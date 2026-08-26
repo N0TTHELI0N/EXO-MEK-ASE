@@ -19,6 +19,8 @@ app.config.update(
     SESSION_COOKIE_SAMESITE='Lax',
 )
 
+BOT_OWNER_ID = int(os.environ.get("BOT_OWNER_ID", "0"))
+
 def generate_csrf_token():
     if '_csrf_token' not in session:
         session['_csrf_token'] = secrets.token_hex(32)
@@ -162,9 +164,6 @@ def nitrado_client_for(guild_id):
         return None
     from nitrado import NitradoClient
     return NitradoClient(token, service_id)
-
-
-BOT_OWNER_ID = int(os.environ.get("BOT_OWNER_ID", "0"))
 
 
 def owner_required(f):
