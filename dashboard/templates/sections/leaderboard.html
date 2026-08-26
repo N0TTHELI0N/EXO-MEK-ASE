@@ -17,7 +17,7 @@
       <label class="relative inline-flex items-center cursor-pointer">
         <input type="checkbox" name="enabled" value="1" class="sr-only peer"
                {% if settings.enabled %}checked{% endif %}>
-        <div class="w-11 h-6 bg-gray-600 peer-focus:ring-2 peer-focus:ring-indigo-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+        <div class="w-11 h-6 bg-gray-600 peer-focus:ring-2 peer-focus:ring-red-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
       </label>
     </div>
   </div>
@@ -31,20 +31,20 @@
         <input type="text" id="channel_id" name="channel_id"
                value="{{ settings.channel_id or '' }}"
                placeholder="Discord channel ID"
-               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
       </div>
       <div>
         <label for="update_interval" class="block text-sm font-medium text-gray-300 mb-1">Update Interval (minutes)</label>
         <input type="number" id="update_interval" name="update_interval"
                value="{{ settings.update_interval or 5 }}"
                min="1" max="1440"
-               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
         <p class="text-xs text-gray-500 mt-1">How often the leaderboard updates (1-1440 minutes)</p>
       </div>
     </div>
   </div>
 
-  <button type="submit" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-lg transition-colors">
+  <button type="submit" class="px-6 py-2.5 bg-red-600 hover:bg-red-500 text-white font-medium rounded-lg transition-colors">
     Save Settings
   </button>
 </form>

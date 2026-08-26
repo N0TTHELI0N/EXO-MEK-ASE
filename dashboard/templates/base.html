@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Sapphire Bot{% endblock %}</title>
+    <title>{% block title %}EXO-BOT{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -12,11 +12,11 @@
             theme: {
                 extend: {
                     colors: {
-                        sapphire: {
-                            400: '#818cf8',
-                            500: '#6366f1',
-                            600: '#4f46e5',
-                            700: '#4338ca',
+                        brand: {
+                            400: '#f87171',
+                            500: '#ef4444',
+                            600: '#dc2626',
+                            700: '#b91c1c',
                         }
                     }
                 }
@@ -81,13 +81,13 @@
         <div class="flex items-center justify-between h-full px-6">
             <!-- Left: Bot Name / Logo -->
             <a href="/" class="flex items-center gap-3 group">
-                <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20 group-hover:shadow-indigo-500/40 transition-shadow">
+                <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center shadow-lg shadow-red-500/20 group-hover:shadow-red-500/40 transition-shadow">
                     <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
                         <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 2a8 8 0 110 16 8 8 0 010-16zm-1 4a1 1 0 00-1 1v4a1 1 0 00.293.707l3 3a1 1 0 001.414-1.414L12 12.586V9a1 1 0 00-1-1z"/>
                     </svg>
                 </div>
-                <span class="text-lg font-bold tracking-tight text-white group-hover:text-indigo-300 transition-colors">
-                    Sapphire
+                <span class="text-lg font-bold tracking-tight text-white group-hover:text-red-300 transition-colors">
+                    EXO-BOT
                 </span>
             </a>
 
@@ -97,19 +97,23 @@
                 <div class="flex items-center gap-3">
                     {% if user.id|string == BOT_OWNER_ID|string %}
                     <a href="/admin/licenses"
-                       class="text-sm text-indigo-400 hover:text-indigo-300 transition-colors px-3 py-1.5 rounded-lg hover:bg-indigo-500/10 border border-indigo-500/30">
+                       class="text-sm text-red-400 hover:text-red-300 transition-colors px-3 py-1.5 rounded-lg hover:bg-red-500/10 border border-red-500/30">
                         🔑 Licenses
                     </a>
                     {% endif %}
+                    <button onclick="toggleTheme()" class="p-2 rounded-lg bg-gray-800/50 border border-gray-700/50 text-gray-400 hover:text-white hover:bg-gray-700 transition-colors" title="Toggle theme">
+                        <svg id="theme-icon-dark" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+                        <svg id="theme-icon-light" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+                    </button>
                     <div class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg bg-gray-800/50 border border-gray-700/50">
                         {% if user.avatar %}
                         <img
                             src="https://cdn.discordapp.com/avatars/{{ user.id }}/{{ user.avatar }}.png?size=64"
                             alt="{{ user.username }}"
-                            class="w-8 h-8 rounded-full ring-2 ring-indigo-500/30"
+                            class="w-8 h-8 rounded-full ring-2 ring-red-500/30"
                         />
                         {% else %}
-                        <div class="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-sm font-semibold text-white ring-2 ring-indigo-500/30">
+                        <div class="w-8 h-8 rounded-full bg-red-600 flex items-center justify-center text-sm font-semibold text-white ring-2 ring-red-500/30">
                             {{ user.username[0] | upper }}
                         </div>
                         {% endif %}
@@ -135,5 +139,40 @@
     </main>
 
     {% block scripts %}{% endblock %}
+    <script>
+        function toggleTheme() {
+            const html = document.documentElement;
+            const isDark = html.classList.contains('dark');
+            if (isDark) {
+                html.classList.remove('dark');
+                html.classList.add('light-mode');
+                document.body.style.backgroundColor = '#f9fafb';
+                document.body.style.color = '#111827';
+                localStorage.setItem('theme', 'light');
+            } else {
+                html.classList.add('dark');
+                html.classList.remove('light-mode');
+                document.body.style.backgroundColor = '#111827';
+                document.body.style.color = '#f9fafb';
+                localStorage.setItem('theme', 'dark');
+            }
+            updateThemeIcons();
+        }
+        function updateThemeIcons() {
+            const isDark = document.documentElement.classList.contains('dark');
+            document.getElementById('theme-icon-dark').classList.toggle('hidden', isDark);
+            document.getElementById('theme-icon-light').classList.toggle('hidden', !isDark);
+        }
+        (function() {
+            const saved = localStorage.getItem('theme');
+            if (saved === 'light') {
+                document.documentElement.classList.remove('dark');
+                document.documentElement.classList.add('light-mode');
+                document.body.style.backgroundColor = '#f9fafb';
+                document.body.style.color = '#111827';
+            }
+            updateThemeIcons();
+        })();
+    </script>
 </body>
 </html>

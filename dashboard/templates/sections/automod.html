@@ -17,7 +17,7 @@
       <label class="relative inline-flex items-center cursor-pointer">
         <input type="checkbox" name="enabled" value="1" class="sr-only peer"
                {% if settings.enabled %}checked{% endif %}>
-        <div class="w-11 h-6 bg-gray-600 peer-focus:ring-2 peer-focus:ring-indigo-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+        <div class="w-11 h-6 bg-gray-600 peer-focus:ring-2 peer-focus:ring-red-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
       </label>
     </div>
   </div>
@@ -31,14 +31,14 @@
         <input type="text" id="log_channel" name="log_channel"
                value="{{ settings.log_channel or '' }}"
                placeholder="Discord channel ID"
-               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
       </div>
       <div>
         <label for="log_file_path" class="block text-sm font-medium text-gray-300 mb-1">Log File Path</label>
         <input type="text" id="log_file_path" name="log_file_path"
                value="{{ settings.log_file_path or '' }}"
                placeholder="e.g. /path/to/logs/auto_mod.log"
-               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
       </div>
     </div>
   </div>
@@ -53,7 +53,7 @@
         <input type="number" id="spam_messages" name="spam_messages"
                value="{{ settings.spam_messages or 5 }}"
                min="1" max="50"
-               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
         <p class="text-xs text-gray-500 mt-1">Maximum messages allowed in the time window</p>
       </div>
       <div>
@@ -61,13 +61,13 @@
         <input type="number" id="spam_window" name="spam_window"
                value="{{ settings.spam_window or 10 }}"
                min="1" max="300"
-               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
         <p class="text-xs text-gray-500 mt-1">Duration of the detection window in seconds</p>
       </div>
     </div>
   </div>
 
-  <button type="submit" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-lg transition-colors">
+  <button type="submit" class="px-6 py-2.5 bg-red-600 hover:bg-red-500 text-white font-medium rounded-lg transition-colors">
     Save Settings
   </button>
 </form>
@@ -83,7 +83,7 @@
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
     <div class="flex gap-4">
       <input type="text" name="new_word" placeholder="Enter word to monitor"
-             class="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+             class="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
       <button type="submit" class="px-6 py-2.5 bg-green-600 hover:bg-green-500 text-white font-medium rounded-lg transition-colors">
         Add Word
       </button>

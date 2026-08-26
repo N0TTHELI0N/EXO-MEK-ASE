@@ -184,10 +184,14 @@ def owner_required(f):
 def login():
     state = secrets.token_urlsafe(32)
     session["oauth_state"] = state
+    redirect_uri = DISCORD_REDIRECT_URI
+    if not redirect_uri or redirect_uri.startswith("http://localhost"):
+        redirect_uri = request.url_root.rstrip("/") + "/callback"
+    from urllib.parse import quote
     return redirect(
         f"https://discord.com/api/oauth2/authorize"
         f"?client_id={DISCORD_CLIENT_ID}"
-        f"&redirect_uri={DISCORD_REDIRECT_URI}"
+        f"&redirect_uri={quote(redirect_uri)}"
         f"&response_type=code"
         f"&scope=identify+guilds"
         f"&state={state}"
@@ -200,12 +204,15 @@ def callback():
     state = request.args.get("state")
     if state != session.get("oauth_state"):
         return "Invalid state parameter.", 403
+    redirect_uri = DISCORD_REDIRECT_URI
+    if not redirect_uri or redirect_uri.startswith("http://localhost"):
+        redirect_uri = request.url_root.rstrip("/") + "/callback"
     data = {
         "client_id": DISCORD_CLIENT_ID,
         "client_secret": DISCORD_CLIENT_SECRET,
         "grant_type": "authorization_code",
         "code": code,
-        "redirect_uri": DISCORD_REDIRECT_URI,
+        "redirect_uri": redirect_uri,
     }
     resp = requests.post("https://discord.com/api/oauth2/token", data=data, timeout=10)
     if resp.status_code != 200:

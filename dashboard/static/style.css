@@ -7,11 +7,22 @@
     --text-primary: #f9fafb;
     --text-secondary: #d1d5db;
     --text-muted: #9ca3af;
-    --accent: #6366f1;
-    --accent-hover: #4f46e5;
+    --accent: #ef4444;
+    --accent-hover: #dc2626;
     --danger: #ef4444;
     --success: #22c55e;
     --warning: #f59e0b;
+}
+
+.light-mode {
+    --bg-primary: #f9fafb;
+    --bg-secondary: #ffffff;
+    --bg-tertiary: #e5e7eb;
+    --text-primary: #111827;
+    --text-secondary: #374151;
+    --text-muted: #6b7280;
+    --accent: #dc2626;
+    --accent-hover: #b91c1c;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -26,7 +37,7 @@ body {
 .hero {
     text-align: center;
     padding: 80px 20px;
-    background: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e1b4b 100%);
+    background: linear-gradient(135deg, #1a0000 0%, #7f1d1d 50%, #1a0000 100%);
 }
 
 .hero h1 { font-size: 3rem; font-weight: 800; margin-bottom: 16px; }
@@ -133,7 +144,7 @@ body {
 }
 .sidebar-link:hover { background: var(--bg-tertiary); color: var(--text-primary); }
 .sidebar-link.active {
-    background: rgba(99, 102, 241, 0.15);
+    background: rgba(239, 68, 68, 0.15);
     color: var(--accent);
     border-left-color: var(--accent);
     font-weight: 600;
@@ -211,7 +222,7 @@ table th {
     color: var(--text-muted);
     font-weight: 600;
 }
-table tr:hover td { background: rgba(99, 102, 241, 0.05); }
+table tr:hover td { background: rgba(239, 68, 68, 0.05); }
 
 /* ── Badges ───────────────────────── */
 .badge {

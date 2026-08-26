@@ -1,5 +1,4 @@
 {% extends "base.html" %}
-{% load static %}
 
 {% block title %}{{ guild_name }} - Dashboard{% endblock %}
 
@@ -45,41 +44,49 @@
 
   <nav class="flex-1 overflow-y-auto px-3 py-4">
     <ul class="space-y-1">
-      {% with sections="overview,rcon_settings,sftp_settings,nitrado_api,license,shop,points,whitelist,tribe_log,automod,punishments,embeds,backup,leaderboard,server_control,logs,settings,permissions" %}
-        {% with labels="Overview,RCON Settings,SFTP Settings,Nitrado API,License,Shop,Points,Whitelist,Tribe Log,AutoMod,Punishments,Embeds,Backup,Leaderboard,Server Control,Logs,Settings,Permissions" %}
-          {% with icons="📊,🔌,📁,🌐,🔑,🦕,💰,✅,📋,🛡️,⚠️,🎨,💾,🏆,🖥️,📜,⚙️,🔐" %}
-            {% with section_list=sections|cut:" "|split:"," %}
-            {% with label_list=labels|split:"," %}
-            {% with icon_list=icons|split:"," %}
-              {% for sec in section_list %}
-                <li>
-                  <a
-                    href="/dashboard/{{ guild_id }}/{{ sec }}"
-                    class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors
-                      {% if active_section == sec %}
-                        bg-indigo-600 text-white
-                      {% else %}
-                        text-gray-400 hover:bg-gray-800 hover:text-gray-200
-                      {% endif %}"
-                  >
-                    <span class="text-base">{{ icon_list|index:forloop.counter0 }}</span>
-                    <span>{{ label_list|index:forloop.counter0 }}</span>
-                  </a>
-                </li>
-              {% endfor %}
-            {% endwith %}
-            {% endwith %}
-            {% endwith %}
-          {% endwith %}
-        {% endwith %}
-      {% endwith %}
+      {% set sections = [
+        ("overview", "Overview", "📊"),
+        ("rcon", "RCON Settings", "🔌"),
+        ("sftp", "SFTP Settings", "📁"),
+        ("nitrado", "Nitrado API", "🌐"),
+        ("license", "License", "🔑"),
+        ("shop", "Shop", "🦕"),
+        ("points", "Points", "💰"),
+        ("whitelist", "Whitelist", "✅"),
+        ("tribelog", "Tribe Log", "📋"),
+        ("automod", "AutoMod", "🛡️"),
+        ("punishments", "Punishments", "⚠️"),
+        ("embeds", "Embeds", "🎨"),
+        ("backup", "Backup", "💾"),
+        ("leaderboard", "Leaderboard", "🏆"),
+        ("server_control", "Server Control", "🖥️"),
+        ("logs", "Logs", "📜"),
+        ("settings", "Settings", "⚙️"),
+        ("permissions", "Permissions", "🔐"),
+      ] %}
+      {% for sec_id, sec_label, sec_icon in sections %}
+        <li>
+          <a
+            href="/dashboard/{{ guild_id }}/{{ sec_id }}"
+            class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors
+              {% if active_section == sec_id %}
+                bg-red-600 text-white
+              {% else %}
+                text-gray-400 hover:bg-gray-800 hover:text-gray-200
+              {% endif %}"
+          >
+            <span class="text-base">{{ sec_icon }}</span>
+            <span>{{ sec_label }}</span>
+          </a>
+        </li>
+      {% endfor %}
     </ul>
   </nav>
 
   <div class="border-t border-gray-800 p-4">
     <div class="flex items-center gap-3">
       {% if user.avatar %}
-        <img src="{{ user.avatar.url }}" alt="" class="h-8 w-8 rounded-full" />
+        <img src="https://cdn.discordapp.com/avatars/{{ user.id }}/{{ user.avatar }}.png?size=64" alt="" class="h-8 w-8 rounded-full" />
       {% endif %}
       <span class="truncate text-sm text-gray-300">{{ user.username }}</span>
     </div>

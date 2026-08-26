@@ -25,15 +25,15 @@
         <label for="guild_id" class="block text-sm font-medium text-gray-300 mb-1">Guild ID</label>
         <input type="text" id="guild_id" name="guild_id" required
                placeholder="Discord Server ID"
-               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent">
       </div>
       <div class="w-40">
         <label for="duration" class="block text-sm font-medium text-gray-300 mb-1">Duration (days)</label>
         <input type="number" id="duration" name="duration" value="30" min="1" max="3650"
-               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent">
       </div>
       <button type="submit"
-              class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-lg transition-colors whitespace-nowrap">
+              class="px-6 py-2.5 bg-red-600 hover:bg-red-500 text-white font-medium rounded-lg transition-colors whitespace-nowrap">
         Generate License
       </button>
     </form>
@@ -78,7 +78,7 @@
           {% for lic in licenses %}
           <tr class="border-b border-gray-700/50 hover:bg-gray-750 transition-colors">
             <td class="px-6 py-4 text-sm text-gray-200 font-mono">{{ lic.guild_id }}</td>
-            <td class="px-6 py-4 text-sm text-indigo-300 font-mono">{{ lic.key }}</td>
+            <td class="px-6 py-4 text-sm text-red-300 font-mono">{{ lic.key }}</td>
             <td class="px-6 py-4 text-sm text-gray-300">
               {% if lic.days == 0 %}Unlimited{% else %}{{ lic.days }} days{% endif %}
             </td>

@@ -29,7 +29,7 @@
           {% endfor %}
         </select>
       </div>
-      <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-6 py-2 rounded-lg transition">
+      <button type="submit" class="bg-red-600 hover:bg-red-700 text-white font-semibold px-6 py-2 rounded-lg transition">
         Add
       </button>
     </form>
@@ -57,7 +57,7 @@
             <td class="py-3 px-4">
               <div class="flex flex-wrap gap-2">
                 {% for role in roles %}
-                <span class="inline-flex items-center gap-1 bg-indigo-600/20 text-indigo-300 px-2 py-1 rounded text-sm">
+                <span class="inline-flex items-center gap-1 bg-red-600/20 text-red-300 px-2 py-1 rounded text-sm">
                   {{ role.name }}
                   <form method="POST" action="/dashboard/{{ guild_id }}/permissions/remove" class="inline">
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">

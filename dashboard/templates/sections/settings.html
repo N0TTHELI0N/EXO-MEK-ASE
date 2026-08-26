@@ -6,9 +6,9 @@
   <form method="POST" class="space-y-6">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
     <!-- Bot Language - Prominent Header Style -->
-    <div class="bg-gradient-to-r from-indigo-600/20 to-purple-600/20 border border-indigo-500/30 rounded-xl p-6">
+    <div class="bg-gradient-to-r from-red-600/20 to-purple-600/20 border border-red-500/30 rounded-xl p-6">
       <div class="flex items-center gap-3 mb-4">
-        <div class="w-10 h-10 rounded-full bg-indigo-500/20 flex items-center justify-center">
+        <div class="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
           <span class="text-xl">🌐</span>
         </div>
         <div>
@@ -19,7 +19,7 @@
       <div class="grid grid-cols-2 gap-4">
         <label class="relative cursor-pointer">
           <input type="radio" name="bot_language" value="ar" {% if settings.get('bot_language', 'ar') == 'ar' %}checked{% endif %} class="peer sr-only">
-          <div class="p-4 rounded-xl border-2 border-gray-600 bg-gray-800/50 peer-checked:border-indigo-500 peer-checked:bg-indigo-500/20 hover:border-gray-500 transition-all">
+          <div class="p-4 rounded-xl border-2 border-gray-600 bg-gray-800/50 peer-checked:border-red-500 peer-checked:bg-red-500/20 hover:border-gray-500 transition-all">
             <div class="flex items-center gap-3">
               <span class="text-2xl">🇸🇦</span>
               <div>
@@ -31,7 +31,7 @@
         </label>
         <label class="relative cursor-pointer">
           <input type="radio" name="bot_language" value="en" {% if settings.get('bot_language', 'ar') == 'en' %}checked{% endif %} class="peer sr-only">
-          <div class="p-4 rounded-xl border-2 border-gray-600 bg-gray-800/50 peer-checked:border-indigo-500 peer-checked:bg-indigo-500/20 hover:border-gray-500 transition-all">
+          <div class="p-4 rounded-xl border-2 border-gray-600 bg-gray-800/50 peer-checked:border-red-500 peer-checked:bg-red-500/20 hover:border-gray-500 transition-all">
             <div class="flex items-center gap-3">
               <span class="text-2xl">🇺🇸</span>
               <div>
@@ -53,7 +53,7 @@
         <div>
           <label class="block text-sm text-gray-400 mb-1">{{ log_type.replace('_', ' ').title() }}</label>
           <input type="text" name="log_channel_{{ log_type }}" value="{{ settings.get('log_channel_' + log_type, '') }}" placeholder="Channel ID"
-                 class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                 class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent">
         </div>
         {% endfor %}
       </div>
@@ -69,7 +69,7 @@
           <span>{{ log_type.replace('_', ' ').title() }}</span>
           <input type="checkbox" name="log_enabled_{{ log_type }}" value="true"
                  {% if settings.get('log_enabled_' + log_type, True) %}checked{% endif %}
-                 class="w-5 h-5 text-indigo-500 bg-gray-600 border-gray-500 rounded focus:ring-indigo-500">
+                 class="w-5 h-5 text-red-500 bg-gray-600 border-gray-500 rounded focus:ring-red-500">
         </label>
         {% endfor %}
       </div>
@@ -85,14 +85,14 @@
           <span>{{ sub.replace('_', ' ').title() }}</span>
           <input type="checkbox" name="log_enabled_admin_{{ sub }}" value="true"
                  {% if settings.get('log_enabled_admin_' + sub, True) %}checked{% endif %}
-                 class="w-5 h-5 text-indigo-500 bg-gray-600 border-gray-500 rounded focus:ring-indigo-500">
+                 class="w-5 h-5 text-red-500 bg-gray-600 border-gray-500 rounded focus:ring-red-500">
         </label>
         {% endfor %}
       </div>
     </div>
 
     <div class="flex justify-end">
-      <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-6 py-2 rounded-lg transition">
+      <button type="submit" class="bg-red-600 hover:bg-red-700 text-white font-semibold px-6 py-2 rounded-lg transition">
         Save Settings
       </button>
     </div>

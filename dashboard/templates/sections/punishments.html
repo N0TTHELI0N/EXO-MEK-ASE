@@ -9,7 +9,7 @@
 <div class="mb-6">
   <div class="flex gap-1 bg-gray-800 rounded-lg p-1 w-fit">
     <button type="button" onclick="showTab('warnings')" id="tab-warnings"
-            class="tab-btn px-5 py-2 text-sm font-medium rounded-md transition-colors bg-indigo-600 text-white">
+            class="tab-btn px-5 py-2 text-sm font-medium rounded-md transition-colors bg-red-600 text-white">
       Warnings
     </button>
     <button type="button" onclick="showTab('punishments')" id="tab-punishments"
@@ -30,7 +30,7 @@
       <div class="flex-1">
         <label for="warn_search" class="block text-sm font-medium text-gray-300 mb-1">Search Player</label>
         <input type="text" id="warn_search" placeholder="Steam name or Steam ID..."
-               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
       </div>
       <div class="pt-6">
         <button type="button" class="px-4 py-2.5 bg-gray-700 hover:bg-gray-600 text-gray-200 font-medium rounded-lg transition-colors">
@@ -67,7 +67,7 @@
       <div class="flex-1">
         <label for="pun_search" class="block text-sm font-medium text-gray-300 mb-1">Search Player</label>
         <input type="text" id="pun_search" placeholder="Steam name or Steam ID..."
-               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
       </div>
       <div class="pt-6">
         <button type="button" class="px-4 py-2.5 bg-gray-700 hover:bg-gray-600 text-gray-200 font-medium rounded-lg transition-colors">
@@ -110,12 +110,12 @@
           <input type="number" id="warning_threshold" name="warning_threshold"
                  value="{{ settings.warning_threshold or 3 }}"
                  min="1" max="20"
-                 class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+                 class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
         </div>
         <div>
           <label for="auto_punishment" class="block text-sm font-medium text-gray-300 mb-1">Auto-Punishment Type</label>
           <select id="auto_punishment" name="auto_punishment"
-                  class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+                  class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
             <option value="kick" {% if settings.auto_punishment == 'kick' %}selected{% endif %}>Kick</option>
             <option value="tempban" {% if settings.auto_punishment == 'tempban' %}selected{% endif %}>Temp Ban</option>
             <option value="ban" {% if settings.auto_punishment == 'ban' %}selected{% endif %}>Permanent Ban</option>
@@ -126,14 +126,14 @@
           <input type="number" id="tempban_duration" name="tempban_duration"
                  value="{{ settings.tempban_duration or 24 }}"
                  min="1" max="720"
-                 class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+                 class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
         </div>
         <div>
           <label for="tempwarn_expiry" class="block text-sm font-medium text-gray-300 mb-1">Warning Expiry (days)</label>
           <input type="number" id="tempwarn_expiry" name="tempwarn_expiry"
                  value="{{ settings.tempwarn_expiry or 30 }}"
                  min="1" max="365"
-                 class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+                 class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
           <p class="text-xs text-gray-500 mt-1">Warnings expire after this many days. Set to 0 for never.</p>
         </div>
       </div>
@@ -145,10 +145,10 @@
       <input type="text" id="log_channel" name="log_channel"
              value="{{ settings.log_channel or '' }}"
              placeholder="Discord channel ID"
-             class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+             class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
     </div>
 
-    <button type="submit" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-lg transition-colors">
+    <button type="submit" class="px-6 py-2.5 bg-red-600 hover:bg-red-500 text-white font-medium rounded-lg transition-colors">
       Save Settings
     </button>
   </form>
@@ -158,12 +158,12 @@
 function showTab(name) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
   document.querySelectorAll('.tab-btn').forEach(b => {
-    b.classList.remove('bg-indigo-600', 'text-white');
+    b.classList.remove('bg-red-600', 'text-white');
     b.classList.add('text-gray-400');
   });
   document.getElementById('panel-' + name).classList.remove('hidden');
   const btn = document.getElementById('tab-' + name);
-  btn.classList.add('bg-indigo-600', 'text-white');
+  btn.classList.add('bg-red-600', 'text-white');
   btn.classList.remove('text-gray-400');
 }
 </script>
