@@ -1,0 +1,95 @@
+<div class="mb-6">
+  <h2 class="text-2xl font-bold text-gray-100">Tribe Log Monitor</h2>
+  <p class="text-gray-400 mt-1">Track tribe activity from your ARK server logs</p>
+</div>
+
+<form method="POST">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+  <div class="bg-gray-800 rounded-lg p-6 shadow-lg mb-6">
+    <div class="flex items-center justify-between">
+      <div>
+        <h3 class="text-lg font-semibold text-gray-100">Tribe Log Monitoring</h3>
+        <p class="text-sm text-gray-400 mt-1">Enable or disable tribe log tracking</p>
+      </div>
+      <label class="relative inline-flex items-center cursor-pointer">
+        <input type="checkbox" name="enabled" value="1" class="sr-only peer"
+               {% if tribe_config.enabled %}checked{% endif %}>
+        <div class="w-11 h-6 bg-gray-600 peer-focus:ring-2 peer-focus:ring-indigo-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+      </label>
+    </div>
+  </div>
+
+  <div class="bg-gray-800 rounded-lg p-6 shadow-lg mb-6">
+    <h3 class="text-lg font-semibold text-gray-100 mb-4">Connection Settings</h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div>
+        <label for="channel_id" class="block text-sm font-medium text-gray-300 mb-1">Log Channel ID</label>
+        <input type="text" id="channel_id" name="channel_id"
+               value="{{ tribe_config.channel_id or '' }}"
+               placeholder="Discord channel ID"
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-300 mb-3">Source Type</label>
+        <div class="flex gap-6">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="radio" name="source_type" value="file"
+                   {% if tribe_config.source_type == 'file' or not tribe_config.source_type %}checked{% endif %}
+                   class="w-4 h-4 text-indigo-500 bg-gray-700 border-gray-600 focus:ring-indigo-500">
+            <span class="text-gray-300">File</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="radio" name="source_type" value="nitrado"
+                   {% if tribe_config.source_type == 'nitrado' %}checked{% endif %}
+                   class="w-4 h-4 text-indigo-500 bg-gray-700 border-gray-600 focus:ring-indigo-500">
+            <span class="text-gray-300">Nitrado API</span>
+          </label>
+        </div>
+      </div>
+    </div>
+    <div class="mt-4">
+      <label for="log_file_path" class="block text-sm font-medium text-gray-300 mb-1">Log File Path</label>
+      <input type="text" id="log_file_path" name="log_file_path"
+             value="{{ tribe_config.log_file_path or '' }}"
+             placeholder="e.g. /path/to/ServerLogs/Ascended-ArthurX1/..."
+             class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+    </div>
+  </div>
+
+  <div class="bg-gray-800 rounded-lg p-6 shadow-lg mb-6">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-lg font-semibold text-gray-100">Monitored Tribes</h3>
+      <button type="button" onclick="addTribe()" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-colors">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+        Add Tribe
+      </button>
+    </div>
+    <div id="tribe-list" class="space-y-2">
+      {% for tribe in tribes %}
+      <div class="tribe-entry flex items-center gap-3 bg-gray-700 rounded-lg px-4 py-2.5">
+        <input type="text" name="tribes" value="{{ tribe }}"
+               class="flex-1 bg-gray-600 border border-gray-500 rounded-lg px-3 py-1.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-sm"
+               placeholder="Tribe name">
+        <button type="button" onclick="this.closest('.tribe-entry').remove()" class="text-gray-400 hover:text-red-400 transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <button type="submit" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-lg transition-colors">
+    Save Settings
+  </button>
+</form>
+
+<script>
+function addTribe() {
+  const list = document.getElementById('tribe-list');
+  const entry = document.createElement('div');
+  entry.className = 'tribe-entry flex items-center gap-3 bg-gray-700 rounded-lg px-4 py-2.5';
+  entry.innerHTML = '<input type="text" name="tribes" value="" class="flex-1 bg-gray-600 border border-gray-500 rounded-lg px-3 py-1.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-sm" placeholder="Tribe name"><button type="button" onclick="this.closest(\'.tribe-entry\').remove()" class="text-gray-400 hover:text-red-400 transition-colors"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>';
+  list.appendChild(entry);
+  entry.querySelector('input').focus();
+}
+</script>

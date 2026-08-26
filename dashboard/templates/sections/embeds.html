@@ -1,0 +1,185 @@
+<div class="mb-6">
+  <h2 class="text-2xl font-bold text-gray-100">Embeds</h2>
+  <p class="text-gray-400 mt-1">Customize bot embed messages</p>
+</div>
+
+<!-- Embed Grid -->
+<div id="embed-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+  {% for key, embed in embeds.items() %}
+  <button type="button" onclick="editEmbed('{{ key }}')"
+          class="embed-card bg-gray-800 rounded-lg p-5 shadow-lg text-left hover:ring-2 hover:ring-indigo-500 transition-all group">
+    <div class="flex items-start gap-3 mb-3">
+      <div class="w-1 h-10 rounded-full flex-shrink-0" style="background-color: {{ embed.color or '#FFD700' }};"></div>
+      <div class="min-w-0">
+        <h4 class="text-sm font-semibold text-gray-100 group-hover:text-indigo-300 transition-colors">
+          {{ key | replace('_', ' ') | title }}
+        </h4>
+        <p class="text-xs text-gray-400 truncate">{{ embed.title or '(No title)' }}</p>
+      </div>
+    </div>
+    <p class="text-xs text-gray-500 line-clamp-2">{{ embed.description[:80] }}{% if embed.description and embed.description|length > 80 %}...{% endif %}</p>
+  </button>
+  {% endfor %}
+</div>
+
+<!-- Edit Panel (hidden by default) -->
+<div id="embed-edit" class="hidden">
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <!-- Form -->
+    <div class="bg-gray-800 rounded-lg p-6 shadow-lg">
+      <div class="flex items-center justify-between mb-6">
+        <h3 id="edit-title" class="text-lg font-semibold text-gray-100"></h3>
+        <button type="button" onclick="closeEdit()" class="text-gray-400 hover:text-gray-200">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <form method="POST" id="embed-form">
+        <input type="hidden" name="embed_type" id="embed_type_input">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
+        <div class="space-y-4">
+          <div>
+            <label for="embed_title" class="block text-sm font-medium text-gray-300 mb-1">Title</label>
+            <input type="text" id="embed_title" name="title" oninput="updatePreview()"
+                   class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+          </div>
+          <div>
+            <label for="embed_description" class="block text-sm font-medium text-gray-300 mb-1">Description</label>
+            <textarea id="embed_description" name="description" rows="4" oninput="updatePreview()"
+                      class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none resize-none"></textarea>
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label for="embed_color" class="block text-sm font-medium text-gray-300 mb-1">Color</label>
+              <input type="color" id="embed_color" name="color" oninput="updatePreview()"
+                     class="w-full h-10 bg-gray-700 border border-gray-600 rounded-lg cursor-pointer">
+            </div>
+            <div></div>
+          </div>
+          <div>
+            <label for="embed_image" class="block text-sm font-medium text-gray-300 mb-1">Image URL</label>
+            <input type="url" id="embed_image" name="image_url" oninput="updatePreview()"
+                   placeholder="https://example.com/image.png"
+                   class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+          </div>
+          <div>
+            <label for="embed_thumbnail" class="block text-sm font-medium text-gray-300 mb-1">Thumbnail URL</label>
+            <input type="url" id="embed_thumbnail" name="thumbnail_url" oninput="updatePreview()"
+                   placeholder="https://example.com/thumb.png"
+                   class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+          </div>
+          <div>
+            <label for="embed_footer" class="block text-sm font-medium text-gray-300 mb-1">Footer</label>
+            <input type="text" id="embed_footer" name="footer_text" oninput="updatePreview()"
+                   placeholder="Footer text"
+                   class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+          </div>
+          <div>
+            <label for="embed_author" class="block text-sm font-medium text-gray-300 mb-1">Author</label>
+            <input type="text" id="embed_author" name="author_name" oninput="updatePreview()"
+                   placeholder="Author name"
+                   class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+          </div>
+        </div>
+
+        <div class="flex gap-3 mt-6">
+          <button type="submit" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-lg transition-colors">
+            Save
+          </button>
+          <button type="button" onclick="closeEdit()" class="px-5 py-2.5 bg-gray-700 hover:bg-gray-600 text-gray-200 font-medium rounded-lg transition-colors">
+            Cancel
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Preview -->
+    <div class="bg-gray-800 rounded-lg p-6 shadow-lg">
+      <h3 class="text-lg font-semibold text-gray-100 mb-4">Preview</h3>
+      <div class="bg-gray-900 rounded-lg p-4 border border-gray-700">
+        <div class="flex gap-3">
+          <div id="preview-bar" class="w-1 rounded-full" style="background-color: #FFD700;"></div>
+          <div class="min-w-0 flex-1">
+            <p id="preview-author" class="text-xs text-gray-400 mb-1 hidden"></p>
+            <h4 id="preview-title" class="text-sm font-semibold text-gray-100 mb-1"></h4>
+            <p id="preview-desc" class="text-sm text-gray-300 mb-2"></p>
+            <img id="preview-image" class="rounded-lg max-h-48 object-cover hidden" alt="">
+            <div class="flex justify-between items-end mt-3">
+              <img id="preview-thumb" class="w-16 h-16 rounded object-cover hidden" alt="">
+              <p id="preview-footer" class="text-xs text-gray-500 hidden"></p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+var embedData = {
+  {% for key, embed in embeds.items() %}
+  "{{ key }}": {
+    title: {{ embed.title | tojson }},
+    description: {{ embed.description | tojson }},
+    color: {{ embed.color | tojson }},
+    image_url: {{ embed.image_url | tojson }},
+    thumbnail_url: {{ embed.thumbnail_url | tojson }},
+    footer_text: {{ embed.footer_text | tojson }},
+    author_name: {{ embed.author_name | tojson }}
+  }{% if not loop.last %},{% endif %}
+  {% endfor %}
+};
+
+function editEmbed(key) {
+  var e = embedData[key] || {};
+  document.getElementById('embed-grid').classList.add('hidden');
+  document.getElementById('embed-edit').classList.remove('hidden');
+  document.getElementById('edit-title').textContent = key.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+  document.getElementById('embed_type_input').value = key;
+  document.getElementById('embed_title').value = e.title || '';
+  document.getElementById('embed_description').value = e.description || '';
+  document.getElementById('embed_color').value = e.color || '#FFD700';
+  document.getElementById('embed_image').value = e.image_url || '';
+  document.getElementById('embed_thumbnail').value = e.thumbnail_url || '';
+  document.getElementById('embed_footer').value = e.footer_text || '';
+  document.getElementById('embed_author').value = e.author_name || '';
+  updatePreview();
+}
+
+function closeEdit() {
+  document.getElementById('embed-grid').classList.remove('hidden');
+  document.getElementById('embed-edit').classList.add('hidden');
+}
+
+function updatePreview() {
+  var color = document.getElementById('embed_color').value || '#FFD700';
+  var title = document.getElementById('embed_title').value;
+  var desc = document.getElementById('embed_description').value;
+  var image = document.getElementById('embed_image').value;
+  var thumb = document.getElementById('embed_thumbnail').value;
+  var footer = document.getElementById('embed_footer').value;
+  var author = document.getElementById('embed_author').value;
+
+  document.getElementById('preview-bar').style.backgroundColor = color;
+  var titleEl = document.getElementById('preview-title');
+  titleEl.textContent = title || '(No title)';
+  var descEl = document.getElementById('preview-desc');
+  descEl.textContent = desc;
+
+  var authorEl = document.getElementById('preview-author');
+  if (author) { authorEl.textContent = author; authorEl.classList.remove('hidden'); }
+  else { authorEl.classList.add('hidden'); }
+
+  var imageEl = document.getElementById('preview-image');
+  if (image) { imageEl.src = image; imageEl.classList.remove('hidden'); }
+  else { imageEl.classList.add('hidden'); }
+
+  var thumbEl = document.getElementById('preview-thumb');
+  if (thumb) { thumbEl.src = thumb; thumbEl.classList.remove('hidden'); }
+  else { thumbEl.classList.add('hidden'); }
+
+  var footerEl = document.getElementById('preview-footer');
+  if (footer) { footerEl.textContent = footer; footerEl.classList.remove('hidden'); }
+  else { footerEl.classList.add('hidden'); }
+}
+</script>

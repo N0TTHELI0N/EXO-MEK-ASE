@@ -1,0 +1,142 @@
+<div class="mb-6">
+  <h2 class="text-2xl font-bold text-gray-100">Logs</h2>
+  <p class="text-gray-400 mt-1">View and filter bot activity logs</p>
+</div>
+
+<!-- Filter Bar -->
+<div class="bg-gray-800 rounded-lg p-6 shadow-lg mb-6">
+  <form method="GET" class="flex flex-col sm:flex-row gap-4">
+    <div class="flex-1">
+      <label for="log_type" class="block text-sm font-medium text-gray-300 mb-1">Log Type</label>
+      <select id="log_type" name="log_type"
+              class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+        <option value="">All Types</option>
+        {% for lt in log_types %}
+        <option value="{{ lt }}" {% if request.GET.log_type == lt %}selected{% endif %}>{{ lt | title }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="date_from" class="block text-sm font-medium text-gray-300 mb-1">From</label>
+      <input type="date" id="date_from" name="date_from"
+             value="{{ request.GET.date_from or '' }}"
+             class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+    </div>
+    <div>
+      <label for="date_to" class="block text-sm font-medium text-gray-300 mb-1">To</label>
+      <input type="date" id="date_to" name="date_to"
+             value="{{ request.GET.date_to or '' }}"
+             class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+    </div>
+    <div class="flex-1">
+      <label for="search" class="block text-sm font-medium text-gray-300 mb-1">Search</label>
+      <input type="text" id="search" name="search"
+             value="{{ request.GET.search or '' }}"
+             placeholder="Search logs..."
+             class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+    </div>
+    <div class="flex items-end">
+      <button type="submit" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-lg transition-colors whitespace-nowrap">
+        Filter
+      </button>
+    </div>
+  </form>
+</div>
+
+<!-- Log Table -->
+<div class="bg-gray-800 rounded-lg shadow-lg overflow-hidden mb-6">
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm text-left">
+      <thead class="text-xs text-gray-400 uppercase border-b border-gray-700">
+        <tr>
+          <th class="px-4 py-3">Timestamp</th>
+          <th class="px-4 py-3">Type</th>
+          <th class="px-4 py-3">User</th>
+          <th class="px-4 py-3">Player</th>
+          <th class="px-4 py-3">Action</th>
+          <th class="px-4 py-3">Details</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-700">
+        {% for entry in logs %}
+        <tr class="hover:bg-gray-700/50">
+          <td class="px-4 py-3 text-gray-400 text-xs font-mono whitespace-nowrap">{{ entry.timestamp }}</td>
+          <td class="px-4 py-3">
+            <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full
+              {% if entry.type == 'warning' %}bg-yellow-900 text-yellow-300
+              {% elif entry.type == 'punishment' %}bg-red-900 text-red-300
+              {% elif entry.type == 'automod' %}bg-orange-900 text-orange-300
+              {% elif entry.type == 'backup' %}bg-blue-900 text-blue-300
+              {% elif entry.type == 'server' %}bg-green-900 text-green-300
+              {% else %}bg-gray-700 text-gray-300{% endif %}">
+              {{ entry.type | title }}
+            </span>
+          </td>
+          <td class="px-4 py-3 text-gray-300">{{ entry.user or '—' }}</td>
+          <td class="px-4 py-3 text-gray-300">{{ entry.player or '—' }}</td>
+          <td class="px-4 py-3 text-gray-200 font-medium">{{ entry.action }}</td>
+          <td class="px-4 py-3 text-gray-400 text-xs max-w-xs truncate">{{ entry.details or '' }}</td>
+        </tr>
+        {% endfor %}
+        {% if not logs %}
+        <tr>
+          <td colspan="6" class="px-4 py-12 text-center text-gray-500">No log entries found</td>
+        </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Pagination -->
+<div class="flex items-center justify-between mb-6">
+  <p class="text-sm text-gray-400">
+    Showing page {{ page }} — {{ log_count }} total entries
+  </p>
+  <div class="flex items-center gap-2">
+    {% if page > 1 %}
+    <a href="?page={{ page - 1 }}{% if request.GET.log_type %}&log_type={{ request.GET.log_type }}{% endif %}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}"
+       class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium rounded-lg transition-colors">
+      Previous
+    </a>
+    {% else %}
+    <span class="px-4 py-2 bg-gray-800 text-gray-600 text-sm font-medium rounded-lg cursor-not-allowed">
+      Previous
+    </span>
+    {% endif %}
+    {% if logs %}
+    <a href="?page={{ page + 1 }}{% if request.GET.log_type %}&log_type={{ request.GET.log_type }}{% endif %}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}"
+       class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium rounded-lg transition-colors">
+      Next
+    </a>
+    {% else %}
+    <span class="px-4 py-2 bg-gray-800 text-gray-600 text-sm font-medium rounded-lg cursor-not-allowed">
+      Next
+    </span>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Log Type Toggles -->
+<div class="bg-gray-800 rounded-lg p-6 shadow-lg">
+  <h3 class="text-lg font-semibold text-gray-100 mb-4">Log Type Settings</h3>
+  <p class="text-sm text-gray-400 mb-4">Toggle which log types are recorded</p>
+  <form method="POST">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      {% for lt in log_types %}
+      <label class="flex items-center justify-between bg-gray-700 rounded-lg px-4 py-3 cursor-pointer hover:bg-gray-650 transition-colors">
+        <span class="text-sm text-gray-200 font-medium">{{ lt | title }}</span>
+        <input type="checkbox" name="log_type_{{ lt }}" value="1"
+               {% if log_settings.get(lt, True) %}checked{% endif %}
+               class="w-4 h-4 text-indigo-500 bg-gray-600 border-gray-500 rounded focus:ring-indigo-500 focus:ring-2 cursor-pointer">
+      </label>
+      {% endfor %}
+    </div>
+    <div class="mt-4">
+      <button type="submit" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-lg transition-colors">
+        Save Log Settings
+      </button>
+    </div>
+  </form>
+</div>

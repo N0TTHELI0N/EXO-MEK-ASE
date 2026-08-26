@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Sapphire Bot{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        sapphire: {
+                            400: '#818cf8',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        .sidebar-link {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.625rem 1rem;
+            border-radius: 0.5rem;
+            color: #9ca3af;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: all 0.15s ease;
+            text-decoration: none;
+        }
+
+        .sidebar-link:hover {
+            background-color: rgba(99, 102, 241, 0.1);
+            color: #e0e7ff;
+        }
+
+        .sidebar-link.active {
+            background-color: rgba(99, 102, 241, 0.15);
+            color: #818cf8;
+        }
+
+        .sidebar-link.active svg {
+            color: #818cf8;
+        }
+
+        .sidebar-link svg {
+            width: 1.25rem;
+            height: 1.25rem;
+            flex-shrink: 0;
+            color: #6b7280;
+            transition: color 0.15s ease;
+        }
+
+        .sidebar-link:hover svg {
+            color: #c7d2fe;
+        }
+
+        .glass-panel {
+            background: rgba(17, 24, 39, 0.6);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(75, 85, 99, 0.3);
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen antialiased">
+
+    <!-- Top Navbar -->
+    <nav class="fixed top-0 left-0 right-0 z-50 h-16 glass-panel border-b border-gray-800">
+        <div class="flex items-center justify-between h-full px-6">
+            <!-- Left: Bot Name / Logo -->
+            <a href="/" class="flex items-center gap-3 group">
+                <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20 group-hover:shadow-indigo-500/40 transition-shadow">
+                    <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 2a8 8 0 110 16 8 8 0 010-16zm-1 4a1 1 0 00-1 1v4a1 1 0 00.293.707l3 3a1 1 0 001.414-1.414L12 12.586V9a1 1 0 00-1-1z"/>
+                    </svg>
+                </div>
+                <span class="text-lg font-bold tracking-tight text-white group-hover:text-indigo-300 transition-colors">
+                    Sapphire
+                </span>
+            </a>
+
+            <!-- Right: User Info + Logout -->
+            <div class="flex items-center gap-4">
+                {% if user %}
+                <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg bg-gray-800/50 border border-gray-700/50">
+                        {% if user.avatar %}
+                        <img
+                            src="https://cdn.discordapp.com/avatars/{{ user.id }}/{{ user.avatar }}.png?size=64"
+                            alt="{{ user.username }}"
+                            class="w-8 h-8 rounded-full ring-2 ring-indigo-500/30"
+                        />
+                        {% else %}
+                        <div class="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-sm font-semibold text-white ring-2 ring-indigo-500/30">
+                            {{ user.username[0] | upper }}
+                        </div>
+                        {% endif %}
+                        <span class="text-sm font-medium text-gray-200">{{ user.username }}</span>
+                    </div>
+                    <a
+                        href="/logout"
+                        class="text-sm text-gray-400 hover:text-red-400 transition-colors px-3 py-1.5 rounded-lg hover:bg-red-500/10"
+                    >
+                        Logout
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="pt-16 min-h-screen">
+        <div class="flex">
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

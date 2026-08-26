@@ -1,0 +1,52 @@
+<div class="mb-6">
+  <h2 class="text-2xl font-bold text-gray-100">RCON Configuration</h2>
+  <p class="text-gray-400 mt-1">Configure your server's RCON connection for remote commands.</p>
+</div>
+
+<div class="bg-gray-800 rounded-lg p-6 shadow-lg max-w-2xl">
+  <form method="POST" action="">
+    <input type="hidden" name="section" value="rcon">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
+    <div class="space-y-4">
+      <div>
+        <label for="rcon_host" class="block text-sm font-medium text-gray-300 mb-1">Host</label>
+        <input type="text" id="rcon_host" name="rcon_host"
+               value="{{ settings.rcon_host or '' }}"
+               placeholder="127.0.0.1"
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+      </div>
+
+      <div>
+        <label for="rcon_port" class="block text-sm font-medium text-gray-300 mb-1">Port</label>
+        <input type="number" id="rcon_port" name="rcon_port"
+               value="{{ settings.rcon_port or '' }}"
+               placeholder="27015"
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+      </div>
+
+      <div>
+        <label for="rcon_password" class="block text-sm font-medium text-gray-300 mb-1">Password</label>
+        <input type="password" id="rcon_password" name="rcon_password"
+               value=""
+               placeholder="{% if settings.rcon_password %}•••••••• (configured){% else %}Enter RCON password{% endif %}"
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+        {% if settings.rcon_password %}
+        <p class="text-xs text-green-400 mt-1">✓ Password configured. Leave blank to keep current.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="mt-6 flex items-center space-x-4">
+      <button type="button" id="rcon-test-btn"
+              class="px-4 py-2 bg-gray-600 hover:bg-gray-500 text-gray-100 rounded-lg font-medium transition-colors">
+        Test Connection
+      </button>
+      <button type="submit"
+              class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition-colors">
+        Save
+      </button>
+      <span id="rcon-test-result" class="text-sm text-gray-400"></span>
+    </div>
+  </form>
+</div>

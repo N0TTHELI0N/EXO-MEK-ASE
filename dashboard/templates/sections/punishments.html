@@ -1,0 +1,167 @@
+<div class="mb-6">
+  <h2 class="text-2xl font-bold text-gray-100">Punishments</h2>
+  <p class="text-gray-400 mt-1">Manage warnings and player punishments</p>
+</div>
+
+<!-- Tab Navigation -->
+<div class="mb-6">
+  <div class="flex gap-1 bg-gray-800 rounded-lg p-1 w-fit">
+    <button type="button" onclick="showTab('warnings')" id="tab-warnings"
+            class="tab-btn px-5 py-2 text-sm font-medium rounded-md transition-colors bg-indigo-600 text-white">
+      Warnings
+    </button>
+    <button type="button" onclick="showTab('punishments')" id="tab-punishments"
+            class="tab-btn px-5 py-2 text-sm font-medium rounded-md transition-colors text-gray-400 hover:text-gray-200">
+      Punishments
+    </button>
+    <button type="button" onclick="showTab('settings')" id="tab-settings"
+            class="tab-btn px-5 py-2 text-sm font-medium rounded-md transition-colors text-gray-400 hover:text-gray-200">
+      Settings
+    </button>
+  </div>
+</div>
+
+<!-- Warnings Tab -->
+<div id="panel-warnings" class="tab-panel">
+  <div class="bg-gray-800 rounded-lg p-6 shadow-lg mb-6">
+    <div class="flex items-center gap-4 mb-6">
+      <div class="flex-1">
+        <label for="warn_search" class="block text-sm font-medium text-gray-300 mb-1">Search Player</label>
+        <input type="text" id="warn_search" placeholder="Steam name or Steam ID..."
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+      </div>
+      <div class="pt-6">
+        <button type="button" class="px-4 py-2.5 bg-gray-700 hover:bg-gray-600 text-gray-200 font-medium rounded-lg transition-colors">
+          Search
+        </button>
+      </div>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm text-left">
+        <thead class="text-xs text-gray-400 uppercase border-b border-gray-700">
+          <tr>
+            <th class="px-4 py-3">Player</th>
+            <th class="px-4 py-3">Reason</th>
+            <th class="px-4 py-3">Issuer</th>
+            <th class="px-4 py-3">Date</th>
+            <th class="px-4 py-3">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-700">
+          <tr class="hover:bg-gray-700/50">
+            <td colspan="5" class="px-4 py-8 text-center text-gray-500">No warnings found</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Punishments Tab -->
+<div id="panel-punishments" class="tab-panel hidden">
+  <div class="bg-gray-800 rounded-lg p-6 shadow-lg mb-6">
+    <div class="flex items-center gap-4 mb-6">
+      <div class="flex-1">
+        <label for="pun_search" class="block text-sm font-medium text-gray-300 mb-1">Search Player</label>
+        <input type="text" id="pun_search" placeholder="Steam name or Steam ID..."
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+      </div>
+      <div class="pt-6">
+        <button type="button" class="px-4 py-2.5 bg-gray-700 hover:bg-gray-600 text-gray-200 font-medium rounded-lg transition-colors">
+          Search
+        </button>
+      </div>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm text-left">
+        <thead class="text-xs text-gray-400 uppercase border-b border-gray-700">
+          <tr>
+            <th class="px-4 py-3">Player</th>
+            <th class="px-4 py-3">Type</th>
+            <th class="px-4 py-3">Reason</th>
+            <th class="px-4 py-3">Duration</th>
+            <th class="px-4 py-3">Evidence</th>
+            <th class="px-4 py-3">Date</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-700">
+          <tr class="hover:bg-gray-700/50">
+            <td colspan="6" class="px-4 py-8 text-center text-gray-500">No punishments found</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Settings Tab -->
+<div id="panel-settings" class="tab-panel hidden">
+  <form method="POST">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <div class="bg-gray-800 rounded-lg p-6 shadow-lg mb-6">
+      <h3 class="text-lg font-semibold text-gray-100 mb-4">Warning Threshold</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <label for="warning_threshold" class="block text-sm font-medium text-gray-300 mb-1">Warnings Before Auto-Punishment</label>
+          <input type="number" id="warning_threshold" name="warning_threshold"
+                 value="{{ settings.warning_threshold or 3 }}"
+                 min="1" max="20"
+                 class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+        </div>
+        <div>
+          <label for="auto_punishment" class="block text-sm font-medium text-gray-300 mb-1">Auto-Punishment Type</label>
+          <select id="auto_punishment" name="auto_punishment"
+                  class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+            <option value="kick" {% if settings.auto_punishment == 'kick' %}selected{% endif %}>Kick</option>
+            <option value="tempban" {% if settings.auto_punishment == 'tempban' %}selected{% endif %}>Temp Ban</option>
+            <option value="ban" {% if settings.auto_punishment == 'ban' %}selected{% endif %}>Permanent Ban</option>
+          </select>
+        </div>
+        <div>
+          <label for="tempban_duration" class="block text-sm font-medium text-gray-300 mb-1">Temp Ban Duration (hours)</label>
+          <input type="number" id="tempban_duration" name="tempban_duration"
+                 value="{{ settings.tempban_duration or 24 }}"
+                 min="1" max="720"
+                 class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+        </div>
+        <div>
+          <label for="tempwarn_expiry" class="block text-sm font-medium text-gray-300 mb-1">Warning Expiry (days)</label>
+          <input type="number" id="tempwarn_expiry" name="tempwarn_expiry"
+                 value="{{ settings.tempwarn_expiry or 30 }}"
+                 min="1" max="365"
+                 class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+          <p class="text-xs text-gray-500 mt-1">Warnings expire after this many days. Set to 0 for never.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-gray-800 rounded-lg p-6 shadow-lg mb-6">
+      <h3 class="text-lg font-semibold text-gray-100 mb-4">Log Channel</h3>
+      <label for="log_channel" class="block text-sm font-medium text-gray-300 mb-1">Punishment Log Channel ID</label>
+      <input type="text" id="log_channel" name="log_channel"
+             value="{{ settings.log_channel or '' }}"
+             placeholder="Discord channel ID"
+             class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+    </div>
+
+    <button type="submit" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-lg transition-colors">
+      Save Settings
+    </button>
+  </form>
+</div>
+
+<script>
+function showTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.classList.remove('bg-indigo-600', 'text-white');
+    b.classList.add('text-gray-400');
+  });
+  document.getElementById('panel-' + name).classList.remove('hidden');
+  const btn = document.getElementById('tab-' + name);
+  btn.classList.add('bg-indigo-600', 'text-white');
+  btn.classList.remove('text-gray-400');
+}
+</script>

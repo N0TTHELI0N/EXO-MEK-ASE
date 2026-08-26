@@ -1,0 +1,93 @@
+{% extends "dashboard.html" %}
+{% block title %}Permissions - {{ guild_name }}{% endblock %}
+
+{% block dashboard_content %}
+<div class="max-w-5xl mx-auto py-8 px-4">
+  <h1 class="text-2xl font-bold mb-6">🔐 Command Permissions</h1>
+  <p class="text-gray-400 mb-6">Restrict which roles can use each command. Commands with no roles configured use default Discord permissions. Admins always have access.</p>
+
+  <!-- Add Permission Form -->
+  <div class="bg-gray-800 rounded-lg p-6 mb-8">
+    <h2 class="text-lg font-semibold mb-4">Add Permission</h2>
+    <form method="POST" action="/dashboard/{{ guild_id }}/permissions/add" class="flex flex-wrap gap-4 items-end">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <div class="flex-1 min-w-[200px]">
+        <label class="block text-sm text-gray-400 mb-1">Command</label>
+        <select name="command" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm" required>
+          <option value="">Select a command...</option>
+          {% for cmd in all_commands %}
+            <option value="{{ cmd }}">{{ cmd }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="flex-1 min-w-[200px]">
+        <label class="block text-sm text-gray-400 mb-1">Role</label>
+        <select name="role_id" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm" required>
+          <option value="">Select a role...</option>
+          {% for role in guild_roles %}
+            <option value="{{ role.id }}">{{ role.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-6 py-2 rounded-lg transition">
+        Add
+      </button>
+    </form>
+  </div>
+
+  <!-- Permissions Table -->
+  <div class="bg-gray-800 rounded-lg p-6">
+    <h2 class="text-lg font-semibold mb-4">Current Permissions</h2>
+    {% if permissions %}
+    <div class="overflow-x-auto">
+      <table class="w-full">
+        <thead>
+          <tr class="border-b border-gray-700">
+            <th class="text-left py-3 px-4 text-sm text-gray-400 font-semibold">Command</th>
+            <th class="text-left py-3 px-4 text-sm text-gray-400 font-semibold">Allowed Roles</th>
+            <th class="text-right py-3 px-4 text-sm text-gray-400 font-semibold">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for cmd, roles in permissions.items %}
+          <tr class="border-b border-gray-700/50 hover:bg-gray-700/30">
+            <td class="py-3 px-4">
+              <code class="bg-gray-700 px-2 py-1 rounded text-sm">/{{ cmd }}</code>
+            </td>
+            <td class="py-3 px-4">
+              <div class="flex flex-wrap gap-2">
+                {% for role in roles %}
+                <span class="inline-flex items-center gap-1 bg-indigo-600/20 text-indigo-300 px-2 py-1 rounded text-sm">
+                  {{ role.name }}
+                  <form method="POST" action="/dashboard/{{ guild_id }}/permissions/remove" class="inline">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="command" value="{{ cmd }}">
+                    <input type="hidden" name="role_id" value="{{ role.id }}">
+                    <button type="submit" class="text-red-400 hover:text-red-300 ml-1" title="Remove">✕</button>
+                  </form>
+                </span>
+                {% endfor %}
+              </div>
+            </td>
+            <td class="py-3 px-4 text-right">
+              <form method="POST" action="/dashboard/{{ guild_id }}/permissions/clear" class="inline"
+                    onsubmit="return confirm('Reset permissions for /{{ cmd }}?')">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="command" value="{{ cmd }}">
+                <button type="submit" class="text-red-400 hover:text-red-300 text-sm">Clear All</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center py-12 text-gray-500">
+      <p class="text-lg mb-2">No permissions configured</p>
+      <p class="text-sm">All commands use default Discord permissions. Add a role above to restrict access.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

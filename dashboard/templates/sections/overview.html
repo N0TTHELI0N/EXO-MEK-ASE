@@ -1,0 +1,38 @@
+<div class="mb-6">
+  <h2 class="text-2xl font-bold text-gray-100">Dashboard Overview</h2>
+  <p class="text-gray-400 mt-1">{{ settings.server_name or 'ARK Server' }} — Guild {{ guild_id }}</p>
+</div>
+
+<div class="mb-6">
+  {% if license_valid %}
+  <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-900 text-green-300">
+    License Active
+  </span>
+  {% else %}
+  <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-900 text-red-300">
+    License Expired
+  </span>
+  {% endif %}
+</div>
+
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+  <div class="bg-gray-800 rounded-lg p-6 shadow-lg">
+    <p class="text-gray-400 text-sm font-medium uppercase tracking-wide">Shop Dinos</p>
+    <p class="mt-2 text-3xl font-bold text-gray-100">{{ stats.total_dinos or 0 }}</p>
+  </div>
+
+  <div class="bg-gray-800 rounded-lg p-6 shadow-lg">
+    <p class="text-gray-400 text-sm font-medium uppercase tracking-wide">Linked Players</p>
+    <p class="mt-2 text-3xl font-bold text-gray-100">{{ stats.linked_players or 0 }}</p>
+  </div>
+
+  <div class="bg-gray-800 rounded-lg p-6 shadow-lg">
+    <p class="text-gray-400 text-sm font-medium uppercase tracking-wide">Active Warnings</p>
+    <p class="mt-2 text-3xl font-bold text-gray-100">{{ stats.active_warnings or 0 }}</p>
+  </div>
+
+  <div class="bg-gray-800 rounded-lg p-6 shadow-lg">
+    <p class="text-gray-400 text-sm font-medium uppercase tracking-wide">Total Backups</p>
+    <p class="mt-2 text-3xl font-bold text-gray-100">{{ stats.total_backups or 0 }}</p>
+  </div>
+</div>

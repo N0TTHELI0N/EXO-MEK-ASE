@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}ARK Server Bot - Home{% endblock %}
+{% block content %}
+<div class="hero">
+    <h1>ARK Survival Evolved Bot</h1>
+    <p class="subtitle">Complete PS4/PS5 Server Management with Nitrado Integration</p>
+    <div class="features">
+        <div class="feature-card">
+            <h3>RCON Management</h3>
+            <p>Full RCON access to send commands and query server status in real time</p>
+        </div>
+        <div class="feature-card">
+            <h3>SFTP Backups</h3>
+            <p>Automated world backups and restores via secure SFTP connection</p>
+        </div>
+        <div class="feature-card">
+            <h3>Shop System</h3>
+            <p>Points &amp; dinosaur shop with tribe leaderboards and role rewards</p>
+        </div>
+        <div class="feature-card">
+            <h3>Whitelist</h3>
+            <p>PSN-based whitelist with scheduled activation and player management</p>
+        </div>
+        <div class="feature-card">
+            <h3>Tribe Logs</h3>
+            <p>Track tribe activity, log events, and monitor player actions in-game</p>
+        </div>
+        <div class="feature-card">
+            <h3>Punishments</h3>
+            <p>Ban, kick, and mute players with full moderation and logging tools</p>
+        </div>
+        <div class="feature-card">
+            <h3>Custom Embeds</h3>
+            <p>Design and manage rich embeds with colors, images, and dynamic content</p>
+        </div>
+        <div class="feature-card">
+            <h3>Server Control</h3>
+            <p>Restart, backup, and monitor your server directly from Discord</p>
+        </div>
+    </div>
+    {% if not user %}
+    <a href="/login" class="btn btn-primary btn-lg">Login with Discord to Get Started</a>
+    {% else %}
+    <a href="/dashboard" class="btn btn-primary btn-lg">Go to Dashboard</a>
+    {% endif %}
+</div>
+{% endblock %}

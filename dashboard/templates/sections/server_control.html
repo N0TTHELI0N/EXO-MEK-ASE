@@ -1,0 +1,163 @@
+<div class="mb-6">
+  <h2 class="text-2xl font-bold text-gray-100">Server Control</h2>
+  <p class="text-gray-400 mt-1">Monitor and manage your ARK server</p>
+</div>
+
+<!-- Status Card -->
+<div class="bg-gray-800 rounded-lg p-6 shadow-lg mb-6">
+  <h3 class="text-lg font-semibold text-gray-100 mb-4">Server Status</h3>
+  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+    <div class="bg-gray-700 rounded-lg p-4 text-center">
+      <p class="text-xs text-gray-400 uppercase tracking-wide mb-1">Status</p>
+      {% if server_status.online %}
+      <span class="inline-flex items-center gap-1.5 text-green-400 font-semibold">
+        <span class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span> Online
+      </span>
+      {% else %}
+      <span class="inline-flex items-center gap-1.5 text-red-400 font-semibold">
+        <span class="w-2 h-2 bg-red-400 rounded-full"></span> Offline
+      </span>
+      {% endif %}
+    </div>
+    <div class="bg-gray-700 rounded-lg p-4 text-center">
+      <p class="text-xs text-gray-400 uppercase tracking-wide mb-1">Map</p>
+      <p class="text-gray-100 font-semibold text-sm">{{ server_status.map or 'Unknown' }}</p>
+    </div>
+    <div class="bg-gray-700 rounded-lg p-4 text-center">
+      <p class="text-xs text-gray-400 uppercase tracking-wide mb-1">Players</p>
+      <p class="text-gray-100 font-semibold text-sm">{{ server_status.players or '0' }} / {{ server_status.max_players or '70' }}</p>
+    </div>
+    <div class="bg-gray-700 rounded-lg p-4 text-center">
+      <p class="text-xs text-gray-400 uppercase tracking-wide mb-1">Ping</p>
+      <p class="text-gray-100 font-semibold text-sm">{{ server_status.ping or '—' }} ms</p>
+    </div>
+    <div class="bg-gray-700 rounded-lg p-4 text-center">
+      <p class="text-xs text-gray-400 uppercase tracking-wide mb-1">Uptime</p>
+      <p class="text-gray-100 font-semibold text-sm">{{ server_status.uptime or '—' }}</p>
+    </div>
+  </div>
+
+  <!-- Action Buttons -->
+  <div class="flex gap-3 mt-6">
+    <form method="POST" class="inline">
+      <input type="hidden" name="action" value="restart">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" onclick="return confirm('Restart the server?')"
+              class="px-5 py-2.5 bg-yellow-600/20 hover:bg-yellow-600/40 text-yellow-300 font-medium rounded-lg transition-colors inline-flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+        Restart
+      </button>
+    </form>
+    <form method="POST" class="inline">
+      <input type="hidden" name="action" value="stop">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" onclick="return confirm('Stop the server? This will disconnect all players.')"
+              class="px-5 py-2.5 bg-red-600/20 hover:bg-red-600/40 text-red-300 font-medium rounded-lg transition-colors inline-flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/></svg>
+        Stop
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- Player List -->
+<div class="bg-gray-800 rounded-lg shadow-lg mb-6 overflow-hidden">
+  <div class="px-6 py-4 border-b border-gray-700">
+    <h3 class="text-lg font-semibold text-gray-100">Connected Players</h3>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm text-left">
+      <thead class="text-xs text-gray-400 uppercase border-b border-gray-700">
+        <tr>
+          <th class="px-6 py-3">Name</th>
+          <th class="px-6 py-3">Steam ID</th>
+          <th class="px-6 py-3">Tribe</th>
+          <th class="px-6 py-3">Level</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-700">
+        {% if server_status.players_list %}
+          {% for player in server_status.players_list %}
+          <tr class="hover:bg-gray-700/50">
+            <td class="px-6 py-3 text-gray-200 font-medium">{{ player.name }}</td>
+            <td class="px-6 py-3 text-gray-400 font-mono text-xs">{{ player.steam_id }}</td>
+            <td class="px-6 py-3 text-gray-400">{{ player.tribe or '—' }}</td>
+            <td class="px-6 py-3 text-gray-200">{{ player.level }}</td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="4" class="px-6 py-8 text-center text-gray-500">No players connected</td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Server Settings -->
+<form method="POST">
+  <input type="hidden" name="action" value="settings">
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+  <div class="bg-gray-800 rounded-lg p-6 shadow-lg">
+    <h3 class="text-lg font-semibold text-gray-100 mb-4">Server Settings</h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div>
+        <label for="server_name" class="block text-sm font-medium text-gray-300 mb-1">Server Name</label>
+        <input type="text" id="server_name" name="server_name"
+               value="{{ server_status.server_name or '' }}"
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+      </div>
+      <div>
+        <label for="map_name" class="block text-sm font-medium text-gray-300 mb-1">Map</label>
+        <select id="map_name" name="map_name"
+                class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+          {% for m in ['The Island', 'Scorched Earth', 'Aberration', 'Extinction', 'Genesis Part 1', 'Genesis Part 2', 'Fjordur', 'Lost Island', 'Crystal Isles'] %}
+          <option value="{{ m }}" {% if server_status.map == m %}selected{% endif %}>{{ m }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="max_players" class="block text-sm font-medium text-gray-300 mb-1">Max Players</label>
+        <input type="number" id="max_players" name="max_players"
+               value="{{ server_status.max_players or 70 }}"
+               min="1" max="250"
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+      </div>
+      <div>
+        <label for="day_night_cycle" class="block text-sm font-medium text-gray-300 mb-1">Day/Night Cycle Speed</label>
+        <input type="number" id="day_night_cycle" name="day_night_cycle"
+               value="{{ server_status.day_night_cycle or 1 }}"
+               min="0.5" max="10" step="0.5"
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+      </div>
+      <div>
+        <label for="taming_speed" class="block text-sm font-medium text-gray-300 mb-1">Taming Speed Multiplier</label>
+        <input type="number" id="taming_speed" name="taming_speed"
+               value="{{ server_status.taming_speed or 1 }}"
+               min="0.5" max="20" step="0.5"
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+      </div>
+      <div>
+        <label for="harvest_amount" class="block text-sm font-medium text-gray-300 mb-1">Harvest Amount Multiplier</label>
+        <input type="number" id="harvest_amount" name="harvest_amount"
+               value="{{ server_status.harvest_amount or 1 }}"
+               min="0.5" max="20" step="0.5"
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+      </div>
+      <div>
+        <label for="xp_multiplier" class="block text-sm font-medium text-gray-300 mb-1">XP Multiplier</label>
+        <input type="number" id="xp_multiplier" name="xp_multiplier"
+               value="{{ server_status.xp_multiplier or 1 }}"
+               min="0.5" max="20" step="0.5"
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+      </div>
+    </div>
+
+    <div class="mt-6">
+      <button type="submit" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-lg transition-colors">
+        Save Server Settings
+      </button>
+    </div>
+  </div>
+</form>

@@ -1,0 +1,89 @@
+<div class="mb-6">
+  <h2 class="text-2xl font-bold text-gray-100">Leaderboard</h2>
+  <p class="text-gray-400 mt-1">Auto-updating player leaderboard display</p>
+</div>
+
+<form method="POST">
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+  <!-- Enable/Disable -->
+  <div class="bg-gray-800 rounded-lg p-6 shadow-lg mb-6">
+    <div class="flex items-center justify-between">
+      <div>
+        <h3 class="text-lg font-semibold text-gray-100">Leaderboard Display</h3>
+        <p class="text-sm text-gray-400 mt-1">Enable or disable the auto-updating leaderboard</p>
+      </div>
+      <label class="relative inline-flex items-center cursor-pointer">
+        <input type="checkbox" name="enabled" value="1" class="sr-only peer"
+               {% if settings.enabled %}checked{% endif %}>
+        <div class="w-11 h-6 bg-gray-600 peer-focus:ring-2 peer-focus:ring-indigo-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+      </label>
+    </div>
+  </div>
+
+  <!-- Settings -->
+  <div class="bg-gray-800 rounded-lg p-6 shadow-lg mb-6">
+    <h3 class="text-lg font-semibold text-gray-100 mb-4">Configuration</h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div>
+        <label for="channel_id" class="block text-sm font-medium text-gray-300 mb-1">Channel ID</label>
+        <input type="text" id="channel_id" name="channel_id"
+               value="{{ settings.channel_id or '' }}"
+               placeholder="Discord channel ID"
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+      </div>
+      <div>
+        <label for="update_interval" class="block text-sm font-medium text-gray-300 mb-1">Update Interval (minutes)</label>
+        <input type="number" id="update_interval" name="update_interval"
+               value="{{ settings.update_interval or 5 }}"
+               min="1" max="1440"
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+        <p class="text-xs text-gray-500 mt-1">How often the leaderboard updates (1-1440 minutes)</p>
+      </div>
+    </div>
+  </div>
+
+  <button type="submit" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-lg transition-colors">
+    Save Settings
+  </button>
+</form>
+
+<!-- Leaderboard Preview -->
+<div class="bg-gray-800 rounded-lg p-6 shadow-lg mt-6">
+  <h3 class="text-lg font-semibold text-gray-100 mb-4">Current Leaderboard</h3>
+  {% if leaderboard %}
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm text-left">
+      <thead class="text-xs text-gray-400 uppercase border-b border-gray-700">
+        <tr>
+          <th class="px-4 py-3 w-16">Rank</th>
+          <th class="px-4 py-3">Player</th>
+          <th class="px-4 py-3">Tribe</th>
+          <th class="px-4 py-3 text-right">Level</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-700">
+        {% for entry in leaderboard %}
+        <tr class="hover:bg-gray-700/50">
+          <td class="px-4 py-3">
+            {% if loop.index == 1 %}
+            <span class="text-yellow-400 font-bold">#1</span>
+            {% elif loop.index == 2 %}
+            <span class="text-gray-300 font-bold">#2</span>
+            {% elif loop.index == 3 %}
+            <span class="text-amber-600 font-bold">#3</span>
+            {% else %}
+            <span class="text-gray-500">#{{ loop.index }}</span>
+            {% endif %}
+          </td>
+          <td class="px-4 py-3 text-gray-200 font-medium">{{ entry.player_name }}</td>
+          <td class="px-4 py-3 text-gray-400">{{ entry.tribe_name or '—' }}</td>
+          <td class="px-4 py-3 text-gray-200 text-right font-mono">{{ entry.level }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-gray-500 text-center py-8">No leaderboard data available yet</p>
+  {% endif %}
+</div>

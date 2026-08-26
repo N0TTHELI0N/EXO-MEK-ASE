@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - Select Server{% endblock %}
+{% block content %}
+<h1>Select a Server</h1>
+<p class="text-muted">Choose a server where both you and the bot have access.</p>
+
+{% if guilds %}
+<div class="guild-grid">
+    {% for guild in guilds %}
+    <a href="/dashboard/{{ guild.id }}" class="guild-card">
+        {% if guild.icon %}
+            <img src="https://cdn.discordapp.com/icons/{{ guild.id }}/{{ guild.icon }}.png?size=128"
+                 alt="{{ guild.name }}" class="guild-icon">
+        {% else %}
+            <div class="guild-icon-placeholder">{{ guild.name[0] }}</div>
+        {% endif %}
+        <div class="guild-info">
+            <h3>{{ guild.name }}</h3>
+            <span class="guild-id">Members: {{ guild.approximate_member_count | default(guild.member_count, true) | default('Unknown') }}</span>
+        </div>
+        <span class="btn btn-primary btn-sm" style="margin-left:auto;">Manage</span>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+    <h3>No servers found</h3>
+    <p>Make sure the bot is in your server and you have <strong>Manage Server</strong> permission.</p>
+    <a href="https://discord.com/oauth2/authorize?client_id={{ config.get('DISCORD_CLIENT_ID', '') }}&permissions=8&scope=bot"
+       class="btn btn-primary" target="_blank">Invite Bot to Server</a>
+</div>
+{% endif %}
+{% endblock %}

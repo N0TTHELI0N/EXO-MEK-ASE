@@ -1,0 +1,1027 @@
+import os
+import json
+import secrets
+import requests
+from flask import Flask, redirect, request, session, render_template, jsonify, url_for, send_file
+from functools import wraps
+import sys
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+import guild_settings
+import shop_db
+from security import validate_path
+
+app = Flask(__name__, template_folder="templates", static_folder="static")
+app.secret_key = os.environ.get("DASHBOARD_SECRET", secrets.token_hex(32))
+
+app.config.update(
+    SESSION_COOKIE_SECURE=True,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+)
+
+def generate_csrf_token():
+    if '_csrf_token' not in session:
+        session['_csrf_token'] = secrets.token_hex(32)
+    return session['_csrf_token']
+
+app.jinja_env.globals['csrf_token'] = generate_csrf_token
+
+def validate_csrf(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if request.method in ("POST", "PUT", "DELETE"):
+            token = request.form.get('_csrf_token') or request.headers.get('X-CSRF-Token')
+            if not token or token != session.get('_csrf_token'):
+                return "CSRF token missing or invalid", 403
+        return f(*args, **kwargs)
+    return decorated
+
+DISCORD_CLIENT_ID = os.environ.get("DISCORD_CLIENT_ID", "")
+DISCORD_CLIENT_SECRET = os.environ.get("DISCORD_CLIENT_SECRET", "")
+DISCORD_REDIRECT_URI = os.environ.get("DISCORD_REDIRECT_URI", "http://localhost:5000/callback")
+DISCORD_API_BASE = "https://discord.com/api/v10"
+BOT_TOKEN = os.environ.get("DISCORD_TOKEN", "")
+
+
+# ────────────────────────────────────────────────────────────
+#  Simple Rate Limiter
+# ────────────────────────────────────────────────────────────
+from collections import defaultdict
+import time
+
+_rate_limit_store: dict[str, list[float]] = defaultdict(list)
+RATE_LIMIT_WINDOW = 60
+RATE_LIMIT_MAX = 30
+
+def check_rate_limit(key: str) -> bool:
+    now = time.time()
+    _rate_limit_store[key] = [t for t in _rate_limit_store[key] if now - t < RATE_LIMIT_WINDOW]
+    if len(_rate_limit_store[key]) >= RATE_LIMIT_MAX:
+        return False
+    _rate_limit_store[key].append(now)
+    return True
+
+
+# ────────────────────────────────────────────────────────────
+#  Auth Helpers
+# ────────────────────────────────────────────────────────────
+
+def get_current_user():
+    return session.get("user")
+
+
+def get_user_guilds():
+    token = session.get("access_token")
+    if not token:
+        return []
+    resp = requests.get(
+        f"{DISCORD_API_BASE}/users/@me/guilds",
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=10,
+    )
+    if resp.status_code != 200:
+        return []
+    return [g for g in resp.json() if int(g.get("permissions", 0)) & 0x20]
+
+
+def get_bot_guilds():
+    if not BOT_TOKEN:
+        return []
+    resp = requests.get(
+        f"{DISCORD_API_BASE}/users/@me/guilds",
+        headers={"Authorization": f"Bot {BOT_TOKEN}"},
+        timeout=10,
+    )
+    if resp.status_code != 200:
+        return []
+    return resp.json()
+
+
+def get_mutual_guilds():
+    user_guilds = {g["id"]: g for g in get_user_guilds()}
+    bot_guilds = {g["id"]: g for g in get_bot_guilds()}
+    return [user_guilds[gid] for gid in set(user_guilds) & set(bot_guilds)]
+
+
+def get_guild_roles(guild_id):
+    if not BOT_TOKEN:
+        return []
+    resp = requests.get(
+        f"{DISCORD_API_BASE}/guilds/{guild_id}/roles",
+        headers={"Authorization": f"Bot {BOT_TOKEN}"},
+        timeout=10,
+    )
+    if resp.status_code != 200:
+        return []
+    roles = resp.json()
+    roles.sort(key=lambda r: r.get("position", 0), reverse=True)
+    return [{"id": int(r["id"]), "name": r["name"]} for r in roles if r.get("name") != "@everyone"]
+
+
+def get_guild_name(guild_id):
+    bot_guilds = get_bot_guilds()
+    for g in bot_guilds:
+        if str(g["id"]) == str(guild_id):
+            return g.get("name", f"Server {guild_id}")
+    return f"Server {guild_id}"
+
+
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not get_current_user():
+            return redirect(url_for("login"))
+        return f(*args, **kwargs)
+    return decorated
+
+
+def guild_admin_required(f):
+    @wraps(f)
+    def decorated(guild_id, *args, **kwargs):
+        user = get_current_user()
+        if not user:
+            return redirect(url_for("login"))
+        user_guilds = {g["id"]: g for g in get_user_guilds()}
+        if str(guild_id) not in user_guilds:
+            return "You don't have access to this server.", 403
+        
+        guild_perms = int(user_guilds[str(guild_id)].get("permissions", 0))
+        ADMINISTRATOR_FLAG = 0x8
+        if not (guild_perms & ADMINISTRATOR_FLAG):
+            return "You need Administrator permission to access this.", 403
+        
+        return f(guild_id, *args, **kwargs)
+    return decorated
+
+
+def nitrado_client_for(guild_id):
+    token = guild_settings.get_setting(guild_id, "nitrado_api_token")
+    service_id = guild_settings.get_setting(guild_id, "nitrado_service_id")
+    if not token or not service_id:
+        return None
+    from nitrado import NitradoClient
+    return NitradoClient(token, service_id)
+
+
+# ────────────────────────────────────────────────────────────
+#  Auth Routes
+# ────────────────────────────────────────────────────────────
+
+@app.route("/login")
+def login():
+    state = secrets.token_urlsafe(32)
+    session["oauth_state"] = state
+    return redirect(
+        f"https://discord.com/api/oauth2/authorize"
+        f"?client_id={DISCORD_CLIENT_ID}"
+        f"&redirect_uri={DISCORD_REDIRECT_URI}"
+        f"&response_type=code"
+        f"&scope=identify+guilds"
+        f"&state={state}"
+    )
+
+
+@app.route("/callback")
+def callback():
+    code = request.args.get("code")
+    state = request.args.get("state")
+    if state != session.get("oauth_state"):
+        return "Invalid state parameter.", 403
+    data = {
+        "client_id": DISCORD_CLIENT_ID,
+        "client_secret": DISCORD_CLIENT_SECRET,
+        "grant_type": "authorization_code",
+        "code": code,
+        "redirect_uri": DISCORD_REDIRECT_URI,
+    }
+    resp = requests.post("https://discord.com/api/oauth2/token", data=data, timeout=10)
+    if resp.status_code != 200:
+        return "Failed to authenticate with Discord.", 403
+    token_data = resp.json()
+    session["access_token"] = token_data["access_token"]
+    user_resp = requests.get(
+        f"{DISCORD_API_BASE}/users/@me",
+        headers={"Authorization": f"Bearer {token_data['access_token']}"},
+        timeout=10,
+    )
+    if user_resp.status_code == 200:
+        session["user"] = user_resp.json()
+    return redirect(url_for("dashboard"))
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("home"))
+
+
+# ────────────────────────────────────────────────────────────
+#  Main Routes
+# ────────────────────────────────────────────────────────────
+
+@app.route("/")
+def home():
+    return render_template("home.html", user=get_current_user())
+
+
+@app.route("/dashboard")
+@login_required
+def dashboard():
+    return render_template(
+        "servers.html",
+        user=get_current_user(),
+        guilds=get_mutual_guilds(),
+    )
+
+
+@app.route("/dashboard/<int:guild_id>")
+@login_required
+@guild_admin_required
+def guild_overview(guild_id):
+    return render_template(
+        "dashboard.html",
+        user=get_current_user(),
+        guild_id=guild_id,
+        active_section="overview",
+        settings=guild_settings.get_settings(guild_id),
+        license_valid=guild_settings.is_license_valid(guild_id),
+    )
+
+
+# ────────────────────────────────────────────────────────────
+#  Section Routes
+# ────────────────────────────────────────────────────────────
+
+@app.route("/dashboard/<int:guild_id>/overview")
+@login_required
+@guild_admin_required
+def section_overview(guild_id):
+    return render_template(
+        "overview.html",
+        user=get_current_user(),
+        guild_id=guild_id,
+        active_section="overview",
+        settings=guild_settings.get_settings(guild_id),
+        license_valid=guild_settings.is_license_valid(guild_id),
+    )
+
+
+@app.route("/dashboard/<int:guild_id>/rcon", methods=["GET", "POST"])
+@login_required
+@guild_admin_required
+@validate_csrf
+def section_rcon(guild_id):
+    if request.method == "POST":
+        guild_settings.update_setting(guild_id, "rcon_host", request.form.get("rcon_host", ""))
+        guild_settings.update_setting(guild_id, "rcon_port", request.form.get("rcon_port", "27015"))
+        rcon_password = request.form.get("rcon_password", "")
+        if rcon_password:
+            guild_settings.update_setting(guild_id, "rcon_password", rcon_password)
+        return redirect(url_for("section_rcon", guild_id=guild_id))
+    return render_template(
+        "rcon.html",
+        user=get_current_user(),
+        guild_id=guild_id,
+        active_section="rcon",
+        settings=guild_settings.get_settings(guild_id),
+    )
+
+
+@app.route("/dashboard/<int:guild_id>/sftp", methods=["GET", "POST"])
+@login_required
+@guild_admin_required
+@validate_csrf
+def section_sftp(guild_id):
+    if request.method == "POST":
+        guild_settings.update_setting(guild_id, "sftp_host", request.form.get("sftp_host", ""))
+        guild_settings.update_setting(guild_id, "sftp_port", request.form.get("sftp_port", "22"))
+        guild_settings.update_setting(guild_id, "sftp_username", request.form.get("sftp_username", ""))
+        sftp_password = request.form.get("sftp_password", "")
+        if sftp_password:
+            guild_settings.update_setting(guild_id, "sftp_password", sftp_password)
+        guild_settings.update_setting(guild_id, "save_dir", request.form.get("save_dir", "/ARK/ShooterGame/Saved"))
+        return redirect(url_for("section_sftp", guild_id=guild_id))
+    return render_template(
+        "sftp.html",
+        user=get_current_user(),
+        guild_id=guild_id,
+        active_section="sftp",
+        settings=guild_settings.get_settings(guild_id),
+    )
+
+
+@app.route("/dashboard/<int:guild_id>/nitrado", methods=["GET", "POST"])
+@login_required
+@guild_admin_required
+@validate_csrf
+def section_nitrado(guild_id):
+    if request.method == "POST":
+        nitrado_token = request.form.get("nitrado_api_token", "")
+        if nitrado_token:
+            guild_settings.update_setting(guild_id, "nitrado_api_token", nitrado_token)
+        guild_settings.update_setting(guild_id, "nitrado_service_id", request.form.get("nitrado_service_id", ""))
+        return redirect(url_for("section_nitrado", guild_id=guild_id))
+    return render_template(
+        "nitrado.html",
+        user=get_current_user(),
+        guild_id=guild_id,
+        active_section="nitrado",
+        settings=guild_settings.get_settings(guild_id),
+    )
+
+
+@app.route("/dashboard/<int:guild_id>/license", methods=["GET", "POST"])
+@login_required
+@guild_admin_required
+@validate_csrf
+def section_license(guild_id):
+    if request.method == "POST":
+        action = request.form.get("action")
+        if action == "activate":
+            key = request.form.get("license_key", "").strip()
+            guild_settings.update_setting(guild_id, "license_key", key)
+        elif action == "generate":
+            duration = int(request.form.get("duration_days", 30))
+            key = guild_settings.generate_license_key(duration)
+            guild_settings.update_setting(guild_id, "license_key", key)
+            guild_settings.update_setting(guild_id, "license_days", duration)
+        return redirect(url_for("section_license", guild_id=guild_id))
+    return render_template(
+        "license.html",
+        user=get_current_user(),
+        guild_id=guild_id,
+        active_section="license",
+        settings=guild_settings.get_settings(guild_id),
+        license_valid=guild_settings.is_license_valid(guild_id),
+    )
+
+
+@app.route("/dashboard/<int:guild_id>/shop", methods=["GET", "POST"])
+@login_required
+@guild_admin_required
+@validate_csrf
+def section_shop(guild_id):
+    if request.method == "POST":
+        action = request.form.get("action")
+        if action == "add":
+            shop_db.add_shop_dino(
+                guild_id,
+                request.form.get("name", ""),
+                request.form.get("blueprint", ""),
+                int(request.form.get("min_level", 1)),
+                int(request.form.get("max_level", 150)),
+                int(request.form.get("price", 0)),
+                request.form.get("category", "General"),
+            )
+        elif action == "remove":
+            shop_db.remove_shop_dino(guild_id, request.form.get("name", ""))
+        return redirect(url_for("section_shop", guild_id=guild_id))
+    return render_template(
+        "shop.html",
+        user=get_current_user(),
+        guild_id=guild_id,
+        active_section="shop",
+        dinos=shop_db.get_all_shop_dinos(guild_id),
+    )
+
+
+@app.route("/dashboard/<int:guild_id>/points", methods=["GET", "POST"])
+@login_required
+@guild_admin_required
+@validate_csrf
+def section_points(guild_id):
+    if request.method == "POST":
+        action = request.form.get("action")
+        tribe = request.form.get("tribe_name", "").strip()
+        amount = int(request.form.get("amount", 0))
+        if action == "add" and tribe and amount > 0:
+            shop_db.add_points(guild_id, tribe, amount)
+        elif action == "remove" and tribe and amount > 0:
+            shop_db.remove_points(guild_id, tribe, amount)
+        return redirect(url_for("section_points", guild_id=guild_id))
+    search = request.args.get("search", "").strip()
+    leaderboard = shop_db.get_leaderboard(guild_id, limit=100)
+    return render_template(
+        "points.html",
+        user=get_current_user(),
+        guild_id=guild_id,
+        active_section="points",
+        leaderboard=leaderboard,
+        search=search,
+    )
+
+
+@app.route("/dashboard/<int:guild_id>/whitelist", methods=["GET", "POST"])
+@login_required
+@guild_admin_required
+@validate_csrf
+def section_whitelist(guild_id):
+    if request.method == "POST":
+        action = request.form.get("action")
+        if action == "set_restart_time":
+            hour = int(request.form.get("hour", 3))
+            minute = int(request.form.get("minute", 0))
+            guild_settings.update_setting(guild_id, "restart_schedule", {"hour": hour, "minute": minute})
+        elif action == "set_whitelist_path":
+            guild_settings.update_setting(guild_id, "whitelist_path", request.form.get("whitelist_path", ""))
+        return redirect(url_for("section_whitelist", guild_id=guild_id))
+    conn = guild_settings.get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT discord_id, psn_id, status, linked_at FROM linked_players WHERE guild_id = %s", (guild_id,))
+            linked_players = cur.fetchall()
+    finally:
+        conn.close()
+    return render_template(
+        "whitelist.html",
+        user=get_current_user(),
+        guild_id=guild_id,
+        active_section="whitelist",
+        settings=guild_settings.get_settings(guild_id),
+        linked_players=linked_players,
+    )
+
+
+@app.route("/dashboard/<int:guild_id>/tribelog", methods=["GET", "POST"])
+@login_required
+@guild_admin_required
+@validate_csrf
+def section_tribelog(guild_id):
+    if request.method == "POST":
+        action = request.form.get("action")
+        if action == "config":
+            conn = guild_settings.get_conn()
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("INSERT INTO tribe_log_config (guild_id) VALUES (%s) ON CONFLICT (guild_id) DO NOTHING", (guild_id,))
+                    cur.execute("UPDATE tribe_log_config SET enabled=%s WHERE guild_id=%s",
+                                (request.form.get("enabled") == "on", guild_id))
+                    cur.execute("UPDATE tribe_log_config SET channel_id=%s WHERE guild_id=%s",
+                                (int(request.form["channel_id"]) if request.form.get("channel_id") else None, guild_id))
+                    cur.execute("UPDATE tribe_log_config SET log_source=%s WHERE guild_id=%s",
+                                (request.form.get("log_source", "file"), guild_id))
+                    cur.execute("UPDATE tribe_log_config SET log_path=%s WHERE guild_id=%s",
+                                (request.form.get("log_path", ""), guild_id))
+                conn.commit()
+            finally:
+                conn.close()
+        elif action == "add_tribe":
+            tribe_name = request.form.get("tribe_name", "").strip()
+            if tribe_name:
+                conn = guild_settings.get_conn()
+                try:
+                    with conn.cursor() as cur:
+                        cur.execute("INSERT INTO known_tribes (guild_id, tribe_name) VALUES (%s, %s) ON CONFLICT DO NOTHING", (guild_id, tribe_name))
+                    conn.commit()
+                finally:
+                    conn.close()
+        elif action == "remove_tribe":
+            tribe_name = request.form.get("tribe_name", "").strip()
+            if tribe_name:
+                conn = guild_settings.get_conn()
+                try:
+                    with conn.cursor() as cur:
+                        cur.execute("DELETE FROM known_tribes WHERE guild_id = %s AND tribe_name = %s", (guild_id, tribe_name))
+                    conn.commit()
+                finally:
+                    conn.close()
+        return redirect(url_for("section_tribelog", guild_id=guild_id))
+    conn = guild_settings.get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT enabled, channel_id, log_source, log_path FROM tribe_log_config WHERE guild_id = %s", (guild_id,))
+            tribelog_config = cur.fetchone()
+            cur.execute("SELECT tribe_name FROM known_tribes WHERE guild_id = %s", (guild_id,))
+            known_tribes = [r[0] for r in cur.fetchall()]
+    finally:
+        conn.close()
+    return render_template(
+        "tribelog.html",
+        user=get_current_user(),
+        guild_id=guild_id,
+        active_section="tribelog",
+        tribelog_config=tribelog_config,
+        known_tribes=known_tribes,
+    )
+
+
+@app.route("/dashboard/<int:guild_id>/automod", methods=["GET", "POST"])
+@login_required
+@guild_admin_required
+@validate_csrf
+def section_automod(guild_id):
+    if request.method == "POST":
+        action = request.form.get("action")
+        
+        if action == "add_word":
+            new_word = request.form.get("new_word", "").strip()
+            if new_word:
+                guild_settings.add_automod_word(guild_id, new_word, session.get("user", {}).get("id"))
+                guild_settings.log_action(
+                    guild_id, "automod", session.get("user", {}).get("id"),
+                    session.get("user", {}).get("username"), None,
+                    sub_type="word_added", details={"word": new_word}
+                )
+        elif action == "remove_word":
+            word_id = request.form.get("word_id")
+            if word_id:
+                conn = guild_settings.get_conn()
+                try:
+                    with conn.cursor() as cur:
+                        cur.execute("SELECT word FROM automod_custom_words WHERE id = %s AND guild_id = %s", (word_id, guild_id))
+                        row = cur.fetchone()
+                        if row:
+                            guild_settings.remove_automod_word(guild_id, row[0])
+                            guild_settings.log_action(
+                                guild_id, "automod", session.get("user", {}).get("id"),
+                                session.get("user", {}).get("username"), None,
+                                sub_type="word_removed", details={"word": row[0]}
+                            )
+                finally:
+                    conn.close()
+        else:
+            # Default save settings
+            guild_settings.update_setting(guild_id, "automod_enabled", request.form.get("automod_enabled") == "on")
+            guild_settings.update_setting(guild_id, "automod_log_channel_id",
+                                           int(request.form["automod_log_channel_id"]) if request.form.get("automod_log_channel_id") else None)
+            guild_settings.update_setting(guild_id, "automod_language", request.form.get("automod_language", "en"))
+        
+        return redirect(url_for("section_automod", guild_id=guild_id))
+    
+    # Get custom words for display
+    custom_words = guild_settings.get_automod_words_with_info(guild_id)
+    
+    return render_template(
+        "sections/automod.html",
+        user=get_current_user(),
+        guild_id=guild_id,
+        active_section="automod",
+        settings=guild_settings.get_settings(guild_id),
+        custom_words=custom_words,
+    )
+
+
+@app.route("/dashboard/<int:guild_id>/punishments", methods=["GET", "POST"])
+@login_required
+@guild_admin_required
+@validate_csrf
+def section_punishments(guild_id):
+    if request.method == "POST":
+        action = request.form.get("action")
+        if action == "set_threshold":
+            guild_settings.update_setting(guild_id, "warning_threshold", int(request.form.get("threshold", 3)))
+            guild_settings.update_setting(guild_id, "warning_punishment", request.form.get("warning_punishment", "ban"))
+        elif action == "set_log_channel":
+            guild_settings.update_setting(guild_id, "punishment_log_channel_id",
+                                           int(request.form["punishment_log_channel_id"]) if request.form.get("punishment_log_channel_id") else None)
+        elif action == "clear_warnings":
+            player = request.form.get("player", "").strip()
+            if player:
+                guild_settings.clear_warnings(guild_id, player)
+        return redirect(url_for("section_punishments", guild_id=guild_id))
+    search_player = request.args.get("player", "").strip()
+    warnings = []
+    punishments = []
+    if search_player:
+        warnings = guild_settings.get_warnings(guild_id, search_player)
+        punishments = guild_settings.get_punishments(guild_id, search_player)
+    return render_template(
+        "punishments.html",
+        user=get_current_user(),
+        guild_id=guild_id,
+        active_section="punishments",
+        settings=guild_settings.get_settings(guild_id),
+        warnings=warnings,
+        punishments=punishments,
+        search_player=search_player,
+    )
+
+
+@app.route("/dashboard/<int:guild_id>/embeds", methods=["GET", "POST"])
+@login_required
+@guild_admin_required
+@validate_csrf
+def section_embeds(guild_id):
+    if request.method == "POST":
+        embed_key = request.form.get("embed_key")
+        if embed_key:
+            guild_settings.set_embed_template(
+                guild_id,
+                embed_key,
+                title=request.form.get("title", ""),
+                description=request.form.get("description", ""),
+                color=request.form.get("color", "#FFD700"),
+                image_url=request.form.get("image_url", ""),
+                thumbnail_url=request.form.get("thumbnail_url", ""),
+                footer_text=request.form.get("footer_text", ""),
+                author_name=request.form.get("author_name", ""),
+            )
+        return redirect(url_for("section_embeds", guild_id=guild_id))
+    return render_template(
+        "embeds.html",
+        user=get_current_user(),
+        guild_id=guild_id,
+        active_section="embeds",
+        embeds=guild_settings.get_all_embed_templates(guild_id),
+        embed_keys=list(guild_settings.DEFAULT_EMBEDS.keys()),
+    )
+
+
+@app.route("/dashboard/<int:guild_id>/backup", methods=["GET", "POST"])
+@login_required
+@guild_admin_required
+@validate_csrf
+def section_backup(guild_id):
+    if request.method == "POST":
+        return redirect(url_for("section_backup", guild_id=guild_id))
+    conn = guild_settings.get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, name, created_at, created_by FROM backup_records WHERE guild_id = %s ORDER BY created_at DESC",
+                (guild_id,),
+            )
+            backups = cur.fetchall()
+    finally:
+        conn.close()
+    return render_template(
+        "backup.html",
+        user=get_current_user(),
+        guild_id=guild_id,
+        active_section="backup",
+        backups=backups,
+    )
+
+
+@app.route("/dashboard/<int:guild_id>/leaderboard", methods=["GET", "POST"])
+@login_required
+@guild_admin_required
+@validate_csrf
+def section_leaderboard(guild_id):
+    if request.method == "POST":
+        action = request.form.get("action")
+        if action == "config":
+            guild_settings.update_setting(guild_id, "leaderboard_config", {
+                "enabled": request.form.get("enabled") == "on",
+                "channel_id": int(request.form["channel_id"]) if request.form.get("channel_id") else None,
+                "interval": int(request.form.get("interval", 5)),
+            })
+        return redirect(url_for("section_leaderboard", guild_id=guild_id))
+    config = shop_db.get_leaderboard_config(guild_id)
+    board = shop_db.get_leaderboard(guild_id, limit=25)
+    return render_template(
+        "leaderboard.html",
+        user=get_current_user(),
+        guild_id=guild_id,
+        active_section="leaderboard",
+        config=config,
+        leaderboard=board,
+    )
+
+
+@app.route("/dashboard/<int:guild_id>/server-control", methods=["GET", "POST"])
+@login_required
+@guild_admin_required
+@validate_csrf
+def section_server_control(guild_id):
+    if request.method == "POST":
+        return redirect(url_for("section_server_control", guild_id=guild_id))
+    return render_template(
+        "server_control.html",
+        user=get_current_user(),
+        guild_id=guild_id,
+        active_section="server-control",
+    )
+
+
+@app.route("/dashboard/<int:guild_id>/logs", methods=["GET", "POST"])
+@login_required
+@guild_admin_required
+@validate_csrf
+def section_logs(guild_id):
+    page = int(request.args.get("page", 1))
+    per_page = 50
+    offset = (page - 1) * per_page
+    log_type_filter = request.args.get("log_type", "")
+    logs = guild_settings.get_logs(guild_id, log_type=log_type_filter or None, limit=per_page, offset=offset)
+    total = guild_settings.get_log_count(guild_id, log_type=log_type_filter or None)
+    return render_template(
+        "logs.html",
+        user=get_current_user(),
+        guild_id=guild_id,
+        active_section="logs",
+        logs=logs,
+        log_types=guild_settings.LOG_TYPES,
+        log_type_filter=log_type_filter,
+        page=page,
+        total=total,
+        per_page=per_page,
+    )
+
+
+@app.route("/dashboard/<int:guild_id>/settings", methods=["GET", "POST"])
+@login_required
+@guild_admin_required
+@validate_csrf
+def section_settings(guild_id):
+    if request.method == "POST":
+        for key in ["bot_language", "whitelist_path", "save_dir"]:
+            value = request.form.get(key)
+            if value is not None:
+                guild_settings.update_setting(guild_id, key, value)
+        for key in request.form:
+            if key.startswith("log_channel_"):
+                log_type = key.replace("log_channel_", "")
+                channel_id = request.form.get(key, "").strip()
+                if channel_id:
+                    guild_settings.update_setting(guild_id, f"log_channel_{log_type}", int(channel_id))
+                else:
+                    guild_settings.remove_setting(guild_id, f"log_channel_{log_type}")
+        return redirect(url_for("section_settings", guild_id=guild_id))
+    return render_template(
+        "settings.html",
+        user=get_current_user(),
+        guild_id=guild_id,
+        active_section="settings",
+        settings=guild_settings.get_settings(guild_id),
+        log_channels=guild_settings.get_all_log_channels(guild_id),
+    )
+
+
+# ── Permissions ─────────────────────────────────────────────
+
+ALL_COMMANDS_LIST = [
+    "activate", "help", "top-servers",
+    "set-rcon", "set-rcon-defaults", "set-nitrado-token", "set-sftp-credentials",
+    "set-log-channel", "set-license", "ban-user", "view-guilds", "force-sync-guild",
+    "set-command-permission", "remove-command-permission", "view-command-permissions", "clear-command-permissions",
+    "shop-add", "shop-remove", "shop-list", "shop-edit",
+    "points-add", "points-remove", "points-check", "points-leaderboard",
+    "whitelist-add", "whitelist-remove", "whitelist-restart", "whitelist-link", "whitelist-unlink",
+    "tribelog-config", "tribelog-test",
+    "automod-config", "automod-list", "automod-remove",
+    "backup-create", "backup-list", "backup-restore", "backup-download",
+    "leaderboard-config", "leaderboard-set-channel", "leaderboard-toggle", "leaderboard-force", "leaderboard-sync",
+    "warn", "tempwarn", "warnings", "clear-warnings", "remove-warning",
+    "punish-ban", "punish-tempban", "punish-wipe",
+    "punishment-history", "set-warning-threshold", "set-warning-punishment",
+    "set-warning-tempban-duration", "set-warning-default-expiry", "set-punishment-log",
+    "add-tribe-member", "server-status", "server-restart", "server-stop",
+]
+
+
+def _build_permissions_dict(guild_id, guild_roles):
+    raw = guild_settings.get_all_command_permissions(guild_id)
+    role_map = {r["id"]: r["name"] for r in guild_roles}
+    result = {}
+    for cmd, role_ids in raw.items():
+        result[cmd] = [{"id": rid, "name": role_map.get(rid, str(rid))} for rid in role_ids]
+    return result
+
+
+@app.route("/dashboard/<int:guild_id>/permissions", methods=["GET"])
+@login_required
+@guild_admin_required
+def section_permissions(guild_id):
+    guild_roles = get_guild_roles(guild_id)
+    permissions = _build_permissions_dict(guild_id, guild_roles)
+    return render_template(
+        "sections/permissions.html",
+        user=get_current_user(),
+        guild_id=guild_id,
+        guild_name=get_guild_name(guild_id),
+        active_section="permissions",
+        permissions=permissions,
+        all_commands=ALL_COMMANDS_LIST,
+        guild_roles=guild_roles,
+    )
+
+
+@app.route("/dashboard/<int:guild_id>/permissions/add", methods=["POST"])
+@login_required
+@guild_admin_required
+@validate_csrf
+def permissions_add(guild_id):
+    command = request.form.get("command", "").strip()
+    role_id = request.form.get("role_id", "").strip()
+    if command and role_id:
+        guild_settings.set_command_permission(guild_id, command, int(role_id))
+    return redirect(url_for("section_permissions", guild_id=guild_id))
+
+
+@app.route("/dashboard/<int:guild_id>/permissions/remove", methods=["POST"])
+@login_required
+@guild_admin_required
+@validate_csrf
+def permissions_remove(guild_id):
+    command = request.form.get("command", "").strip()
+    role_id = request.form.get("role_id", "").strip()
+    if command and role_id:
+        guild_settings.remove_command_permission(guild_id, command, int(role_id))
+    return redirect(url_for("section_permissions", guild_id=guild_id))
+
+
+@app.route("/dashboard/<int:guild_id>/permissions/clear", methods=["POST"])
+@login_required
+@guild_admin_required
+@validate_csrf
+def permissions_clear(guild_id):
+    command = request.form.get("command", "").strip()
+    if command:
+        guild_settings.clear_command_permissions(guild_id, command)
+    return redirect(url_for("section_permissions", guild_id=guild_id))
+
+
+# ────────────────────────────────────────────────────────────
+#  API Endpoints
+# ────────────────────────────────────────────────────────────
+
+@app.route("/api/guild/<int:guild_id>/shop/add", methods=["POST"])
+@login_required
+@guild_admin_required
+@validate_csrf
+def api_shop_add(guild_id):
+    rate_key = f"api:{guild_id}:{request.remote_addr}"
+    if not check_rate_limit(rate_key):
+        return jsonify({"error": "rate limit exceeded"}), 429
+    data = request.get_json(force=True)
+    name = str(data.get("name", ""))[:100]
+    blueprint = str(data.get("blueprint", ""))[:500]
+    if not name or not blueprint:
+        return jsonify({"error": "name and blueprint required"}), 400
+    try:
+        min_level = max(1, min(999, int(data.get("min_level", 1))))
+        max_level = max(1, min(999, int(data.get("max_level", 150))))
+        price = max(0, min(999999999, int(data.get("price", 0))))
+    except (ValueError, TypeError):
+        return jsonify({"error": "invalid numeric values"}), 400
+    category = str(data.get("category", "General"))[:50]
+    shop_db.add_shop_dino(guild_id, name, blueprint, min_level, max_level, price, category)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/guild/<int:guild_id>/shop/remove", methods=["POST"])
+@login_required
+@guild_admin_required
+@validate_csrf
+def api_shop_remove(guild_id):
+    data = request.get_json(force=True)
+    name = str(data.get("name", ""))[:100]
+    if not name:
+        return jsonify({"error": "name required"}), 400
+    shop_db.remove_shop_dino(guild_id, name)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/guild/<int:guild_id>/points/add", methods=["POST"])
+@login_required
+@guild_admin_required
+@validate_csrf
+def api_points_add(guild_id):
+    data = request.get_json(force=True)
+    tribe_name = str(data.get("tribe_name", ""))[:100]
+    if not tribe_name:
+        return jsonify({"error": "tribe_name required"}), 400
+    try:
+        amount = max(0, min(999999999, int(data.get("amount", 0))))
+    except (ValueError, TypeError):
+        return jsonify({"error": "invalid amount"}), 400
+    shop_db.add_points(guild_id, tribe_name, amount)
+    return jsonify({"ok": True, "balance": shop_db.get_points(guild_id, tribe_name)})
+
+
+@app.route("/api/guild/<int:guild_id>/points/remove", methods=["POST"])
+@login_required
+@guild_admin_required
+@validate_csrf
+def api_points_remove(guild_id):
+    data = request.get_json(force=True)
+    tribe_name = str(data.get("tribe_name", ""))[:100]
+    if not tribe_name:
+        return jsonify({"error": "tribe_name required"}), 400
+    try:
+        amount = max(0, min(999999999, int(data.get("amount", 0))))
+    except (ValueError, TypeError):
+        return jsonify({"error": "invalid amount"}), 400
+    shop_db.remove_points(guild_id, tribe_name, amount)
+    return jsonify({"ok": True, "balance": shop_db.get_points(guild_id, tribe_name)})
+
+
+@app.route("/api/guild/<int:guild_id>/logs", methods=["POST"])
+@login_required
+@guild_admin_required
+@validate_csrf
+def api_logs(guild_id):
+    data = request.get_json(force=True)
+    logs = guild_settings.get_logs(
+        guild_id,
+        log_type=data.get("log_type"),
+        user_id=data.get("user_id"),
+        limit=int(data.get("limit", 50)),
+        offset=int(data.get("offset", 0)),
+    )
+    for log in logs:
+        if log.get("created_at"):
+            log["created_at"] = log["created_at"].isoformat()
+    return jsonify({"ok": True, "logs": logs})
+
+
+@app.route("/api/guild/<int:guild_id>/backup/create", methods=["POST"])
+@login_required
+@guild_admin_required
+@validate_csrf
+def api_backup_create(guild_id):
+    rate_key = f"backup:{guild_id}:{request.remote_addr}"
+    if not check_rate_limit(rate_key):
+        return jsonify({"error": "rate limit exceeded"}), 429
+    data = request.get_json(force=True) if request.data else {}
+    name = data.get("name", "")
+    return jsonify({"ok": False, "error": "Backup creation must be performed via the bot or SFTP."})
+
+
+@app.route("/api/guild/<int:guild_id>/backup/download/<int:backup_id>")
+@login_required
+@guild_admin_required
+def api_backup_download(guild_id, backup_id):
+    conn = guild_settings.get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT name, file_path FROM backup_records WHERE guild_id = %s AND id = %s", (guild_id, backup_id))
+            record = cur.fetchone()
+    finally:
+        conn.close()
+    if not record or not record[1] or not os.path.exists(record[1]):
+        return jsonify({"ok": False, "error": "Backup not found."}), 404
+    
+    backup_base = os.path.abspath("./backups")
+    if not validate_path(record[1], backup_base):
+        return jsonify({"ok": False, "error": "Invalid backup path."}), 403
+    
+    return send_file(record[1], as_attachment=True, download_name=f"{record[0]}.zip")
+
+
+@app.route("/api/guild/<int:guild_id>/backup/restore/<int:backup_id>", methods=["POST"])
+@login_required
+@guild_admin_required
+@validate_csrf
+def api_backup_restore(guild_id, backup_id):
+    return jsonify({"ok": False, "error": "Restore must be performed via the bot or SFTP."})
+
+
+@app.route("/api/guild/<int:guild_id>/server/restart", methods=["POST"])
+@login_required
+@guild_admin_required
+@validate_csrf
+def api_server_restart(guild_id):
+    rate_key = f"control:{guild_id}:{request.remote_addr}"
+    if not check_rate_limit(rate_key):
+        return jsonify({"error": "rate limit exceeded"}), 429
+    client = nitrado_client_for(guild_id)
+    if not client:
+        return jsonify({"ok": False, "error": "Nitrado API not configured."}), 400
+    result = client.restart_server()
+    if result:
+        guild_settings.log_action(guild_id, "server", session.get("user", {}).get("id"), session.get("user", {}).get("username"), None, sub_type="restart")
+    return jsonify({"ok": result})
+
+
+@app.route("/api/guild/<int:guild_id>/server/stop", methods=["POST"])
+@login_required
+@guild_admin_required
+@validate_csrf
+def api_server_stop(guild_id):
+    rate_key = f"control:{guild_id}:{request.remote_addr}"
+    if not check_rate_limit(rate_key):
+        return jsonify({"error": "rate limit exceeded"}), 429
+    client = nitrado_client_for(guild_id)
+    if not client:
+        return jsonify({"ok": False, "error": "Nitrado API not configured."}), 400
+    result = client.stop_server()
+    if result:
+        guild_settings.log_action(guild_id, "server", session.get("user", {}).get("id"), session.get("user", {}).get("username"), None, sub_type="stop")
+    return jsonify({"ok": result})
+
+
+@app.route("/api/guild/<int:guild_id>/server/status")
+@login_required
+@guild_admin_required
+def api_server_status(guild_id):
+    client = nitrado_client_for(guild_id)
+    if not client:
+        return jsonify({"ok": False, "error": "Nitrado API not configured."})
+    status = client.get_server_status()
+    return jsonify({"ok": True, "status": status})
+
+
+@app.route("/api/health")
+def api_health():
+    return jsonify({"status": "ok"})
+
+
+# ────────────────────────────────────────────────────────────
+#  Init
+# ────────────────────────────────────────────────────────────
+
+if __name__ == "__main__":
+    guild_settings.init_db()
+    app.run(host="0.0.0.0", port=5000, debug=False)
