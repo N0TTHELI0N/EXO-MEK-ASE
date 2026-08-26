@@ -322,7 +322,7 @@ def guild_overview(guild_id):
 @guild_admin_required
 def section_overview(guild_id):
     return render_template(
-        "overview.html",
+        "sections/overview.html",
         user=get_current_user(),
         guild_id=guild_id,
         active_section="overview",
@@ -344,7 +344,7 @@ def section_rcon(guild_id):
             guild_settings.update_setting(guild_id, "rcon_password", rcon_password)
         return redirect(url_for("section_rcon", guild_id=guild_id))
     return render_template(
-        "rcon.html",
+        "sections/rcon.html",
         user=get_current_user(),
         guild_id=guild_id,
         active_section="rcon",
@@ -367,7 +367,7 @@ def section_sftp(guild_id):
         guild_settings.update_setting(guild_id, "save_dir", request.form.get("save_dir", "/ARK/ShooterGame/Saved"))
         return redirect(url_for("section_sftp", guild_id=guild_id))
     return render_template(
-        "sftp.html",
+        "sections/sftp.html",
         user=get_current_user(),
         guild_id=guild_id,
         active_section="sftp",
@@ -387,7 +387,7 @@ def section_nitrado(guild_id):
         guild_settings.update_setting(guild_id, "nitrado_service_id", request.form.get("nitrado_service_id", ""))
         return redirect(url_for("section_nitrado", guild_id=guild_id))
     return render_template(
-        "nitrado.html",
+        "sections/nitrado.html",
         user=get_current_user(),
         guild_id=guild_id,
         active_section="nitrado",
@@ -412,7 +412,7 @@ def section_license(guild_id):
             guild_settings.update_setting(guild_id, "license_days", duration)
         return redirect(url_for("section_license", guild_id=guild_id))
     return render_template(
-        "license.html",
+        "sections/license.html",
         user=get_current_user(),
         guild_id=guild_id,
         active_section="license",
@@ -442,7 +442,7 @@ def section_shop(guild_id):
             shop_db.remove_shop_dino(guild_id, request.form.get("name", ""))
         return redirect(url_for("section_shop", guild_id=guild_id))
     return render_template(
-        "shop.html",
+        "sections/shop.html",
         user=get_current_user(),
         guild_id=guild_id,
         active_section="shop",
@@ -467,7 +467,7 @@ def section_points(guild_id):
     search = request.args.get("search", "").strip()
     leaderboard = shop_db.get_leaderboard(guild_id, limit=100)
     return render_template(
-        "points.html",
+        "sections/points.html",
         user=get_current_user(),
         guild_id=guild_id,
         active_section="points",
@@ -498,7 +498,7 @@ def section_whitelist(guild_id):
     finally:
         conn.close()
     return render_template(
-        "whitelist.html",
+        "sections/whitelist.html",
         user=get_current_user(),
         guild_id=guild_id,
         active_section="whitelist",
@@ -561,7 +561,7 @@ def section_tribelog(guild_id):
     finally:
         conn.close()
     return render_template(
-        "tribelog.html",
+        "sections/tribelog.html",
         user=get_current_user(),
         guild_id=guild_id,
         active_section="tribelog",
@@ -651,7 +651,7 @@ def section_punishments(guild_id):
         warnings = guild_settings.get_warnings(guild_id, search_player)
         punishments = guild_settings.get_punishments(guild_id, search_player)
     return render_template(
-        "punishments.html",
+        "sections/punishments.html",
         user=get_current_user(),
         guild_id=guild_id,
         active_section="punishments",
@@ -683,7 +683,7 @@ def section_embeds(guild_id):
             )
         return redirect(url_for("section_embeds", guild_id=guild_id))
     return render_template(
-        "embeds.html",
+        "sections/embeds.html",
         user=get_current_user(),
         guild_id=guild_id,
         active_section="embeds",
@@ -710,7 +710,7 @@ def section_backup(guild_id):
     finally:
         conn.close()
     return render_template(
-        "backup.html",
+        "sections/backup.html",
         user=get_current_user(),
         guild_id=guild_id,
         active_section="backup",
@@ -735,7 +735,7 @@ def section_leaderboard(guild_id):
     config = shop_db.get_leaderboard_config(guild_id)
     board = shop_db.get_leaderboard(guild_id, limit=25)
     return render_template(
-        "leaderboard.html",
+        "sections/leaderboard.html",
         user=get_current_user(),
         guild_id=guild_id,
         active_section="leaderboard",
@@ -752,7 +752,7 @@ def section_server_control(guild_id):
     if request.method == "POST":
         return redirect(url_for("section_server_control", guild_id=guild_id))
     return render_template(
-        "server_control.html",
+        "sections/server_control.html",
         user=get_current_user(),
         guild_id=guild_id,
         active_section="server-control",
@@ -771,7 +771,7 @@ def section_logs(guild_id):
     logs = guild_settings.get_logs(guild_id, log_type=log_type_filter or None, limit=per_page, offset=offset)
     total = guild_settings.get_log_count(guild_id, log_type=log_type_filter or None)
     return render_template(
-        "logs.html",
+        "sections/logs.html",
         user=get_current_user(),
         guild_id=guild_id,
         active_section="logs",
@@ -804,7 +804,7 @@ def section_settings(guild_id):
                     guild_settings.remove_setting(guild_id, f"log_channel_{log_type}")
         return redirect(url_for("section_settings", guild_id=guild_id))
     return render_template(
-        "settings.html",
+        "sections/settings.html",
         user=get_current_user(),
         guild_id=guild_id,
         active_section="settings",

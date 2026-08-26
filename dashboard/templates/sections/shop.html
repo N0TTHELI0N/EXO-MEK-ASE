@@ -1,3 +1,5 @@
+{% extends "dashboard.html" %}
+{% block dashboard_content %}
 <div class="mb-6 flex items-center justify-between">
   <div>
     <h2 class="text-2xl font-bold text-gray-100">Dino Shop</h2>
@@ -96,8 +98,9 @@
             <input type="text" name="category" placeholder="e.g. Carnivore"
                    class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
           </div>
-        </div>
-      </div>
+  </div>
+</div>
+{% endblock %}
 
       <div class="mt-6 flex justify-end space-x-3">
         <button type="button" onclick="document.getElementById('add-dino-modal').classList.add('hidden')"
@@ -112,3 +115,4 @@
     </form>
   </div>
 </div>
+{% endblock %}
