@@ -1,47 +1,160 @@
 {% extends "base.html" %}
-{% block title %}ARK Server Bot - Home{% endblock %}
+{% block title %}EXO-BOT - ARK Server Management{% endblock %}
 {% block content %}
-<div class="hero">
-    <h1>ARK Survival Evolved Bot</h1>
-    <p class="subtitle">Complete PS4/PS5 Server Management with Nitrado Integration</p>
-    <div class="features">
-        <div class="feature-card">
-            <h3>RCON Management</h3>
-            <p>Full RCON access to send commands and query server status in real time</p>
-        </div>
-        <div class="feature-card">
-            <h3>SFTP Backups</h3>
-            <p>Automated world backups and restores via secure SFTP connection</p>
-        </div>
-        <div class="feature-card">
-            <h3>Shop System</h3>
-            <p>Points &amp; dinosaur shop with tribe leaderboards and role rewards</p>
-        </div>
-        <div class="feature-card">
-            <h3>Whitelist</h3>
-            <p>PSN-based whitelist with scheduled activation and player management</p>
-        </div>
-        <div class="feature-card">
-            <h3>Tribe Logs</h3>
-            <p>Track tribe activity, log events, and monitor player actions in-game</p>
-        </div>
-        <div class="feature-card">
-            <h3>Punishments</h3>
-            <p>Ban, kick, and mute players with full moderation and logging tools</p>
-        </div>
-        <div class="feature-card">
-            <h3>Custom Embeds</h3>
-            <p>Design and manage rich embeds with colors, images, and dynamic content</p>
-        </div>
-        <div class="feature-card">
-            <h3>Server Control</h3>
-            <p>Restart, backup, and monitor your server directly from Discord</p>
-        </div>
+<div class="min-h-screen">
+
+  <!-- Hero Section -->
+  <section class="relative overflow-hidden py-24 px-6">
+    <!-- Background Effects -->
+    <div class="absolute inset-0 bg-gradient-to-b from-red-900/20 via-gray-900 to-gray-900"></div>
+    <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-red-500/10 rounded-full blur-3xl"></div>
+
+    <div class="relative max-w-4xl mx-auto text-center">
+      <!-- Bot Icon -->
+      <div class="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-red-500 to-red-700 shadow-2xl shadow-red-500/30 mb-8">
+        <svg class="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 2a8 8 0 110 16 8 8 0 010-16zm-1 4a1 1 0 00-1 1v4a1 1 0 00.293.707l3 3a1 1 0 001.414-1.414L12 12.586V9a1 1 0 00-1-1z"/>
+        </svg>
+      </div>
+
+      <h1 class="text-5xl md:text-6xl font-extrabold tracking-tight text-white mb-4">
+        EXO-BOT
+      </h1>
+      <p class="text-xl md:text-2xl text-gray-400 mb-2">
+        Advanced ARK Discord Bot
+      </p>
+      <p class="text-lg text-gray-500 mb-10 max-w-2xl mx-auto">
+        Complete server management for ARK Survival Evolved. Built by server owners, for server owners.
+      </p>
+
+      <!-- CTA Buttons -->
+      <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+        {% if not user %}
+        <a href="/login"
+           class="inline-flex items-center gap-2 px-8 py-3.5 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-semibold rounded-xl shadow-lg shadow-red-500/25 hover:shadow-red-500/40 transition-all text-lg">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 00-4.885-1.515.074.074 0 00-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 00-5.487 0 12.64 12.64 0 00-.617-1.25.077.077 0 00-.079-.037A19.736 19.736 0 003.677 4.37a.07.07 0 00-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 00.031.057 19.9 19.9 0 005.993 3.03.078.078 0 00.084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 00-.041-.106 13.107 13.107 0 01-1.872-.892.077.077 0 01-.008-.128 10.2 10.2 0 00.372-.292.074.074 0 01.077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 01.078.01c.12.098.246.198.373.292a.077.077 0 01-.006.127 12.299 12.299 0 01-1.873.892.077.077 0 00-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 00.084.028 19.839 19.839 0 006.002-3.03.077.077 0 00.032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 00-.031-.03z"/></svg>
+          Login with Discord
+        </a>
+        {% else %}
+        <a href="/dashboard"
+           class="inline-flex items-center gap-2 px-8 py-3.5 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-semibold rounded-xl shadow-lg shadow-red-500/25 hover:shadow-red-500/40 transition-all text-lg">
+          Open Dashboard
+        </a>
+        {% endif %}
+        <a href="https://discord.gg/exobot" target="_blank"
+           class="inline-flex items-center gap-2 px-8 py-3.5 bg-gray-800 hover:bg-gray-700 text-gray-200 font-semibold rounded-xl border border-gray-700 hover:border-gray-600 transition-all text-lg">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 00-4.885-1.515.074.074 0 00-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 00-5.487 0 12.64 12.64 0 00-.617-1.25.077.077 0 00-.079-.037A19.736 19.736 0 003.677 4.37a.07.07 0 00-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 00.031.057 19.9 19.9 0 005.993 3.03.078.078 0 00.084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 00-.041-.106 13.107 13.107 0 01-1.872-.892.077.077 0 01-.008-.128 10.2 10.2 0 00.372-.292.074.074 0 01.077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 01.078.01c.12.098.246.198.373.292a.077.077 0 01-.006.127 12.299 12.299 0 01-1.873.892.077.077 0 00-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 00.084.028 19.839 19.839 0 006.002-3.03.077.077 0 00.032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 00-.031-.03z"/></svg>
+          Support Server
+        </a>
+      </div>
     </div>
-    {% if not user %}
-    <a href="/login" class="btn btn-primary btn-lg">Login with Discord to Get Started</a>
-    {% else %}
-    <a href="/dashboard" class="btn btn-primary btn-lg">Go to Dashboard</a>
-    {% endif %}
+  </section>
+
+  <!-- Features Section -->
+  <section class="py-20 px-6">
+    <div class="max-w-6xl mx-auto">
+      <div class="text-center mb-16">
+        <h2 class="text-3xl md:text-4xl font-bold text-white mb-3">Powerful Features</h2>
+        <p class="text-gray-400 text-lg">Everything you need to manage your ARK server from Discord</p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <!-- RCON Management -->
+        <div class="group bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6 hover:border-red-500/50 hover:bg-gray-800 transition-all duration-300">
+          <div class="w-12 h-12 rounded-xl bg-red-500/10 flex items-center justify-center mb-4 group-hover:bg-red-500/20 transition-colors">
+            <svg class="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          </div>
+          <h3 class="text-lg font-semibold text-white mb-2">RCON Management</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">Full RCON access to send commands and query server status in real time</p>
+        </div>
+
+        <!-- SFTP Backups -->
+        <div class="group bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6 hover:border-red-500/50 hover:bg-gray-800 transition-all duration-300">
+          <div class="w-12 h-12 rounded-xl bg-red-500/10 flex items-center justify-center mb-4 group-hover:bg-red-500/20 transition-colors">
+            <svg class="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+          </div>
+          <h3 class="text-lg font-semibold text-white mb-2">SFTP Backups</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">Automated world backups and restores via secure SFTP connection</p>
+        </div>
+
+        <!-- Shop System -->
+        <div class="group bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6 hover:border-red-500/50 hover:bg-gray-800 transition-all duration-300">
+          <div class="w-12 h-12 rounded-xl bg-red-500/10 flex items-center justify-center mb-4 group-hover:bg-red-500/20 transition-colors">
+            <svg class="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z"/></svg>
+          </div>
+          <h3 class="text-lg font-semibold text-white mb-2">Shop System</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">Points &amp; dinosaur shop with tribe leaderboards and role rewards</p>
+        </div>
+
+        <!-- Whitelist -->
+        <div class="group bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6 hover:border-red-500/50 hover:bg-gray-800 transition-all duration-300">
+          <div class="w-12 h-12 rounded-xl bg-red-500/10 flex items-center justify-center mb-4 group-hover:bg-red-500/20 transition-colors">
+            <svg class="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+          </div>
+          <h3 class="text-lg font-semibold text-white mb-2">Whitelist</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">PSN-based whitelist with scheduled activation and player management</p>
+        </div>
+
+        <!-- Tribe Logs -->
+        <div class="group bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6 hover:border-red-500/50 hover:bg-gray-800 transition-all duration-300">
+          <div class="w-12 h-12 rounded-xl bg-red-500/10 flex items-center justify-center mb-4 group-hover:bg-red-500/20 transition-colors">
+            <svg class="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+          </div>
+          <h3 class="text-lg font-semibold text-white mb-2">Tribe Logs</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">Track tribe activity, log events, and monitor player actions in-game</p>
+        </div>
+
+        <!-- Punishments -->
+        <div class="group bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6 hover:border-red-500/50 hover:bg-gray-800 transition-all duration-300">
+          <div class="w-12 h-12 rounded-xl bg-red-500/10 flex items-center justify-center mb-4 group-hover:bg-red-500/20 transition-colors">
+            <svg class="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+          </div>
+          <h3 class="text-lg font-semibold text-white mb-2">Punishments</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">Ban, kick, and mute players with full moderation and logging tools</p>
+        </div>
+
+        <!-- Custom Embeds -->
+        <div class="group bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6 hover:border-red-500/50 hover:bg-gray-800 transition-all duration-300">
+          <div class="w-12 h-12 rounded-xl bg-red-500/10 flex items-center justify-center mb-4 group-hover:bg-red-500/20 transition-colors">
+            <svg class="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"/></svg>
+          </div>
+          <h3 class="text-lg font-semibold text-white mb-2">Custom Embeds</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">Design and manage rich embeds with colors, images, and dynamic content</p>
+        </div>
+
+        <!-- Server Control -->
+        <div class="group bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6 hover:border-red-500/50 hover:bg-gray-800 transition-all duration-300">
+          <div class="w-12 h-12 rounded-xl bg-red-500/10 flex items-center justify-center mb-4 group-hover:bg-red-500/20 transition-colors">
+            <svg class="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+          </div>
+          <h3 class="text-lg font-semibold text-white mb-2">Server Control</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">Restart, backup, and monitor your server directly from Discord</p>
+        </div>
+
+        <!-- AutoMod -->
+        <div class="group bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6 hover:border-red-500/50 hover:bg-gray-800 transition-all duration-300">
+          <div class="w-12 h-12 rounded-xl bg-red-500/10 flex items-center justify-center mb-4 group-hover:bg-red-500/20 transition-colors">
+            <svg class="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+          </div>
+          <h3 class="text-lg font-semibold text-white mb-2">AutoMod</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">Automatic message filtering and moderation with custom word lists</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="border-t border-gray-800 py-8 px-6">
+    <div class="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-500">
+      <div class="flex items-center gap-2">
+        <div class="w-6 h-6 rounded-lg bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center">
+          <svg class="w-3.5 h-3.5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2z"/></svg>
+        </div>
+        <span>EXO-BOT</span>
+      </div>
+      <p>&copy; 2024 EXO-BOT. Not affiliated with ARK or Studio Wildcard.</p>
+    </div>
+  </footer>
+
 </div>
 {% endblock %}

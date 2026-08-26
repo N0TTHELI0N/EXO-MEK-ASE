@@ -42,17 +42,17 @@
         }
 
         .sidebar-link:hover {
-            background-color: rgba(99, 102, 241, 0.1);
-            color: #e0e7ff;
+            background-color: rgba(239, 68, 68, 0.08);
+            color: #fca5a5;
         }
 
         .sidebar-link.active {
-            background-color: rgba(99, 102, 241, 0.15);
-            color: #818cf8;
+            background-color: rgba(239, 68, 68, 0.15);
+            color: #f87171;
         }
 
         .sidebar-link.active svg {
-            color: #818cf8;
+            color: #f87171;
         }
 
         .sidebar-link svg {
@@ -64,7 +64,7 @@
         }
 
         .sidebar-link:hover svg {
-            color: #c7d2fe;
+            color: #fca5a5;
         }
 
         .glass-panel {
@@ -132,10 +132,8 @@
     </nav>
 
     <!-- Main Content -->
-    <main class="pt-16 min-h-screen">
-        <div class="flex">
-            {% block content %}{% endblock %}
-        </div>
+    <main>
+        {% block content %}{% endblock %}
     </main>
 
     {% block scripts %}{% endblock %}

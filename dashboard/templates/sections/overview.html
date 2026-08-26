@@ -1,41 +1,65 @@
 {% extends "dashboard.html" %}
 {% block dashboard_content %}
-<div class="mb-6">
-  <h2 class="text-2xl font-bold text-gray-100">Dashboard Overview</h2>
-  <p class="text-gray-400 mt-1">{{ settings.server_name or 'ARK Server' }} — Guild {{ guild_id }}</p>
+<div class="mb-8">
+  <h2 class="text-2xl font-bold text-white">Dashboard Overview</h2>
+  <p class="text-gray-400 mt-1">{{ settings.get('server_name', 'ARK Server') }} &mdash; Guild {{ guild_id }}</p>
 </div>
 
-<div class="mb-6">
+<!-- License Status -->
+<div class="mb-8">
   {% if license_valid %}
-  <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-900 text-green-300">
+  <div class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-green-500/10 border border-green-500/20 text-green-400 text-sm font-medium">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
     License Active
-  </span>
+  </div>
   {% else %}
-  <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-900 text-red-300">
+  <div class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm font-medium">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
     License Expired
-  </span>
+  </div>
   {% endif %}
 </div>
 
-<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-  <div class="bg-gray-800 rounded-lg p-6 shadow-lg">
-    <p class="text-gray-400 text-sm font-medium uppercase tracking-wide">Shop Dinos</p>
-    <p class="mt-2 text-3xl font-bold text-gray-100">{{ stats.total_dinos or 0 }}</p>
+<!-- Stats Grid -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+  <div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6">
+    <div class="flex items-center gap-3 mb-3">
+      <div class="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center">
+        <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z"/></svg>
+      </div>
+      <p class="text-gray-400 text-sm font-medium">Shop Dinos</p>
+    </div>
+    <p class="text-3xl font-bold text-white">{{ stats.total_dinos }}</p>
   </div>
 
-  <div class="bg-gray-800 rounded-lg p-6 shadow-lg">
-    <p class="text-gray-400 text-sm font-medium uppercase tracking-wide">Linked Players</p>
-    <p class="mt-2 text-3xl font-bold text-gray-100">{{ stats.linked_players or 0 }}</p>
+  <div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6">
+    <div class="flex items-center gap-3 mb-3">
+      <div class="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center">
+        <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+      </div>
+      <p class="text-gray-400 text-sm font-medium">Linked Players</p>
+    </div>
+    <p class="text-3xl font-bold text-white">{{ stats.linked_players }}</p>
   </div>
 
-  <div class="bg-gray-800 rounded-lg p-6 shadow-lg">
-    <p class="text-gray-400 text-sm font-medium uppercase tracking-wide">Active Warnings</p>
-    <p class="mt-2 text-3xl font-bold text-gray-100">{{ stats.active_warnings or 0 }}</p>
+  <div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6">
+    <div class="flex items-center gap-3 mb-3">
+      <div class="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center">
+        <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+      </div>
+      <p class="text-gray-400 text-sm font-medium">Active Warnings</p>
+    </div>
+    <p class="text-3xl font-bold text-white">{{ stats.active_warnings }}</p>
   </div>
 
-  <div class="bg-gray-800 rounded-lg p-6 shadow-lg">
-    <p class="text-gray-400 text-sm font-medium uppercase tracking-wide">Total Backups</p>
-    <p class="mt-2 text-3xl font-bold text-gray-100">{{ stats.total_backups or 0 }}</p>
+  <div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6">
+    <div class="flex items-center gap-3 mb-3">
+      <div class="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center">
+        <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+      </div>
+      <p class="text-gray-400 text-sm font-medium">Total Backups</p>
+    </div>
+    <p class="text-3xl font-bold text-white">{{ stats.total_backups }}</p>
   </div>
 </div>
 {% endblock %}

@@ -1,33 +1,55 @@
 {% extends "base.html" %}
 {% block title %}Dashboard - Select Server{% endblock %}
 {% block content %}
-<h1>Select a Server</h1>
-<p class="text-muted">Choose a server where both you and the bot have access.</p>
+<div class="min-h-screen py-16 px-6">
+  <div class="max-w-4xl mx-auto">
 
-{% if guilds %}
-<div class="guild-grid">
-    {% for guild in guilds %}
-    <a href="/dashboard/{{ guild.id }}" class="guild-card">
-        {% if guild.icon %}
-            <img src="https://cdn.discordapp.com/icons/{{ guild.id }}/{{ guild.icon }}.png?size=128"
-                 alt="{{ guild.name }}" class="guild-icon">
-        {% else %}
-            <div class="guild-icon-placeholder">{{ guild.name[0] }}</div>
-        {% endif %}
-        <div class="guild-info">
-            <h3>{{ guild.name }}</h3>
-            <span class="guild-id">Members: {{ guild.approximate_member_count | default(guild.member_count, true) | default('Unknown') }}</span>
+    <!-- Header -->
+    <div class="text-center mb-12">
+      <h1 class="text-3xl md:text-4xl font-bold text-white mb-3">Select a Server</h1>
+      <p class="text-gray-400 text-lg">Choose a server where both you and the bot have access</p>
+    </div>
+
+    {% if guilds %}
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+      {% for guild in guilds %}
+      <a href="/dashboard/{{ guild.id }}"
+         class="group block bg-gray-800/50 border border-gray-700/50 rounded-2xl p-5 hover:border-red-500/50 hover:bg-gray-800 transition-all duration-300">
+        <div class="flex items-center gap-4">
+          {% if guild.icon %}
+          <img src="https://cdn.discordapp.com/icons/{{ guild.id }}/{{ guild.icon }}.png?size=128"
+               alt="{{ guild.name }}"
+               class="w-14 h-14 rounded-xl ring-2 ring-gray-700 group-hover:ring-red-500/50 transition-all">
+          {% else %}
+          <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center text-xl font-bold text-white ring-2 ring-gray-700 group-hover:ring-red-500/50 transition-all">
+            {{ guild.name[0] | upper }}
+          </div>
+          {% endif %}
+          <div class="flex-1 min-w-0">
+            <h3 class="text-base font-semibold text-white truncate group-hover:text-red-300 transition-colors">{{ guild.name }}</h3>
+            <p class="text-sm text-gray-500">{{ guild.approximate_member_count | default(guild.member_count, true) | default('?') }} members</p>
+          </div>
+          <svg class="w-5 h-5 text-gray-600 group-hover:text-red-400 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
         </div>
-        <span class="btn btn-primary btn-sm" style="margin-left:auto;">Manage</span>
-    </a>
-    {% endfor %}
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-20">
+      <div class="w-16 h-16 rounded-2xl bg-gray-800 flex items-center justify-center mx-auto mb-6">
+        <svg class="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/></svg>
+      </div>
+      <h3 class="text-xl font-semibold text-white mb-2">No servers found</h3>
+      <p class="text-gray-400 mb-8 max-w-md mx-auto">Make sure the bot is in your server and you have <strong class="text-gray-300">Manage Server</strong> permission.</p>
+      <a href="https://discord.com/oauth2/authorize?client_id={{ config.get('DISCORD_CLIENT_ID', '') }}&permissions=8&scope=bot"
+         target="_blank"
+         class="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-semibold rounded-xl shadow-lg shadow-red-500/25 hover:shadow-red-500/40 transition-all">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 00-4.885-1.515.074.074 0 00-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 00-5.487 0 12.64 12.64 0 00-.617-1.25.077.077 0 00-.079-.037A19.736 19.736 0 003.677 4.37a.07.07 0 00-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 00.031.057 19.9 19.9 0 005.993 3.03.078.078 0 00.084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 00-.041-.106 13.107 13.107 0 01-1.872-.892.077.077 0 01-.008-.128 10.2 10.2 0 00.372-.292.074.074 0 01.077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 01.078.01c.12.098.246.198.373.292a.077.077 0 01-.006.127 12.299 12.299 0 01-1.873.892.077.077 0 00-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 00.084.028 19.839 19.839 0 006.002-3.03.077.077 0 00.032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 00-.031-.03z"/></svg>
+        Invite Bot to Server
+      </a>
+    </div>
+    {% endif %}
+
+  </div>
 </div>
-{% else %}
-<div class="empty-state">
-    <h3>No servers found</h3>
-    <p>Make sure the bot is in your server and you have <strong>Manage Server</strong> permission.</p>
-    <a href="https://discord.com/oauth2/authorize?client_id={{ config.get('DISCORD_CLIENT_ID', '') }}&permissions=8&scope=bot"
-       class="btn btn-primary" target="_blank">Invite Bot to Server</a>
-</div>
-{% endif %}
 {% endblock %}

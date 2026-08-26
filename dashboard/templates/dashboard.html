@@ -3,99 +3,91 @@
 {% block title %}{{ guild_name }} - Dashboard{% endblock %}
 
 {% block content %}
-<script>
-  document.addEventListener('DOMContentLoaded', function () {
-    const sidebar = document.getElementById('sidebar');
-    const overlay = document.getElementById('sidebar-overlay');
-    const toggleBtn = document.getElementById('sidebar-toggle');
-
-    function openSidebar() {
-      sidebar.classList.remove('-translate-x-full');
-      overlay.classList.remove('hidden');
-    }
-    function closeSidebar() {
-      sidebar.classList.add('-translate-x-full');
-      overlay.classList.add('hidden');
-    }
-
-    toggleBtn.addEventListener('click', openSidebar);
-    overlay.addEventListener('click', closeSidebar);
-  });
-</script>
-
+<!-- Mobile sidebar toggle -->
 <button
   id="sidebar-toggle"
-  class="fixed top-4 left-4 z-50 rounded-lg bg-gray-800 p-2 text-gray-300 shadow-lg hover:bg-gray-700 lg:hidden"
+  class="fixed top-20 left-4 z-50 rounded-xl bg-gray-800 p-2.5 text-gray-300 shadow-lg hover:bg-gray-700 lg:hidden border border-gray-700"
 >
-  <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+  <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
   </svg>
 </button>
 
-<div id="sidebar-overlay" class="fixed inset-0 z-40 hidden bg-black/50 lg:hidden"></div>
+<!-- Mobile overlay -->
+<div id="sidebar-overlay" class="fixed inset-0 z-40 hidden bg-black/60 backdrop-blur-sm lg:hidden"></div>
 
+<!-- Sidebar -->
 <aside
   id="sidebar"
-  class="fixed left-0 top-0 z-40 flex h-full w-64 -translate-x-full flex-col border-r border-gray-800 bg-gray-900 transition-transform lg:translate-x-0"
+  class="fixed left-0 top-0 z-40 flex h-full w-64 -translate-x-full flex-col bg-gray-900 border-r border-gray-800 transition-transform duration-300 lg:translate-x-0"
 >
-  <div class="flex h-16 items-center border-b border-gray-800 px-6">
-    <span class="text-lg font-bold text-white">{{ guild_name }}</span>
+  <!-- Sidebar Header -->
+  <div class="flex h-16 items-center gap-3 border-b border-gray-800 px-5">
+    <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center flex-shrink-0">
+      <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2z"/></svg>
+    </div>
+    <span class="text-sm font-bold text-white truncate">{{ guild_name }}</span>
   </div>
 
-  <nav class="flex-1 overflow-y-auto px-3 py-4">
-    <ul class="space-y-1">
-      {% set sections = [
-        ("overview", "Overview", "📊"),
-        ("rcon", "RCON Settings", "🔌"),
-        ("sftp", "SFTP Settings", "📁"),
-        ("nitrado", "Nitrado API", "🌐"),
-        ("license", "License", "🔑"),
-        ("shop", "Shop", "🦕"),
-        ("points", "Points", "💰"),
-        ("whitelist", "Whitelist", "✅"),
-        ("tribelog", "Tribe Log", "📋"),
-        ("automod", "AutoMod", "🛡️"),
-        ("punishments", "Punishments", "⚠️"),
-        ("embeds", "Embeds", "🎨"),
-        ("backup", "Backup", "💾"),
-        ("leaderboard", "Leaderboard", "🏆"),
-        ("server_control", "Server Control", "🖥️"),
-        ("logs", "Logs", "📜"),
-        ("settings", "Settings", "⚙️"),
-        ("permissions", "Permissions", "🔐"),
-      ] %}
-      {% for sec_id, sec_label, sec_icon in sections %}
-        <li>
-          <a
-            href="/dashboard/{{ guild_id }}/{{ sec_id }}"
-            class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors
-              {% if active_section == sec_id %}
-                bg-red-600 text-white
-              {% else %}
-                text-gray-400 hover:bg-gray-800 hover:text-gray-200
-              {% endif %}"
-          >
-            <span class="text-base">{{ sec_icon }}</span>
-            <span>{{ sec_label }}</span>
-          </a>
-        </li>
-      {% endfor %}
-    </ul>
+  <!-- Sidebar Nav -->
+  <nav class="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
+    {% set sections = [
+      ("overview", "Overview", "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0h4"),
+      ("rcon", "RCON Settings", "M13 10V3L4 14h7v7l9-11h-7z"),
+      ("sftp", "SFTP Settings", "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"),
+      ("nitrado", "Nitrado API", "M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"),
+      ("license", "License", "M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"),
+      ("shop", "Shop", "M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z"),
+      ("points", "Points", "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"),
+      ("whitelist", "Whitelist", "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"),
+      ("tribelog", "Tribe Log", "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"),
+      ("automod", "AutoMod", "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"),
+      ("punishments", "Punishments", "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"),
+      ("embeds", "Embeds", "M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"),
+      ("backup", "Backup", "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"),
+      ("leaderboard", "Leaderboard", "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"),
+      ("server-control", "Server Control", "M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"),
+      ("logs", "Logs", "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"),
+      ("settings", "Settings", "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z"),
+      ("permissions", "Permissions", "M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"),
+    ] %}
+    {% for sec_id, sec_label, sec_icon in sections %}
+      <a
+        href="/dashboard/{{ guild_id }}/{{ sec_id }}"
+        class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150
+          {% if active_section == sec_id %}
+            bg-red-600/15 text-red-400 border-l-2 border-red-500
+          {% else %}
+            text-gray-400 hover:bg-gray-800 hover:text-gray-200 border-l-2 border-transparent
+          {% endif %}"
+      >
+        <svg class="w-[18px] h-[18px] flex-shrink-0 {% if active_section == sec_id %}text-red-400{% else %}text-gray-500{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="{{ sec_icon }}"/>
+        </svg>
+        <span>{{ sec_label }}</span>
+      </a>
+    {% endfor %}
   </nav>
 
-  <div class="border-t border-gray-800 p-4">
-    <div class="flex items-center gap-3">
+  <!-- Sidebar Footer -->
+  <div class="border-t border-gray-800 p-3">
+    <div class="flex items-center gap-3 px-2 py-1.5">
       {% if user.avatar %}
-        <img src="https://cdn.discordapp.com/avatars/{{ user.id }}/{{ user.avatar }}.png?size=64" alt="" class="h-8 w-8 rounded-full" />
+        <img src="https://cdn.discordapp.com/avatars/{{ user.id }}/{{ user.avatar }}.png?size=64" alt="" class="h-8 w-8 rounded-full ring-2 ring-gray-700" />
+      {% else %}
+        <div class="h-8 w-8 rounded-full bg-red-600 flex items-center justify-center text-xs font-semibold text-white">
+          {{ user.username[0] | upper }}
+        </div>
       {% endif %}
       <span class="truncate text-sm text-gray-300">{{ user.username }}</span>
     </div>
   </div>
 </aside>
 
-<main class="min-h-screen pt-4 transition-all lg:ml-64 lg:pt-0">
+<!-- Main Content -->
+<div class="min-h-screen pt-16 lg:pl-64">
   <div class="p-6 lg:p-8">
     {% block dashboard_content %}{% endblock %}
   </div>
-</main>
+</div>
 {% endblock %}

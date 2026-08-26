@@ -182,11 +182,14 @@ def owner_required(f):
 
 @app.route("/login")
 def login():
+    if not DISCORD_CLIENT_ID:
+        return "DISCORD_CLIENT_ID is not configured. Set it in your environment variables.", 500
     state = secrets.token_urlsafe(32)
     session["oauth_state"] = state
     redirect_uri = DISCORD_REDIRECT_URI
     if not redirect_uri or redirect_uri.startswith("http://localhost"):
         redirect_uri = request.url_root.rstrip("/") + "/callback"
+    session["oauth_redirect_uri"] = redirect_uri
     from urllib.parse import quote
     return redirect(
         f"https://discord.com/api/oauth2/authorize"
@@ -202,11 +205,19 @@ def login():
 def callback():
     code = request.args.get("code")
     state = request.args.get("state")
+    error = request.args.get("error")
+    if error:
+        error_desc = request.args.get("error_description", error)
+        return f"Discord OAuth error: {error_desc}", 403
+    if not code:
+        return "No authorization code received from Discord.", 400
     if state != session.get("oauth_state"):
-        return "Invalid state parameter.", 403
-    redirect_uri = DISCORD_REDIRECT_URI
-    if not redirect_uri or redirect_uri.startswith("http://localhost"):
-        redirect_uri = request.url_root.rstrip("/") + "/callback"
+        return "Invalid state parameter. Please try logging in again.", 403
+    redirect_uri = session.get("oauth_redirect_uri")
+    if not redirect_uri:
+        redirect_uri = DISCORD_REDIRECT_URI
+        if not redirect_uri or redirect_uri.startswith("http://localhost"):
+            redirect_uri = request.url_root.rstrip("/") + "/callback"
     data = {
         "client_id": DISCORD_CLIENT_ID,
         "client_secret": DISCORD_CLIENT_SECRET,
@@ -216,8 +227,10 @@ def callback():
     }
     resp = requests.post("https://discord.com/api/oauth2/token", data=data, timeout=10)
     if resp.status_code != 200:
-        return "Failed to authenticate with Discord.", 403
+        return f"Failed to authenticate with Discord (HTTP {resp.status_code}). Check your DISCORD_CLIENT_SECRET.", 403
     token_data = resp.json()
+    if "access_token" not in token_data:
+        return f"Discord did not return an access token. Error: {token_data.get('error', 'unknown')}", 403
     session["access_token"] = token_data["access_token"]
     user_resp = requests.get(
         f"{DISCORD_API_BASE}/users/@me",
@@ -310,14 +323,7 @@ def dashboard():
 @login_required
 @guild_admin_required
 def guild_overview(guild_id):
-    return render_template(
-        "dashboard.html",
-        user=get_current_user(),
-        guild_id=guild_id,
-        active_section="overview",
-        settings=guild_settings.get_settings(guild_id),
-        license_valid=guild_settings.is_license_valid(guild_id),
-    )
+    return redirect(url_for("section_overview", guild_id=guild_id))
 
 
 # ────────────────────────────────────────────────────────────
@@ -328,13 +334,32 @@ def guild_overview(guild_id):
 @login_required
 @guild_admin_required
 def section_overview(guild_id):
+    settings = guild_settings.get_settings(guild_id)
+    conn = guild_settings.get_conn()
+    stats = {"total_dinos": 0, "linked_players": 0, "active_warnings": 0, "total_backups": 0}
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM shop_dinos WHERE guild_id = %s", (guild_id,))
+            stats["total_dinos"] = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(*) FROM linked_players WHERE guild_id = %s", (guild_id,))
+            stats["linked_players"] = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(*) FROM warnings WHERE guild_id = %s AND active = true", (guild_id,))
+            stats["active_warnings"] = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(*) FROM backup_records WHERE guild_id = %s", (guild_id,))
+            stats["total_backups"] = cur.fetchone()[0]
+    except Exception:
+        pass
+    finally:
+        conn.close()
     return render_template(
         "sections/overview.html",
         user=get_current_user(),
         guild_id=guild_id,
+        guild_name=get_guild_name(guild_id),
         active_section="overview",
-        settings=guild_settings.get_settings(guild_id),
+        settings=settings,
         license_valid=guild_settings.is_license_valid(guild_id),
+        stats=stats,
     )
 
 
