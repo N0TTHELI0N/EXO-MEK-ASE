@@ -804,6 +804,61 @@ def generate_license_key(duration_days: int = 30) -> str:
     return key
 
 
+def get_all_licenses() -> list[dict]:
+    from datetime import datetime, timezone, timedelta
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT guild_id, settings FROM guild_settings")
+            rows = cur.fetchall()
+        results = []
+        for guild_id, settings in rows:
+            if not isinstance(settings, dict):
+                settings = json.loads(settings)
+            key = settings.get("license_key", "")
+            days = settings.get("license_days", 0)
+            created = settings.get("license_created")
+            if not key:
+                continue
+            expiry_str = None
+            is_valid = True
+            if days == 0:
+                expiry_str = "Unlimited"
+            else:
+                try:
+                    if isinstance(created, str):
+                        created_dt = datetime.fromisoformat(created.replace('Z', '+00:00'))
+                    elif created:
+                        created_dt = created
+                    else:
+                        created_dt = datetime.now(timezone.utc)
+                    expires = created_dt + timedelta(days=days)
+                    is_valid = datetime.now(timezone.utc) < expires
+                    expiry_str = expires.strftime("%Y-%m-%d %H:%M UTC")
+                except (ValueError, TypeError):
+                    expiry_str = "Unknown"
+            results.append({
+                "guild_id": guild_id,
+                "key": key,
+                "days": days,
+                "created": created,
+                "expiry": expiry_str,
+                "valid": is_valid,
+            })
+        return results
+    finally:
+        conn.close()
+
+
+def create_license_for_guild(guild_id: int, duration_days: int = 30) -> str:
+    from datetime import datetime, timezone
+    key = generate_license_key(duration_days)
+    update_setting(guild_id, "license_key", key)
+    update_setting(guild_id, "license_days", duration_days)
+    update_setting(guild_id, "license_created", datetime.now(timezone.utc).isoformat())
+    return key
+
+
 # ============================================================
 #  LOG CHANNEL HELPERS (dashboard)
 # ============================================================

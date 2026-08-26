@@ -25,6 +25,7 @@ def generate_csrf_token():
     return session['_csrf_token']
 
 app.jinja_env.globals['csrf_token'] = generate_csrf_token
+app.jinja_env.globals['BOT_OWNER_ID'] = BOT_OWNER_ID
 
 def validate_csrf(f):
     @wraps(f)
@@ -163,6 +164,19 @@ def nitrado_client_for(guild_id):
     return NitradoClient(token, service_id)
 
 
+BOT_OWNER_ID = int(os.environ.get("BOT_OWNER_ID", "0"))
+
+
+def owner_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        user = get_current_user()
+        if not user or int(user.get("id", 0)) != BOT_OWNER_ID:
+            return "Access denied.", 403
+        return f(*args, **kwargs)
+    return decorated
+
+
 # ────────────────────────────────────────────────────────────
 #  Auth Routes
 # ────────────────────────────────────────────────────────────
@@ -213,6 +227,58 @@ def callback():
 def logout():
     session.clear()
     return redirect(url_for("home"))
+
+
+# ────────────────────────────────────────────────────────────
+#  Admin License Management (Owner Only)
+# ────────────────────────────────────────────────────────────
+
+@app.route("/admin/licenses")
+@login_required
+@owner_required
+@validate_csrf
+def admin_licenses():
+    licenses = guild_settings.get_all_licenses()
+    return render_template(
+        "licenses.html",
+        user=get_current_user(),
+        licenses=licenses,
+        message=request.args.get("message", ""),
+        message_type=request.args.get("type", "success"),
+    )
+
+
+@app.route("/admin/licenses/create", methods=["POST"])
+@login_required
+@owner_required
+@validate_csrf
+def admin_license_create():
+    guild_id_str = request.form.get("guild_id", "").strip()
+    duration = request.form.get("duration", "30").strip()
+    if not guild_id_str or not guild_id_str.isdigit():
+        return redirect(url_for("admin_licenses", message="Invalid Guild ID.", type="error"))
+    guild_id = int(guild_id_str)
+    try:
+        days = max(1, min(3650, int(duration)))
+    except ValueError:
+        days = 30
+    key = guild_settings.create_license_for_guild(guild_id, days)
+    return redirect(url_for("admin_licenses", message=f"License created: {key} ({days} days)", type="success"))
+
+
+@app.route("/admin/licenses/revoke", methods=["POST"])
+@login_required
+@owner_required
+@validate_csrf
+def admin_license_revoke():
+    guild_id_str = request.form.get("guild_id", "").strip()
+    if not guild_id_str or not guild_id_str.isdigit():
+        return redirect(url_for("admin_licenses", message="Invalid Guild ID.", type="error"))
+    guild_id = int(guild_id_str)
+    guild_settings.update_setting(guild_id, "license_key", "")
+    guild_settings.update_setting(guild_id, "license_days", 0)
+    guild_settings.update_setting(guild_id, "license_created", None)
+    return redirect(url_for("admin_licenses", message=f"License revoked for guild {guild_id}.", type="success"))
 
 
 # ────────────────────────────────────────────────────────────
