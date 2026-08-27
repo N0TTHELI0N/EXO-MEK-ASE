@@ -134,14 +134,27 @@ class Admin(commands.Cog):
 
     # ── /set-license ─────────────────────────────────────────
     @app_commands.command(name="set-license", description="Set the license key for this guild (Admin only)")
-    @app_commands.describe(key="License key", days="Number of days (0 = infinite)")
-    async def set_license(self, interaction: discord.Interaction, key: str, days: int = 0):
+    @app_commands.describe(key="License key (issued by the bot owner)")
+    async def set_license(self, interaction: discord.Interaction, key: str):
         if not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message("❌ Admin only.", ephemeral=True)
 
+        parsed = guild_settings.parse_license_key(key)
+        if parsed is None:
+            return await interaction.response.send_message(
+                "❌ Invalid license key. It was not issued by this bot or has been tampered with.", ephemeral=True
+            )
+        if parsed["guild_id"] != interaction.guild_id:
+            return await interaction.response.send_message(
+                "❌ This license key belongs to a different server.", ephemeral=True
+            )
         guild_settings.update_setting(interaction.guild_id, "license_key", key)
-        guild_settings.update_setting(interaction.guild_id, "license_days", days)
-        await interaction.response.send_message(f"✅ License key saved.", ephemeral=True)
+        expiry = parsed["expires_at"]
+        if expiry.timestamp() == 0:
+            msg = "♾️ License activated (unlimited)."
+        else:
+            msg = f"✅ License activated until {expiry.strftime('%Y-%m-%d %H:%M UTC')}."
+        await interaction.response.send_message(msg, ephemeral=True)
 
     # ── /set-language ────────────────────────────────────────
     @app_commands.command(name="set-language", description="Set bot language (Admin only)")
