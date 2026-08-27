@@ -859,7 +859,13 @@ def parse_license_key(key: str) -> dict | None:
 def verify_license_key(guild_id: int, key: str) -> bool:
     """True only if the supplied key matches the one stored for this guild AND is not expired."""
     stored = get_setting(guild_id, "license_key", "")
-    if not stored or not secrets.compare_digest(stored.strip(), key.strip()):
+    if not stored or not key:
+        return False
+    try:
+        # compare as bytes to safely handle any input (incl. non-ASCII) without raising
+        if not hmac.compare_digest(stored.strip().encode("utf-8"), key.strip().encode("utf-8")):
+            return False
+    except Exception:
         return False
     return is_license_valid(guild_id)
 
