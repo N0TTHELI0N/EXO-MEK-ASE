@@ -91,7 +91,16 @@ def run_bot():
     for ext in EXTENSIONS:
         bot.load_extension(ext)
 
-    bot.run(config.DISCORD_TOKEN)
+    if not config.DISCORD_TOKEN:
+        print("[Bot] ERROR: DISCORD_TOKEN is not set. Bot cannot start.", flush=True)
+        return
+
+    try:
+        bot.run(config.DISCORD_TOKEN)
+    except Exception as e:
+        print(f"[Bot] ERROR: bot crashed: {type(e).__name__}: {e}", flush=True)
+    except SystemExit as e:
+        print(f"[Bot] Bot exited: {e}", flush=True)
 
 
 def run_dashboard():
