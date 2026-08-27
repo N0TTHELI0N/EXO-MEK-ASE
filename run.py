@@ -43,9 +43,16 @@ def run_bot():
         print(f"[Bot] Guilds: {len(bot.guilds)}")
         try:
             synced = await bot.tree.sync()
-            print(f"[Bot] Synced {len(synced)} slash commands")
+            print(f"[Bot] Synced {len(synced)} slash commands globally", flush=True)
         except Exception as e:
-            print(f"[Bot] Sync error: {e}")
+            print(f"[Bot] Global sync error: {e}", flush=True)
+        # Guild-scoped sync makes commands appear immediately in each server
+        for guild in bot.guilds:
+            try:
+                g_synced = await bot.tree.sync(guild=guild)
+                print(f"[Bot] Synced {len(g_synced)} commands for {guild.name} ({guild.id})", flush=True)
+            except Exception as e:
+                print(f"[Bot] Guild sync error for {guild.name}: {e}", flush=True)
 
     @bot.tree.interaction_check
     async def global_permission_check(interaction: discord.Interaction) -> bool:
