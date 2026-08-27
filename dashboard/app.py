@@ -21,14 +21,6 @@ def _lang_from_session():
 # Cache of content overrides, loaded once per request for performance.
 _CONTENT_OVERRIDES = {}
 
-@app.before_request
-def _load_content_overrides():
-    global _CONTENT_OVERRIDES
-    try:
-        _CONTENT_OVERRIDES = guild_settings.get_all_content_overrides()
-    except Exception:
-        _CONTENT_OVERRIDES = {}
-
 def _t(key, lang=None):
     lang = lang or _lang_from_session()
     override = _CONTENT_OVERRIDES.get(key, {})
@@ -38,6 +30,14 @@ def _t(key, lang=None):
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.secret_key = os.environ.get("DASHBOARD_SECRET", secrets.token_hex(32))
+
+@app.before_request
+def _load_content_overrides():
+    global _CONTENT_OVERRIDES
+    try:
+        _CONTENT_OVERRIDES = guild_settings.get_all_content_overrides()
+    except Exception:
+        _CONTENT_OVERRIDES = {}
 
 @app.before_request
 def _set_template_globals():
