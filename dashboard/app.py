@@ -18,8 +18,22 @@ def _lang_from_session():
         lang = DASHBOARD_DEFAULT_LANG
     return lang
 
+# Cache of content overrides, loaded once per request for performance.
+_CONTENT_OVERRIDES = {}
+
+@app.before_request
+def _load_content_overrides():
+    global _CONTENT_OVERRIDES
+    try:
+        _CONTENT_OVERRIDES = guild_settings.get_all_content_overrides()
+    except Exception:
+        _CONTENT_OVERRIDES = {}
+
 def _t(key, lang=None):
     lang = lang or _lang_from_session()
+    override = _CONTENT_OVERRIDES.get(key, {})
+    if override.get(lang):
+        return override[lang]
     return TRANSLATIONS.get(key, {}).get(lang, TRANSLATIONS.get(key, {}).get(DASHBOARD_DEFAULT_LANG, key))
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
@@ -338,6 +352,58 @@ def admin_license_revoke():
     guild_settings.update_setting(guild_id, "license_days", 0)
     guild_settings.update_setting(guild_id, "license_created", None)
     return redirect(url_for("admin_licenses", message=f"License revoked for guild {guild_id}.", type="success"))
+
+
+# ────────────────────────────────────────────────────────────
+#  Admin Content Customization (Owner Only)
+#  Lets the owner edit any dashboard text (Arabic/English)
+#  live from the database, without redeploying.
+# ────────────────────────────────────────────────────────────
+
+@app.route("/admin/content")
+@login_required
+@owner_required
+def admin_content():
+    overrides = guild_settings.get_all_content_overrides()
+    # Build a list of all known keys from defaults + any custom override keys
+    known = set(TRANSLATIONS.keys())
+    known |= set(overrides.keys())
+    keys = sorted(known)
+    return render_template(
+        "content_admin.html",
+        user=get_current_user(),
+        keys=keys,
+        overrides=overrides,
+        message=request.args.get("message", ""),
+        message_type=request.args.get("type", "success"),
+    )
+
+
+@app.route("/admin/content/save", methods=["POST"])
+@login_required
+@owner_required
+@validate_csrf
+def admin_content_save():
+    content_key = request.form.get("content_key", "").strip()
+    lang = request.form.get("lang", "").strip()
+    value = request.form.get("value", "").strip()
+    if not content_key or lang not in DASHBOARD_LANGS:
+        return redirect(url_for("admin_content", message="Invalid key or language.", type="error"))
+    guild_settings.set_content_override(content_key, lang, value)
+    return redirect(url_for("admin_content", message=f"Saved ({content_key}) in {lang}.", type="success"))
+
+
+@app.route("/admin/content/delete", methods=["POST"])
+@login_required
+@owner_required
+@validate_csrf
+def admin_content_delete():
+    content_key = request.form.get("content_key", "").strip()
+    lang = request.form.get("lang", "").strip()
+    if not content_key:
+        return redirect(url_for("admin_content", message="Missing key.", type="error"))
+    guild_settings.delete_content_override(content_key, lang or None)
+    return redirect(url_for("admin_content", message=f"Reset ({content_key}) to default.", type="success"))
 
 
 # ────────────────────────────────────────────────────────────

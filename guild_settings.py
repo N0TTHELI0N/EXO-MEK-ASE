@@ -234,6 +234,15 @@ def init_db():
                 )
             """)
             cur.execute("CREATE INDEX IF NOT EXISTS idx_automod_words ON automod_custom_words(guild_id)")
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS content_overrides (
+                    content_key TEXT NOT NULL,
+                    lang        TEXT NOT NULL,
+                    value       TEXT NOT NULL,
+                    updated_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    PRIMARY KEY (content_key, lang)
+                )
+            """)
         conn.commit()
     finally:
         conn.close()
@@ -1033,5 +1042,69 @@ def clear_automod_words(guild_id: int):
         with conn.cursor() as cur:
             cur.execute("DELETE FROM automod_custom_words WHERE guild_id = %s", (guild_id,))
         conn.commit()
+    finally:
+        conn.close()
+
+
+# ============================================================
+#  CONTENT OVERRIDES (dashboard text customization)
+# ============================================================
+
+def set_content_override(content_key: str, lang: str, value: str):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO content_overrides (content_key, lang, value, updated_at)
+                VALUES (%s, %s, %s, now())
+                ON CONFLICT (content_key, lang)
+                DO UPDATE SET value = EXCLUDED.value, updated_at = now()
+            """, (content_key, lang, value))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def delete_content_override(content_key: str, lang: str = None):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            if lang is None:
+                cur.execute("DELETE FROM content_overrides WHERE content_key = %s", (content_key,))
+            else:
+                cur.execute(
+                    "DELETE FROM content_overrides WHERE content_key = %s AND lang = %s",
+                    (content_key, lang),
+                )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_all_content_overrides() -> dict:
+    """Return {content_key: {lang: value}}"""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT content_key, lang, value FROM content_overrides")
+            rows = cur.fetchall()
+        result = {}
+        for key, lang, value in rows:
+            result.setdefault(key, {})[lang] = value
+        return result
+    finally:
+        conn.close()
+
+
+def get_content_override(content_key: str, lang: str) -> str:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT value FROM content_overrides WHERE content_key = %s AND lang = %s",
+                (content_key, lang),
+            )
+            row = cur.fetchone()
+            return row[0] if row else None
     finally:
         conn.close()

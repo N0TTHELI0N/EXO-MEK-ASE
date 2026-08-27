@@ -5,6 +5,7 @@ TRANSLATIONS = {
     "nav_login": {"ar": "تسجيل الدخول", "en": "Login"},
     "nav_logout": {"ar": "تسجيل الخروج", "en": "Logout"},
     "nav_licenses": {"ar": "التراخيص", "en": "Licenses"},
+    "nav_content": {"ar": "تخصيص النصوص", "en": "Customize Text"},
 
     "home_tagline": {"ar": "بوت ديسكورد متقدم لـ ARK", "en": "Advanced ARK Discord Bot"},
     "home_subtitle": {"ar": "إدارة كاملة لسيرفر ARK Survival Evolved. صنع بواسطة مالكي السيرفرات، لأصحاب السيرفرات.", "en": "Complete server management for ARK Survival Evolved. Built by server owners, for server owners."},

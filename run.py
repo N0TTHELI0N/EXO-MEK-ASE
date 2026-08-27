@@ -77,6 +77,18 @@ def run_bot():
                 "❌ You are banned from using this bot.", ephemeral=True
             )
             return False
+        # Owner always has full access (bypass license gate)
+        if member.id == config.BOT_OWNER_ID:
+            return True
+        # License gate: every feature requires a valid license, except the license
+        # management commands themselves so a server can activate its key.
+        if command_name not in ("set-license",):
+            if not guild_settings.is_license_valid(interaction.guild_id):
+                await interaction.response.send_message(
+                    "❌ This server has no valid license. Activate one with /set-license.",
+                    ephemeral=True,
+                )
+                return False
         if member.guild_permissions.administrator:
             return True
         allowed_roles = guild_settings.get_command_permissions(
