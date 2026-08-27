@@ -5,6 +5,13 @@
   <p class="text-gray-400 mt-1">{{ t('license_desc') }}</p>
 </div>
 
+{% if license_ok %}
+<div class="mb-6 max-w-2xl p-4 rounded-lg bg-green-900/50 border border-green-700 text-green-300">✅ License verified successfully.</div>
+{% endif %}
+{% if license_error == 'invalid' %}
+<div class="mb-6 max-w-2xl p-4 rounded-lg bg-red-900/50 border border-red-700 text-red-300">❌ Invalid license key. The key does not match the license issued for this server, or it has expired.</div>
+{% endif %}
+
 <div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6 max-w-2xl mb-6">
   <h3 class="text-lg font-semibold text-white mb-4">{{ t('license_current') }}</h3>
 
@@ -25,24 +32,24 @@
 
     <div class="flex items-center justify-between">
       <span class="text-gray-400">{{ t('license_expires') }}</span>
-      <span class="text-white">{{ settings.license_expiry or '—' }}</span>
+      <span class="text-white">{{ license_expiry or '—' }}</span>
     </div>
   </div>
 </div>
 
 <div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6 max-w-2xl">
   <h3 class="text-lg font-semibold text-white mb-4">{{ t('license_activate_new') }}</h3>
+  <p class="text-sm text-gray-400 mb-4">Enter the license key you received to verify it. The key must match the license issued for this server.</p>
 
   <form method="POST" action="">
-    <input type="hidden" name="action" value="activate">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
 
     <div class="flex items-end gap-4">
       <div class="flex-1">
         <label for="license_key" class="block text-sm font-medium text-gray-300 mb-1">{{ t('license_key') }}</label>
         <input type="text" id="license_key" name="license_key"
-               placeholder="XXXX-XXXX-XXXX-XXXX"
-               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent">
+               placeholder="ARK-XXXXXX-XXXXXX-XXXXXX"
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent font-mono">
       </div>
       <button type="submit"
               class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-medium transition-colors whitespace-nowrap">

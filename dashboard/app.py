@@ -539,16 +539,14 @@ def section_nitrado(guild_id):
 @validate_csrf
 def section_license(guild_id):
     if request.method == "POST":
-        action = request.form.get("action")
-        if action == "activate":
-            key = request.form.get("license_key", "").strip()
-            guild_settings.update_setting(guild_id, "license_key", key)
-        elif action == "generate":
-            duration = int(request.form.get("duration_days", 30))
-            key = guild_settings.generate_license_key(duration)
-            guild_settings.update_setting(guild_id, "license_key", key)
-            guild_settings.update_setting(guild_id, "license_days", duration)
-        return redirect(url_for("section_license", guild_id=guild_id))
+        key = request.form.get("license_key", "").strip()
+        if guild_settings.verify_license_key(guild_id, key):
+            # Valid key that matches the stored one - nothing to overwrite, just confirm.
+            pass
+        else:
+            # The supplied key is not the valid license for this server.
+            return redirect(url_for("section_license", guild_id=guild_id, license_error="invalid"))
+        return redirect(url_for("section_license", guild_id=guild_id, license_ok="1"))
     return render_template(
         "sections/license.html",
         user=get_current_user(),
@@ -556,6 +554,9 @@ def section_license(guild_id):
         active_section="license",
         settings=guild_settings.get_settings(guild_id),
         license_valid=guild_settings.is_license_valid(guild_id),
+        license_expiry=guild_settings.get_license_expiry(guild_id),
+        license_error=request.args.get("license_error", ""),
+        license_ok=request.args.get("license_ok", ""),
     )
 
 
