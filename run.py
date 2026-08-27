@@ -41,6 +41,13 @@ def run_bot():
     async def on_ready():
         print(f"[Bot] Logged in as {bot.user} ({bot.user.id})")
         print(f"[Bot] Guilds: {len(bot.guilds)}")
+        # Load cogs (async in discord.py 2.4) before syncing so commands are registered
+        for ext in EXTENSIONS:
+            try:
+                await bot.load_extension(ext)
+                print(f"[Bot] Loaded extension {ext}", flush=True)
+            except Exception as e:
+                print(f"[Bot] ERROR loading {ext}: {e}", flush=True)
         try:
             synced = await bot.tree.sync()
             print(f"[Bot] Synced {len(synced)} slash commands globally", flush=True)
@@ -94,9 +101,6 @@ def run_bot():
             await ctx.send(bot_i18n.t(ctx.guild.id, "rcon_failed"))
             return
         raise error
-
-    for ext in EXTENSIONS:
-        bot.load_extension(ext)
 
     if not config.DISCORD_TOKEN:
         print("[Bot] ERROR: DISCORD_TOKEN is not set. Bot cannot start.", flush=True)
