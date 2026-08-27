@@ -142,18 +142,18 @@ class Admin(commands.Cog):
         parsed = guild_settings.parse_license_key(key)
         if parsed is None:
             return await interaction.response.send_message(
-                "❌ Invalid license key. It was not issued by this bot or has been tampered with.", ephemeral=True
+                "❌ Invalid license key format.", ephemeral=True
             )
-        if parsed["guild_id"] != interaction.guild_id:
+        if not guild_settings.verify_license_key(interaction.guild_id, key):
             return await interaction.response.send_message(
-                "❌ This license key belongs to a different server.", ephemeral=True
+                "❌ This license key does not match the license issued for this server, or it has expired.",
+                ephemeral=True,
             )
-        guild_settings.update_setting(interaction.guild_id, "license_key", key)
-        expiry = parsed["expires_at"]
-        if expiry.timestamp() == 0:
-            msg = "♾️ License activated (unlimited)."
+        expiry = guild_settings.get_license_expiry(interaction.guild_id)
+        if expiry == "Unlimited":
+            msg = "♾️ License verified (unlimited)."
         else:
-            msg = f"✅ License activated until {expiry.strftime('%Y-%m-%d %H:%M UTC')}."
+            msg = f"✅ License verified. Active until {expiry}."
         await interaction.response.send_message(msg, ephemeral=True)
 
     # ── /set-language ────────────────────────────────────────

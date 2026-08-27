@@ -791,79 +791,81 @@ def get_evidence(punishment_id: int):
 #  LICENSE
 # ============================================================
 
-def _sign_license_payload(payload: str) -> str:
-    return hmac.new(_LICENSE_SIGN_KEY, payload.encode(), hashlib.sha256).hexdigest()[:12]
-
-
-def _license_sig_valid(payload: str, sig: str) -> bool:
-    if not _LICENSE_SIGN_KEY:
-        return False
-    return hmac.compare_digest(sig.lower(), _sign_license_payload(payload).lower())
-
-
-def parse_license_key(key: str) -> dict | None:
-    """Validate a signed license key and return {guild_id, expires_at} or None if invalid."""
-    from datetime import datetime, timezone, timedelta
-    if not key or not key.startswith("ARK-"):
-        return None
-    body = key[4:]
-    if "-" not in body:
-        return None
-    payload, sig = body.rsplit("-", 1)
-    if not _license_sig_valid(payload, sig):
-        return None
-    if ":" not in payload:
-        return None
-    gid_str, ts_str = payload.split(":", 1)
-    try:
-        guild_id = int(gid_str)
-        expiry_ts = int(ts_str)
-    except (ValueError, TypeError):
-        return None
-    return {
-        "guild_id": guild_id,
-        "expires_at": datetime.fromtimestamp(expiry_ts, tz=timezone.utc),
-    }
-
-
-def generate_license_key(guild_id: int, duration_days: int = 30) -> str:
-    """Create a signed license key. expiry is embedded so a key cannot be forged or modified."""
-    from datetime import datetime, timezone, timedelta
-    if duration_days <= 0:
-        expiry_ts = 0  # unlimited
-    else:
-        expiry = datetime.now(timezone.utc) + timedelta(days=duration_days)
-        expiry_ts = int(expiry.timestamp())
-    payload = f"{int(guild_id)}:{expiry_ts}"
-    sig = _sign_license_payload(payload)
-    return f"ARK-{payload}-{sig}"
+def generate_license_key() -> str:
+    """Generate a purely random activation-license key, e.g. ARK-XXXXXX-XXXXXX-XXXXXX.
+    The key carries no readable data; expiry is stored in the database."""
+    alphabet = string.ascii_uppercase + string.digits
+    # 3 groups of 6 => 18 random chars (~107 bits of entropy) - strong and easy to copy.
+    groups = ["".join(secrets.choice(alphabet) for _ in range(6)) for _ in range(3)]
+    return "ARK-" + "-".join(groups)
 
 
 def is_license_valid(guild_id: int) -> bool:
-    from datetime import datetime, timezone
+    from datetime import datetime, timezone, timedelta
     key = get_setting(guild_id, "license_key", "")
-    parsed = parse_license_key(key)
-    if parsed is None:
+    if not key:
         return False
-    if parsed["guild_id"] != int(guild_id):
-        return False
-    if parsed["expires_at"].timestamp() == 0:  # unlimited
+    days = get_setting(guild_id, "license_days", 0)
+    if days == 0:
         return True
-    return datetime.now(timezone.utc) < parsed["expires_at"]
+    created = get_setting(guild_id, "license_created")
+    if not created:
+        return True
+    try:
+        if isinstance(created, str):
+            created_dt = datetime.fromisoformat(created.replace('Z', '+00:00'))
+        else:
+            created_dt = created
+        expires = created_dt + timedelta(days=days)
+        return datetime.now(timezone.utc) < expires
+    except (ValueError, TypeError):
+        return True
 
 
 def get_license_expiry(guild_id: int) -> str:
-    """Return a human-readable expiry string for a guild's stored license."""
-    key = get_setting(guild_id, "license_key", "")
-    parsed = parse_license_key(key)
-    if parsed is None:
+    """Human-readable expiry for dashboard display."""
+    from datetime import datetime, timezone, timedelta
+    days = get_setting(guild_id, "license_days", 0)
+    if not get_setting(guild_id, "license_key", ""):
         return ""
-    if parsed["expires_at"].timestamp() == 0:
+    if days == 0:
         return "Unlimited"
-    return parsed["expires_at"].strftime("%Y-%m-%d %H:%M UTC")
+    created = get_setting(guild_id, "license_created")
+    try:
+        if isinstance(created, str):
+            created_dt = datetime.fromisoformat(created.replace('Z', '+00:00'))
+        else:
+            created_dt = created
+        expires = created_dt + timedelta(days=days)
+        return expires.strftime("%Y-%m-%d %H:%M UTC")
+    except (ValueError, TypeError):
+        return "Unknown"
+
+
+def parse_license_key(key: str) -> dict | None:
+    """Simple format validation. Returns the key if it looks like a license key, else None.
+    Real authorization is done by matching against the stored key in the database."""
+    if not key or not key.startswith("ARK-"):
+        return None
+    body = key[4:]
+    parts = body.split("-")
+    if len(parts) != 3:
+        return None
+    if not all(len(p) == 6 and p.isalnum() for p in parts):
+        return None
+    return {"key": key}
+
+
+def verify_license_key(guild_id: int, key: str) -> bool:
+    """True only if the supplied key matches the one stored for this guild AND is not expired."""
+    stored = get_setting(guild_id, "license_key", "")
+    if not stored or not secrets.compare_digest(stored.strip(), key.strip()):
+        return False
+    return is_license_valid(guild_id)
 
 
 def get_all_licenses() -> list[dict]:
+    from datetime import datetime, timezone, timedelta
     conn = get_conn()
     try:
         with conn.cursor() as cur:
@@ -876,20 +878,33 @@ def get_all_licenses() -> list[dict]:
             key = settings.get("license_key", "")
             if not key:
                 continue
-            parsed = parse_license_key(key)
-            if parsed is None:
-                is_valid = False
-                expiry_str = "Invalid Key"
-                expiry_ts = 0
-            else:
-                expiry_ts = parsed["expires_at"].timestamp()
-                is_valid = expiry_ts == 0 or datetime.now(timezone.utc) < parsed["expires_at"]
-                expiry_str = "Unlimited" if expiry_ts == 0 else parsed["expires_at"].strftime("%Y-%m-%d %H:%M UTC")
+            days = settings.get("license_days", 0)
+            created = settings.get("license_created")
+            expiry_str = "" if not key else ("Unlimited" if days == 0 else "Unknown")
+            is_valid = False
+            if key:
+                if days == 0:
+                    is_valid = True
+                    expiry_str = "Unlimited"
+                else:
+                    try:
+                        if isinstance(created, str):
+                            created_dt = datetime.fromisoformat(created.replace('Z', '+00:00'))
+                        elif created:
+                            created_dt = created
+                        else:
+                            created_dt = datetime.now(timezone.utc)
+                        expires = created_dt + timedelta(days=days)
+                        is_valid = datetime.now(timezone.utc) < expires
+                        expiry_str = expires.strftime("%Y-%m-%d %H:%M UTC")
+                    except (ValueError, TypeError):
+                        is_valid = False
+                        expiry_str = "Unknown"
             results.append({
                 "guild_id": guild_id,
                 "key": key,
-                "days": (0 if expiry_ts == 0 else max(0, int((parsed["expires_at"] - datetime.now(timezone.utc)).days + 1)) if parsed else 0),
-                "created": None,
+                "days": days,
+                "created": created,
                 "expiry": expiry_str,
                 "valid": is_valid,
             })
@@ -899,9 +914,8 @@ def get_all_licenses() -> list[dict]:
 
 
 def create_license_for_guild(guild_id: int, duration_days: int = 30) -> str:
-    key = generate_license_key(guild_id, duration_days)
+    key = generate_license_key()
     update_setting(guild_id, "license_key", key)
-    # keep legacy fields populated for compatibility/reference
     update_setting(guild_id, "license_days", duration_days)
     update_setting(guild_id, "license_created", datetime.now(timezone.utc).isoformat())
     return key
