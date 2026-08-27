@@ -1,18 +1,18 @@
 {% extends "dashboard.html" %}
 {% block dashboard_content %}
 <div class="mb-6">
-  <h2 class="text-2xl font-bold text-gray-100">Leaderboard</h2>
-  <p class="text-gray-400 mt-1">Auto-updating player leaderboard display</p>
+  <h2 class="text-2xl font-bold text-white">{{ t('leaderboard_title') }}</h2>
+  <p class="text-gray-400 mt-1">{{ t('leaderboard_desc') }}</p>
 </div>
 
 <form method="POST">
   <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
   <!-- Enable/Disable -->
-  <div class="bg-gray-800 rounded-lg p-6 shadow-lg mb-6">
+  <div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6 mb-6">
     <div class="flex items-center justify-between">
       <div>
-        <h3 class="text-lg font-semibold text-gray-100">Leaderboard Display</h3>
-        <p class="text-sm text-gray-400 mt-1">Enable or disable the auto-updating leaderboard</p>
+        <h3 class="text-lg font-semibold text-white">{{ t('lb_display') }}</h3>
+        <p class="text-sm text-gray-400 mt-1">{{ t('lb_display_desc') }}</p>
       </div>
       <label class="relative inline-flex items-center cursor-pointer">
         <input type="checkbox" name="enabled" value="1" class="sr-only peer"
@@ -23,49 +23,49 @@
   </div>
 
   <!-- Settings -->
-  <div class="bg-gray-800 rounded-lg p-6 shadow-lg mb-6">
-    <h3 class="text-lg font-semibold text-gray-100 mb-4">Configuration</h3>
+  <div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6 mb-6">
+    <h3 class="text-lg font-semibold text-white mb-4">{{ t('lb_config') }}</h3>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
       <div>
-        <label for="channel_id" class="block text-sm font-medium text-gray-300 mb-1">Channel ID</label>
+        <label for="channel_id" class="block text-sm font-medium text-gray-300 mb-1">{{ t('lb_channel') }}</label>
         <input type="text" id="channel_id" name="channel_id"
                value="{{ settings.channel_id or '' }}"
                placeholder="Discord channel ID"
-               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
       </div>
       <div>
-        <label for="update_interval" class="block text-sm font-medium text-gray-300 mb-1">Update Interval (minutes)</label>
+        <label for="update_interval" class="block text-sm font-medium text-gray-300 mb-1">{{ t('lb_interval') }}</label>
         <input type="number" id="update_interval" name="update_interval"
                value="{{ settings.update_interval or 5 }}"
                min="1" max="1440"
-               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
-        <p class="text-xs text-gray-500 mt-1">How often the leaderboard updates (1-1440 minutes)</p>
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
+        <p class="text-xs text-gray-500 mt-1">{{ t('lb_interval_desc') }}</p>
       </div>
     </div>
   </div>
 
   <button type="submit" class="px-6 py-2.5 bg-red-600 hover:bg-red-500 text-white font-medium rounded-lg transition-colors">
-    Save Settings
+    {{ t('lb_save') }}
   </button>
 </form>
 
 <!-- Leaderboard Preview -->
-<div class="bg-gray-800 rounded-lg p-6 shadow-lg mt-6">
-  <h3 class="text-lg font-semibold text-gray-100 mb-4">Current Leaderboard</h3>
+<div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6 mt-6">
+  <h3 class="text-lg font-semibold text-white mb-4">{{ t('lb_current') }}</h3>
   {% if leaderboard %}
   <div class="overflow-x-auto">
     <table class="w-full text-sm text-left">
       <thead class="text-xs text-gray-400 uppercase border-b border-gray-700">
         <tr>
-          <th class="px-4 py-3 w-16">Rank</th>
-          <th class="px-4 py-3">Player</th>
-          <th class="px-4 py-3">Tribe</th>
-          <th class="px-4 py-3 text-right">Level</th>
+          <th class="px-4 py-3 w-16">{{ t('lb_rank') }}</th>
+          <th class="px-4 py-3">{{ t('lb_player') }}</th>
+          <th class="px-4 py-3">{{ t('lb_tribe') }}</th>
+          <th class="px-4 py-3 text-right">{{ t('lb_level') }}</th>
         </tr>
       </thead>
       <tbody class="divide-y divide-gray-700">
         {% for entry in leaderboard %}
-        <tr class="hover:bg-gray-700/50">
+        <tr class="hover:bg-gray-800">
           <td class="px-4 py-3">
             {% if loop.index == 1 %}
             <span class="text-yellow-400 font-bold">#1</span>
@@ -86,7 +86,7 @@
     </table>
   </div>
   {% else %}
-  <p class="text-gray-500 text-center py-8">No leaderboard data available yet</p>
+  <p class="text-gray-500 text-center py-8">{{ t('lb_none') }}</p>
   {% endif %}
 </div>
 {% endblock %}

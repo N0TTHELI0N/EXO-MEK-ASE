@@ -1,19 +1,19 @@
 {% extends "dashboard.html" %}
 {% block dashboard_content %}
 <div class="mb-6">
-  <h2 class="text-2xl font-bold text-gray-100">Backup Manager</h2>
-  <p class="text-gray-400 mt-1">Create, restore, and manage server backups</p>
+  <h2 class="text-2xl font-bold text-white">{{ t('backup_title') }}</h2>
+  <p class="text-gray-400 mt-1">{{ t('backup_desc') }}</p>
 </div>
 
 <!-- Actions -->
-<div class="bg-gray-800 rounded-lg p-6 shadow-lg mb-6">
+<div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6 mb-6">
   <div class="flex flex-col sm:flex-row gap-4">
     <form method="POST" class="flex-1">
       <input type="hidden" name="action" value="create">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white font-medium rounded-lg transition-colors">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-        Create Backup
+        {{ t('backup_create') }}
       </button>
     </form>
     <form method="POST" enctype="multipart/form-data" class="flex-1">
@@ -23,7 +23,7 @@
         <input type="file" name="backup_file" accept=".zip,.tar.gz,.bak"
                class="flex-1 text-sm text-gray-400 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-gray-700 file:text-gray-200 hover:file:bg-gray-600 file:cursor-pointer file:transition-colors">
         <button type="submit" class="px-4 py-2.5 bg-gray-700 hover:bg-gray-600 text-gray-200 font-medium rounded-lg transition-colors whitespace-nowrap">
-          Upload
+          {{ t('backup_upload') }}
         </button>
       </div>
     </form>
@@ -31,20 +31,20 @@
 </div>
 
 <!-- Backups Table -->
-<div class="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+<div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl shadow-lg overflow-hidden">
   <div class="overflow-x-auto">
     <table class="w-full text-sm text-left">
-      <thead class="text-xs text-gray-400 uppercase bg-gray-750 border-b border-gray-700">
+      <thead class="text-xs text-gray-400 uppercase bg-gray-800 border-b border-gray-700">
         <tr>
-          <th class="px-6 py-3">Name</th>
-          <th class="px-6 py-3">Date</th>
-          <th class="px-6 py-3">Created By</th>
-          <th class="px-6 py-3 text-right">Actions</th>
+          <th class="px-6 py-3">{{ t('backup_name') }}</th>
+          <th class="px-6 py-3">{{ t('backup_date') }}</th>
+          <th class="px-6 py-3">{{ t('backup_created_by') }}</th>
+          <th class="px-6 py-3 text-right">{{ t('backup_actions') }}</th>
         </tr>
       </thead>
       <tbody class="divide-y divide-gray-700">
         {% for backup in backups %}
-        <tr class="hover:bg-gray-700/50">
+        <tr class="hover:bg-gray-800">
           <td class="px-6 py-4 text-gray-200 font-medium">{{ backup.name }}</td>
           <td class="px-6 py-4 text-gray-400">{{ backup.date }}</td>
           <td class="px-6 py-4 text-gray-400">{{ backup.created_by }}</td>
@@ -52,24 +52,24 @@
             <div class="flex items-center justify-end gap-2">
               <a href="/dashboard/{{ guild_id }}/backup/download/{{ backup.id }}"
                  class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-200 text-xs font-medium rounded-lg transition-colors">
-                Download
+                {{ t('backup_download') }}
               </a>
               <form method="POST" class="inline">
                 <input type="hidden" name="action" value="restore">
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="backup_id" value="{{ backup.id }}">
-                <button type="submit" onclick="return confirm('Restore this backup? The server will be restarted.')"
+                <button type="submit" onclick="return confirm('{{ t('backup_restore_confirm') }}')"
                         class="px-3 py-1.5 bg-yellow-600/20 hover:bg-yellow-600/40 text-yellow-300 text-xs font-medium rounded-lg transition-colors">
-                  Restore
+                  {{ t('backup_restore') }}
                 </button>
               </form>
               <form method="POST" class="inline">
                 <input type="hidden" name="action" value="delete">
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="backup_id" value="{{ backup.id }}">
-                <button type="submit" onclick="return confirm('Delete this backup permanently?')"
+                <button type="submit" onclick="return confirm('{{ t('backup_delete_confirm') }}')"
                         class="px-3 py-1.5 bg-red-600/20 hover:bg-red-600/40 text-red-300 text-xs font-medium rounded-lg transition-colors">
-                  Delete
+                  {{ t('backup_delete') }}
                 </button>
               </form>
             </div>
@@ -78,7 +78,7 @@
         {% endfor %}
         {% if not backups %}
         <tr>
-          <td colspan="4" class="px-6 py-12 text-center text-gray-500">No backups found</td>
+          <td colspan="4" class="px-6 py-12 text-center text-gray-500">{{ t('backup_none') }}</td>
         </tr>
         {% endif %}
       </tbody>

@@ -1,48 +1,48 @@
 {% extends "dashboard.html" %}
 {% block dashboard_content %}
 <div class="mb-6">
-  <h2 class="text-2xl font-bold text-gray-100">Nitrado Configuration</h2>
-  <p class="text-gray-400 mt-1">Connect your Nitrado server for API-based management.</p>
+  <h2 class="text-2xl font-bold text-white">{{ t('nitrado_title') }}</h2>
+  <p class="text-gray-400 mt-1">{{ t('nitrado_desc') }}</p>
 </div>
 
-<div class="bg-gray-800 rounded-lg p-6 shadow-lg max-w-2xl">
+<div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6 max-w-2xl">
   <form method="POST" action="">
     <input type="hidden" name="section" value="nitrado">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
 
     <div class="space-y-4">
       <div>
-        <label for="nitrado_token" class="block text-sm font-medium text-gray-300 mb-1">API Token</label>
+        <label for="nitrado_token" class="block text-sm font-medium text-gray-300 mb-1">{{ t('api_token') }}</label>
         <input type="password" id="nitrado_token" name="nitrado_token"
                value=""
                placeholder="{% if settings.nitrado_token %}•••••••• (configured){% else %}Enter your Nitrado API token{% endif %}"
-               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent">
         {% if settings.nitrado_token %}
-        <p class="text-xs text-green-400 mt-1">✓ Token configured. Leave blank to keep current.</p>
+        <p class="text-xs text-green-400 mt-1">{{ t('token_configured_keep') }}</p>
         {% endif %}
       </div>
 
       <div>
-        <label for="nitrado_user_id" class="block text-sm font-medium text-gray-300 mb-1">User ID</label>
+        <label for="nitrado_user_id" class="block text-sm font-medium text-gray-300 mb-1">{{ t('user_id') }}</label>
         <input type="text" id="nitrado_user_id" name="nitrado_user_id"
                value="{{ settings.nitrado_user_id or '' }}"
                placeholder="Enter your Nitrado User ID"
-               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent">
       </div>
 
       <div>
-        <label for="nitrado_service_id" class="block text-sm font-medium text-gray-300 mb-1">Service ID</label>
+        <label for="nitrado_service_id" class="block text-sm font-medium text-gray-300 mb-1">{{ t('service_id') }}</label>
         <input type="text" id="nitrado_service_id" name="nitrado_service_id"
                value="{{ settings.nitrado_service_id or '' }}"
                placeholder="Enter your Nitrado Service ID"
-               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent">
       </div>
     </div>
 
     <div class="mt-6">
       <button type="submit"
-              class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition-colors">
-        Save
+              class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-medium transition-colors">
+        {{ t('save') }}
       </button>
     </div>
   </form>

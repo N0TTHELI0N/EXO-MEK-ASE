@@ -1,18 +1,18 @@
 {% extends "dashboard.html" %}
 {% block dashboard_content %}
 <div class="mb-6">
-  <h2 class="text-2xl font-bold text-gray-100">AutoMod</h2>
-  <p class="text-gray-400 mt-1">Automatic chat moderation and spam detection</p>
+  <h2 class="text-2xl font-bold text-white">{{ t('automod_title') }}</h2>
+  <p class="text-gray-400 mt-1">{{ t('automod_desc') }}</p>
 </div>
 
 <form method="POST">
   <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
   <!-- Enable/Disable -->
-  <div class="bg-gray-800 rounded-lg p-6 shadow-lg mb-6">
+  <div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6 mb-6">
     <div class="flex items-center justify-between">
       <div>
-        <h3 class="text-lg font-semibold text-gray-100">AutoMod Protection</h3>
-        <p class="text-sm text-gray-400 mt-1">Enable or disable automatic moderation</p>
+        <h3 class="text-lg font-semibold text-white">{{ t('automod_protection') }}</h3>
+        <p class="text-sm text-gray-400 mt-1">{{ t('automod_protection_desc') }}</p>
       </div>
       <label class="relative inline-flex items-center cursor-pointer">
         <input type="checkbox" name="enabled" value="1" class="sr-only peer"
@@ -23,80 +23,80 @@
   </div>
 
   <!-- Channel & Log Settings -->
-  <div class="bg-gray-800 rounded-lg p-6 shadow-lg mb-6">
-    <h3 class="text-lg font-semibold text-gray-100 mb-4">Channel Settings</h3>
+  <div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6 mb-6">
+    <h3 class="text-lg font-semibold text-white mb-4">{{ t('automod_channel') }}</h3>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
       <div>
-        <label for="log_channel" class="block text-sm font-medium text-gray-300 mb-1">Log Channel ID</label>
+        <label for="log_channel" class="block text-sm font-medium text-gray-300 mb-1">{{ t('automod_log_channel') }}</label>
         <input type="text" id="log_channel" name="log_channel"
                value="{{ settings.log_channel or '' }}"
                placeholder="Discord channel ID"
-               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
       </div>
       <div>
-        <label for="log_file_path" class="block text-sm font-medium text-gray-300 mb-1">Log File Path</label>
+        <label for="log_file_path" class="block text-sm font-medium text-gray-300 mb-1">{{ t('automod_log_file') }}</label>
         <input type="text" id="log_file_path" name="log_file_path"
                value="{{ settings.log_file_path or '' }}"
                placeholder="e.g. /path/to/logs/auto_mod.log"
-               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
       </div>
     </div>
   </div>
 
   <!-- Spam Detection -->
-  <div class="bg-gray-800 rounded-lg p-6 shadow-lg mb-6">
-    <h3 class="text-lg font-semibold text-gray-100 mb-4">Spam Detection</h3>
-    <p class="text-sm text-gray-400 mb-4">Configure rate limits for message spam detection</p>
+  <div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6 mb-6">
+    <h3 class="text-lg font-semibold text-white mb-4">{{ t('automod_spam') }}</h3>
+    <p class="text-sm text-gray-400 mb-4">{{ t('automod_spam_desc') }}</p>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
       <div>
-        <label for="spam_messages" class="block text-sm font-medium text-gray-300 mb-1">Max Messages</label>
+        <label for="spam_messages" class="block text-sm font-medium text-gray-300 mb-1">{{ t('automod_max_msgs') }}</label>
         <input type="number" id="spam_messages" name="spam_messages"
                value="{{ settings.spam_messages or 5 }}"
                min="1" max="50"
-               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
-        <p class="text-xs text-gray-500 mt-1">Maximum messages allowed in the time window</p>
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
+        <p class="text-xs text-gray-500 mt-1">{{ t('automod_max_msgs_desc') }}</p>
       </div>
       <div>
-        <label for="spam_window" class="block text-sm font-medium text-gray-300 mb-1">Time Window (seconds)</label>
+        <label for="spam_window" class="block text-sm font-medium text-gray-300 mb-1">{{ t('automod_window') }}</label>
         <input type="number" id="spam_window" name="spam_window"
                value="{{ settings.spam_window or 10 }}"
                min="1" max="300"
-               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
-        <p class="text-xs text-gray-500 mt-1">Duration of the detection window in seconds</p>
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
+        <p class="text-xs text-gray-500 mt-1">{{ t('automod_window_desc') }}</p>
       </div>
     </div>
   </div>
 
   <button type="submit" class="px-6 py-2.5 bg-red-600 hover:bg-red-500 text-white font-medium rounded-lg transition-colors">
-    Save Settings
+    {{ t('save') }}
   </button>
 </form>
 
 <!-- Custom Words Management -->
-<div class="bg-gray-800 rounded-lg p-6 shadow-lg mb-6 mt-8">
-  <h3 class="text-lg font-semibold text-gray-100 mb-4">Custom Monitored Words</h3>
-  <p class="text-sm text-gray-400 mb-4">Add or remove words to monitor in addition to the default list</p>
-  
+<div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6 mb-6 mt-8">
+  <h3 class="text-lg font-semibold text-white mb-4">{{ t('automod_words') }}</h3>
+  <p class="text-sm text-gray-400 mb-4">{{ t('automod_words_desc') }}</p>
+
   <!-- Add Word Form -->
   <form method="POST" class="mb-6">
     <input type="hidden" name="action" value="add_word">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
     <div class="flex gap-4">
-      <input type="text" name="new_word" placeholder="Enter word to monitor"
-             class="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
+      <input type="text" name="new_word" placeholder="{{ t('automod_word_placeholder') }}"
+             class="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
       <button type="submit" class="px-6 py-2.5 bg-green-600 hover:bg-green-500 text-white font-medium rounded-lg transition-colors">
-        Add Word
+        {{ t('automod_add_word') }}
       </button>
     </div>
   </form>
 
   <!-- Words List -->
   {% if custom_words %}
-  <div class="bg-gray-700 rounded-lg p-4">
+  <div class="bg-gray-700/50 rounded-lg p-4">
     <div class="flex flex-wrap gap-2">
       {% for word in custom_words %}
       <div class="flex items-center gap-2 bg-gray-600 rounded-lg px-3 py-2">
-        <span class="text-gray-100">{{ word.word }}</span>
+        <span class="text-white">{{ word.word }}</span>
         <form method="POST" class="inline">
           <input type="hidden" name="action" value="remove_word">
           <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
@@ -106,12 +106,12 @@
       </div>
       {% endfor %}
     </div>
-    <p class="text-xs text-gray-500 mt-3">Total: {{ custom_words|length }} custom words</p>
+    <p class="text-xs text-gray-500 mt-3">{{ t('automod_total') }} {{ custom_words|length }}</p>
   </div>
   {% else %}
-  <div class="bg-gray-700 rounded-lg p-4 text-center">
-    <p class="text-gray-400">No custom words added yet.</p>
-    <p class="text-xs text-gray-500 mt-1">Default words are still active.</p>
+  <div class="bg-gray-700/50 rounded-lg p-4 text-center">
+    <p class="text-gray-400">{{ t('automod_no_words') }}</p>
+    <p class="text-xs text-gray-500 mt-1">{{ t('automod_default_on') }}</p>
   </div>
   {% endif %}
 </div>

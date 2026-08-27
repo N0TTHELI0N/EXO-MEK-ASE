@@ -1,8 +1,8 @@
 {% extends "dashboard.html" %}
 {% block dashboard_content %}
 <div class="mb-6">
-  <h2 class="text-2xl font-bold text-gray-100">Punishments</h2>
-  <p class="text-gray-400 mt-1">Manage warnings and player punishments</p>
+  <h2 class="text-2xl font-bold text-white">{{ t('punishments_title') }}</h2>
+  <p class="text-gray-400 mt-1">{{ t('punishments_desc') }}</p>
 </div>
 
 <!-- Tab Navigation -->
@@ -10,31 +10,31 @@
   <div class="flex gap-1 bg-gray-800 rounded-lg p-1 w-fit">
     <button type="button" onclick="showTab('warnings')" id="tab-warnings"
             class="tab-btn px-5 py-2 text-sm font-medium rounded-md transition-colors bg-red-600 text-white">
-      Warnings
+      {{ t('pun_warnings') }}
     </button>
     <button type="button" onclick="showTab('punishments')" id="tab-punishments"
             class="tab-btn px-5 py-2 text-sm font-medium rounded-md transition-colors text-gray-400 hover:text-gray-200">
-      Punishments
+      {{ t('punishments_title') }}
     </button>
     <button type="button" onclick="showTab('settings')" id="tab-settings"
             class="tab-btn px-5 py-2 text-sm font-medium rounded-md transition-colors text-gray-400 hover:text-gray-200">
-      Settings
+      {{ t('pun_settings') }}
     </button>
   </div>
 </div>
 
 <!-- Warnings Tab -->
 <div id="panel-warnings" class="tab-panel">
-  <div class="bg-gray-800 rounded-lg p-6 shadow-lg mb-6">
+  <div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6 mb-6">
     <div class="flex items-center gap-4 mb-6">
       <div class="flex-1">
-        <label for="warn_search" class="block text-sm font-medium text-gray-300 mb-1">Search Player</label>
-        <input type="text" id="warn_search" placeholder="Steam name or Steam ID..."
-               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
+        <label for="warn_search" class="block text-sm font-medium text-gray-300 mb-1">{{ t('pun_search') }}</label>
+        <input type="text" id="warn_search" placeholder="{{ t('pun_search_ph') }}"
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
       </div>
       <div class="pt-6">
         <button type="button" class="px-4 py-2.5 bg-gray-700 hover:bg-gray-600 text-gray-200 font-medium rounded-lg transition-colors">
-          Search
+          {{ t('logs_search') }}
         </button>
       </div>
     </div>
@@ -43,16 +43,16 @@
       <table class="w-full text-sm text-left">
         <thead class="text-xs text-gray-400 uppercase border-b border-gray-700">
           <tr>
-            <th class="px-4 py-3">Player</th>
-            <th class="px-4 py-3">Reason</th>
-            <th class="px-4 py-3">Issuer</th>
-            <th class="px-4 py-3">Date</th>
-            <th class="px-4 py-3">Actions</th>
+            <th class="px-4 py-3">{{ t('logs_player') }}</th>
+            <th class="px-4 py-3">{{ t('pun_reason') }}</th>
+            <th class="px-4 py-3">{{ t('pun_issuer') }}</th>
+            <th class="px-4 py-3">{{ t('pun_date') }}</th>
+            <th class="px-4 py-3">{{ t('permissions_actions') }}</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-700">
-          <tr class="hover:bg-gray-700/50">
-            <td colspan="5" class="px-4 py-8 text-center text-gray-500">No warnings found</td>
+          <tr class="hover:bg-gray-800">
+            <td colspan="5" class="px-4 py-8 text-center text-gray-500">{{ t('pun_no_warnings') }}</td>
           </tr>
         </tbody>
       </table>
@@ -62,16 +62,16 @@
 
 <!-- Punishments Tab -->
 <div id="panel-punishments" class="tab-panel hidden">
-  <div class="bg-gray-800 rounded-lg p-6 shadow-lg mb-6">
+  <div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6 mb-6">
     <div class="flex items-center gap-4 mb-6">
       <div class="flex-1">
-        <label for="pun_search" class="block text-sm font-medium text-gray-300 mb-1">Search Player</label>
-        <input type="text" id="pun_search" placeholder="Steam name or Steam ID..."
-               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
+        <label for="pun_search" class="block text-sm font-medium text-gray-300 mb-1">{{ t('pun_search') }}</label>
+        <input type="text" id="pun_search" placeholder="{{ t('pun_search_ph') }}"
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
       </div>
       <div class="pt-6">
         <button type="button" class="px-4 py-2.5 bg-gray-700 hover:bg-gray-600 text-gray-200 font-medium rounded-lg transition-colors">
-          Search
+          {{ t('logs_search') }}
         </button>
       </div>
     </div>
@@ -80,17 +80,17 @@
       <table class="w-full text-sm text-left">
         <thead class="text-xs text-gray-400 uppercase border-b border-gray-700">
           <tr>
-            <th class="px-4 py-3">Player</th>
-            <th class="px-4 py-3">Type</th>
-            <th class="px-4 py-3">Reason</th>
-            <th class="px-4 py-3">Duration</th>
-            <th class="px-4 py-3">Evidence</th>
-            <th class="px-4 py-3">Date</th>
+            <th class="px-4 py-3">{{ t('logs_player') }}</th>
+            <th class="px-4 py-3">{{ t('pun_type') }}</th>
+            <th class="px-4 py-3">{{ t('pun_reason') }}</th>
+            <th class="px-4 py-3">{{ t('pun_duration') }}</th>
+            <th class="px-4 py-3">{{ t('pun_evidence') }}</th>
+            <th class="px-4 py-3">{{ t('pun_date') }}</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-700">
-          <tr class="hover:bg-gray-700/50">
-            <td colspan="6" class="px-4 py-8 text-center text-gray-500">No punishments found</td>
+          <tr class="hover:bg-gray-800">
+            <td colspan="6" class="px-4 py-8 text-center text-gray-500">{{ t('pun_no_punishments') }}</td>
           </tr>
         </tbody>
       </table>
@@ -102,54 +102,54 @@
 <div id="panel-settings" class="tab-panel hidden">
   <form method="POST">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-    <div class="bg-gray-800 rounded-lg p-6 shadow-lg mb-6">
-      <h3 class="text-lg font-semibold text-gray-100 mb-4">Warning Threshold</h3>
+    <div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6 mb-6">
+      <h3 class="text-lg font-semibold text-white mb-4">{{ t('pun_warning_threshold') }}</h3>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <label for="warning_threshold" class="block text-sm font-medium text-gray-300 mb-1">Warnings Before Auto-Punishment</label>
+          <label for="warning_threshold" class="block text-sm font-medium text-gray-300 mb-1">{{ t('pun_auto_threshold') }}</label>
           <input type="number" id="warning_threshold" name="warning_threshold"
                  value="{{ settings.warning_threshold or 3 }}"
                  min="1" max="20"
-                 class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
+                 class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
         </div>
         <div>
-          <label for="auto_punishment" class="block text-sm font-medium text-gray-300 mb-1">Auto-Punishment Type</label>
+          <label for="auto_punishment" class="block text-sm font-medium text-gray-300 mb-1">{{ t('pun_auto_type') }}</label>
           <select id="auto_punishment" name="auto_punishment"
-                  class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
-            <option value="kick" {% if settings.auto_punishment == 'kick' %}selected{% endif %}>Kick</option>
-            <option value="tempban" {% if settings.auto_punishment == 'tempban' %}selected{% endif %}>Temp Ban</option>
-            <option value="ban" {% if settings.auto_punishment == 'ban' %}selected{% endif %}>Permanent Ban</option>
+                  class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
+            <option value="kick" {% if settings.auto_punishment == 'kick' %}selected{% endif %}>{{ t('pun_kick') }}</option>
+            <option value="tempban" {% if settings.auto_punishment == 'tempban' %}selected{% endif %}>{{ t('pun_tempban') }}</option>
+            <option value="ban" {% if settings.auto_punishment == 'ban' %}selected{% endif %}>{{ t('pun_permban') }}</option>
           </select>
         </div>
         <div>
-          <label for="tempban_duration" class="block text-sm font-medium text-gray-300 mb-1">Temp Ban Duration (hours)</label>
+          <label for="tempban_duration" class="block text-sm font-medium text-gray-300 mb-1">{{ t('pun_tempban_duration') }}</label>
           <input type="number" id="tempban_duration" name="tempban_duration"
                  value="{{ settings.tempban_duration or 24 }}"
                  min="1" max="720"
-                 class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
+                 class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
         </div>
         <div>
-          <label for="tempwarn_expiry" class="block text-sm font-medium text-gray-300 mb-1">Warning Expiry (days)</label>
+          <label for="tempwarn_expiry" class="block text-sm font-medium text-gray-300 mb-1">{{ t('pun_warning_expiry') }}</label>
           <input type="number" id="tempwarn_expiry" name="tempwarn_expiry"
                  value="{{ settings.tempwarn_expiry or 30 }}"
                  min="1" max="365"
-                 class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
-          <p class="text-xs text-gray-500 mt-1">Warnings expire after this many days. Set to 0 for never.</p>
+                 class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
+          <p class="text-xs text-gray-500 mt-1">{{ t('pun_warning_expiry_desc') }}</p>
         </div>
       </div>
     </div>
 
-    <div class="bg-gray-800 rounded-lg p-6 shadow-lg mb-6">
-      <h3 class="text-lg font-semibold text-gray-100 mb-4">Log Channel</h3>
-      <label for="log_channel" class="block text-sm font-medium text-gray-300 mb-1">Punishment Log Channel ID</label>
+    <div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6 mb-6">
+      <h3 class="text-lg font-semibold text-white mb-4">{{ t('pun_log_channel') }}</h3>
+      <label for="log_channel" class="block text-sm font-medium text-gray-300 mb-1">{{ t('pun_log_channel_id') }}</label>
       <input type="text" id="log_channel" name="log_channel"
              value="{{ settings.log_channel or '' }}"
              placeholder="Discord channel ID"
-             class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
+             class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
     </div>
 
     <button type="submit" class="px-6 py-2.5 bg-red-600 hover:bg-red-500 text-white font-medium rounded-lg transition-colors">
-      Save Settings
+      {{ t('save') }}
     </button>
   </form>
 </div>

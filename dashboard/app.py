@@ -9,9 +9,26 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import guild_settings
 import shop_db
 from security import validate_path
+from translations import TRANSLATIONS, DASHBOARD_DEFAULT_LANG, DASHBOARD_LANGS
+
+def _lang_from_session():
+    lang = session.get("_lang", DASHBOARD_DEFAULT_LANG)
+    if lang not in DASHBOARD_LANGS:
+        lang = DASHBOARD_DEFAULT_LANG
+    return lang
+
+def _t(key, lang=None):
+    lang = lang or _lang_from_session()
+    return TRANSLATIONS.get(key, {}).get(lang, TRANSLATIONS.get(key, {}).get(DASHBOARD_DEFAULT_LANG, key))
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.secret_key = os.environ.get("DASHBOARD_SECRET", secrets.token_hex(32))
+
+@app.before_request
+def _set_template_globals():
+    app.jinja_env.globals['t'] = _t
+    app.jinja_env.globals['LANGS'] = DASHBOARD_LANGS
+    app.jinja_env.globals['DASHBOARD_LANG'] = _lang_from_session()
 
 app.config.update(
     SESSION_COOKIE_SECURE=True,
@@ -246,6 +263,13 @@ def callback():
 def logout():
     session.clear()
     return redirect(url_for("home"))
+
+
+@app.route("/lang/<lang>")
+def set_language(lang):
+    if lang in DASHBOARD_LANGS:
+        session["_lang"] = lang
+    return redirect(request.referrer or url_for("home"))
 
 
 # ────────────────────────────────────────────────────────────

@@ -1,21 +1,21 @@
 {% extends "dashboard.html" %}
 {% block dashboard_content %}
 <div class="mb-6">
-  <h2 class="text-2xl font-bold text-gray-100">Points Management</h2>
-  <p class="text-gray-400 mt-1">Search for a member and manage their point balance.</p>
+  <h2 class="text-2xl font-bold text-white">{{ t('points_title') }}</h2>
+  <p class="text-gray-400 mt-1">{{ t('points_desc') }}</p>
 </div>
 
-<div class="bg-gray-800 rounded-lg p-6 shadow-lg max-w-2xl">
+<div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6 max-w-2xl">
   <div class="mb-6">
-    <label for="member-search" class="block text-sm font-medium text-gray-300 mb-1">Search Member</label>
+    <label for="member-search" class="block text-sm font-medium text-gray-300 mb-1">{{ t('points_search') }}</label>
     <input type="text" id="member-search" name="member_search"
            placeholder="Enter Discord name or ID..."
            hx-get="/dashboard/{{ guild_id }}/points/search"
            hx-trigger="input changed delay:300ms"
            hx-target="#member-results"
            hx-indicator="#search-spinner"
-           class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-    <div id="search-spinner" class="htmx-indicator text-gray-400 text-sm mt-1">Searching...</div>
+           class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent">
+    <div id="search-spinner" class="htmx-indicator text-gray-400 text-sm mt-1">{{ t('points_searching') }}</div>
   </div>
 
   <div id="member-results" class="space-y-4"></div>
@@ -24,12 +24,12 @@
     <div class="bg-gray-700 rounded-lg p-4 mb-4">
       <div class="flex items-center justify-between">
         <div>
-          <p class="text-gray-100 font-medium" id="member-name">—</p>
+          <p class="text-white font-medium" id="member-name">—</p>
           <p class="text-gray-400 text-sm" id="member-id">—</p>
         </div>
         <div class="text-right">
-          <p class="text-gray-400 text-sm">Current Balance</p>
-          <p class="text-2xl font-bold text-gray-100" id="member-balance">0</p>
+          <p class="text-gray-400 text-sm">{{ t('points_balance') }}</p>
+          <p class="text-2xl font-bold text-white" id="member-balance">0</p>
         </div>
       </div>
     </div>
@@ -41,17 +41,17 @@
 
       <div class="flex items-end space-x-4">
         <div class="flex-1">
-          <label for="points-amount" class="block text-sm font-medium text-gray-300 mb-1">Amount</label>
+          <label for="points-amount" class="block text-sm font-medium text-gray-300 mb-1">{{ t('points_amount') }}</label>
           <input type="number" id="points-amount" name="amount" min="1" value="100"
-                 class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                 class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent">
         </div>
         <button type="submit" name="action" value="add"
                 class="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg font-medium transition-colors">
-          Add
+          {{ t('points_add') }}
         </button>
         <button type="submit" name="action" value="remove"
                 class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-medium transition-colors">
-          Remove
+          {{ t('points_remove') }}
         </button>
       </div>
     </form>

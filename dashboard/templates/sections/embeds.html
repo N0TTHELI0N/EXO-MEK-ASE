@@ -1,22 +1,22 @@
 {% extends "dashboard.html" %}
 {% block dashboard_content %}
 <div class="mb-6">
-  <h2 class="text-2xl font-bold text-gray-100">Embeds</h2>
-  <p class="text-gray-400 mt-1">Customize bot embed messages</p>
+  <h2 class="text-2xl font-bold text-white">{{ t('embeds_title') }}</h2>
+  <p class="text-gray-400 mt-1">{{ t('embeds_desc') }}</p>
 </div>
 
 <!-- Embed Grid -->
 <div id="embed-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
   {% for key, embed in embeds.items() %}
   <button type="button" onclick="editEmbed('{{ key }}')"
-          class="embed-card bg-gray-800 rounded-lg p-5 shadow-lg text-left hover:ring-2 hover:ring-red-500 transition-all group">
+          class="embed-card bg-gray-800/50 border border-gray-700/50 rounded-2xl p-5 text-left hover:ring-2 hover:ring-red-500 transition-all group">
     <div class="flex items-start gap-3 mb-3">
       <div class="w-1 h-10 rounded-full flex-shrink-0" style="background-color: {{ embed.color or '#FFD700' }};"></div>
       <div class="min-w-0">
-        <h4 class="text-sm font-semibold text-gray-100 group-hover:text-red-300 transition-colors">
+        <h4 class="text-sm font-semibold text-white group-hover:text-red-300 transition-colors">
           {{ key | replace('_', ' ') | title }}
         </h4>
-        <p class="text-xs text-gray-400 truncate">{{ embed.title or '(No title)' }}</p>
+        <p class="text-xs text-gray-400 truncate">{{ embed.title or t('embeds_no_title') }}</p>
       </div>
     </div>
     <p class="text-xs text-gray-500 line-clamp-2">{{ embed.description[:80] }}{% if embed.description and embed.description|length > 80 %}...{% endif %}</p>
@@ -28,9 +28,9 @@
 <div id="embed-edit" class="hidden">
   <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
     <!-- Form -->
-    <div class="bg-gray-800 rounded-lg p-6 shadow-lg">
+    <div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6">
       <div class="flex items-center justify-between mb-6">
-        <h3 id="edit-title" class="text-lg font-semibold text-gray-100"></h3>
+        <h3 id="edit-title" class="text-lg font-semibold text-white"></h3>
         <button type="button" onclick="closeEdit()" class="text-gray-400 hover:text-gray-200">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
         </button>
@@ -41,63 +41,63 @@
 
         <div class="space-y-4">
           <div>
-            <label for="embed_title" class="block text-sm font-medium text-gray-300 mb-1">Title</label>
+            <label for="embed_title" class="block text-sm font-medium text-gray-300 mb-1">{{ t('embeds_title_f') }}</label>
             <input type="text" id="embed_title" name="title" oninput="updatePreview()"
-                   class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
+                   class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
           </div>
           <div>
-            <label for="embed_description" class="block text-sm font-medium text-gray-300 mb-1">Description</label>
+            <label for="embed_description" class="block text-sm font-medium text-gray-300 mb-1">{{ t('embeds_description') }}</label>
             <textarea id="embed_description" name="description" rows="4" oninput="updatePreview()"
-                      class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none resize-none"></textarea>
+                      class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none resize-none"></textarea>
           </div>
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <label for="embed_color" class="block text-sm font-medium text-gray-300 mb-1">Color</label>
+              <label for="embed_color" class="block text-sm font-medium text-gray-300 mb-1">{{ t('embeds_color') }}</label>
               <input type="color" id="embed_color" name="color" oninput="updatePreview()"
                      class="w-full h-10 bg-gray-700 border border-gray-600 rounded-lg cursor-pointer">
             </div>
             <div></div>
           </div>
           <div>
-            <label for="embed_image" class="block text-sm font-medium text-gray-300 mb-1">Image URL</label>
+            <label for="embed_image" class="block text-sm font-medium text-gray-300 mb-1">{{ t('embeds_image') }}</label>
             <input type="url" id="embed_image" name="image_url" oninput="updatePreview()"
                    placeholder="https://example.com/image.png"
-                   class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
+                   class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
           </div>
           <div>
-            <label for="embed_thumbnail" class="block text-sm font-medium text-gray-300 mb-1">Thumbnail URL</label>
+            <label for="embed_thumbnail" class="block text-sm font-medium text-gray-300 mb-1">{{ t('embeds_thumbnail') }}</label>
             <input type="url" id="embed_thumbnail" name="thumbnail_url" oninput="updatePreview()"
                    placeholder="https://example.com/thumb.png"
-                   class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
+                   class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
           </div>
           <div>
-            <label for="embed_footer" class="block text-sm font-medium text-gray-300 mb-1">Footer</label>
+            <label for="embed_footer" class="block text-sm font-medium text-gray-300 mb-1">{{ t('embeds_footer') }}</label>
             <input type="text" id="embed_footer" name="footer_text" oninput="updatePreview()"
-                   placeholder="Footer text"
-                   class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
+                   placeholder="{{ t('embeds_footer') }}"
+                   class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
           </div>
           <div>
-            <label for="embed_author" class="block text-sm font-medium text-gray-300 mb-1">Author</label>
+            <label for="embed_author" class="block text-sm font-medium text-gray-300 mb-1">{{ t('embeds_author') }}</label>
             <input type="text" id="embed_author" name="author_name" oninput="updatePreview()"
-                   placeholder="Author name"
-                   class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
+                   placeholder="{{ t('embeds_author') }}"
+                   class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
           </div>
         </div>
 
         <div class="flex gap-3 mt-6">
           <button type="submit" class="px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white font-medium rounded-lg transition-colors">
-            Save
+            {{ t('save') }}
           </button>
           <button type="button" onclick="closeEdit()" class="px-5 py-2.5 bg-gray-700 hover:bg-gray-600 text-gray-200 font-medium rounded-lg transition-colors">
-            Cancel
+            {{ t('cancel') }}
           </button>
         </div>
       </form>
     </div>
 
     <!-- Preview -->
-    <div class="bg-gray-800 rounded-lg p-6 shadow-lg">
-      <h3 class="text-lg font-semibold text-gray-100 mb-4">Preview</h3>
+    <div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6">
+      <h3 class="text-lg font-semibold text-white mb-4">{{ t('embeds_preview') }}</h3>
       <div class="bg-gray-900 rounded-lg p-4 border border-gray-700">
         <div class="flex gap-3">
           <div id="preview-bar" class="w-1 rounded-full" style="background-color: #FFD700;"></div>

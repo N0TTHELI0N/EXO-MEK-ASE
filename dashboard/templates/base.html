@@ -98,7 +98,17 @@
                     {% if user.id|string == BOT_OWNER_ID|string %}
                     <a href="/admin/licenses"
                        class="text-sm text-red-400 hover:text-red-300 transition-colors px-3 py-1.5 rounded-lg hover:bg-red-500/10 border border-red-500/30">
-                        🔑 Licenses
+                        🔑 {{ t('nav_licenses') }}
+                    </a>
+                    {% endif %}
+                    <!-- Language Toggle -->
+                    {% if DASHBOARD_LANG == 'ar' %}
+                    <a href="/lang/en" class="p-2 rounded-lg bg-gray-800/50 border border-gray-700/50 text-gray-400 hover:text-white hover:bg-gray-700 transition-colors text-sm font-semibold" title="English">
+                        EN
+                    </a>
+                    {% else %}
+                    <a href="/lang/ar" class="p-2 rounded-lg bg-gray-800/50 border border-gray-700/50 text-gray-400 hover:text-white hover:bg-gray-700 transition-colors text-sm font-semibold" title="العربية">
+                        ع
                     </a>
                     {% endif %}
                     <button onclick="toggleTheme()" class="p-2 rounded-lg bg-gray-800/50 border border-gray-700/50 text-gray-400 hover:text-white hover:bg-gray-700 transition-colors" title="Toggle theme">
@@ -123,7 +133,7 @@
                         href="/logout"
                         class="text-sm text-gray-400 hover:text-red-400 transition-colors px-3 py-1.5 rounded-lg hover:bg-red-500/10"
                     >
-                        Logout
+                        {{ t('nav_logout') }}
                     </a>
                 </div>
                 {% endif %}

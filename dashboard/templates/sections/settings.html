@@ -1,7 +1,7 @@
 {% extends "dashboard.html" %}
 {% block dashboard_content %}
 <div class="max-w-4xl mx-auto py-8 px-4">
-  <h1 class="text-2xl font-bold mb-6">⚙️ General Settings</h1>
+  <h1 class="text-2xl font-bold mb-6">⚙️ {{ t('settings_title') }}</h1>
 
   <form method="POST" class="space-y-6">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
@@ -12,8 +12,8 @@
           <span class="text-xl">🌐</span>
         </div>
         <div>
-          <h2 class="text-lg font-semibold text-white">Language / اللغة</h2>
-          <p class="text-sm text-gray-400">Choose your preferred language</p>
+          <h2 class="text-lg font-semibold text-white">🌐 {{ t('settings_language') }}</h2>
+          <p class="text-sm text-gray-400">{{ t('settings_language_desc') }}</p>
         </div>
       </div>
       <div class="grid grid-cols-2 gap-4">
@@ -46,8 +46,8 @@
 
     <!-- Log Channels -->
     <div class="bg-gray-800 rounded-lg p-6">
-      <h2 class="text-lg font-semibold mb-4">📜 Log Channels</h2>
-      <p class="text-gray-400 text-sm mb-4">Set a channel for each log type. Leave blank to disable.</p>
+      <h2 class="text-lg font-semibold mb-4">📜 {{ t('settings_log_channels') }}</h2>
+      <p class="text-gray-400 text-sm mb-4">{{ t('settings_log_channels_desc') }}</p>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         {% for log_type in ['chat', 'admin_command', 'punishment', 'leaderboard', 'whitelist', 'automod', 'server', 'tribe'] %}
         <div>
@@ -61,8 +61,8 @@
 
     <!-- Log Toggles -->
     <div class="bg-gray-800 rounded-lg p-6">
-      <h2 class="text-lg font-semibold mb-4">🔘 Log Toggles</h2>
-      <p class="text-gray-400 text-sm mb-4">Enable or disable each log type. All are ON by default.</p>
+      <h2 class="text-lg font-semibold mb-4">🔘 {{ t('settings_log_toggles') }}</h2>
+      <p class="text-gray-400 text-sm mb-4">{{ t('settings_log_toggles_desc') }}</p>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         {% for log_type in ['chat', 'admin_command', 'punishment', 'leaderboard', 'whitelist', 'automod', 'server', 'tribe'] %}
         <label class="flex items-center justify-between p-3 rounded-lg bg-gray-700">
@@ -77,8 +77,8 @@
 
     <!-- Admin Command Sub-toggles -->
     <div class="bg-gray-800 rounded-lg p-6">
-      <h2 class="text-lg font-semibold mb-4">🎯 Admin Command Sub-toggles</h2>
-      <p class="text-gray-400 text-sm mb-4">Fine-tune which admin commands are logged.</p>
+      <h2 class="text-lg font-semibold mb-4">🎯 {{ t('settings_admin_sub') }}</h2>
+      <p class="text-gray-400 text-sm mb-4">{{ t('settings_admin_sub_desc') }}</p>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         {% for sub in ['dino_spawn', 'gfi', 'gcm', 'ban', 'kick', 'other'] %}
         <label class="flex items-center justify-between p-3 rounded-lg bg-gray-700">
@@ -93,7 +93,7 @@
 
     <div class="flex justify-end">
       <button type="submit" class="bg-red-600 hover:bg-red-700 text-white font-semibold px-6 py-2 rounded-lg transition">
-        Save Settings
+        {{ t('settings_save') }}
       </button>
     </div>
   </form>
