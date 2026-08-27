@@ -53,19 +53,15 @@ def run_bot():
             print(f"[Bot] Synced {len(synced)} slash commands globally", flush=True)
         except Exception as e:
             print(f"[Bot] Global sync error: {e}", flush=True)
-        # Copy global commands into each guild and sync, so they appear immediately
-        # (avoids waiting up to an hour for global command cache to refresh)
+        # Remove stale per-guild copies left from earlier testing so commands do not duplicate.
+        # Commands live globally only; the global sync above already registered them.
         for guild in bot.guilds:
             try:
-                bot.tree.copy_global_to(guild=guild)
+                bot.tree.clear_commands(guild=guild)
+                cleared = await bot.tree.sync(guild=guild)
+                print(f"[Bot] Cleaned {len(cleared)} guild copies from {guild.name}", flush=True)
             except Exception as e:
-                # CommandAlreadyRegistered etc. is fine - it means they are already there
-                print(f"[Bot] copy_global_to note for {guild.name}: {e}", flush=True)
-            try:
-                g_synced = await bot.tree.sync(guild=guild)
-                print(f"[Bot] Synced {len(g_synced)} commands for {guild.name} ({guild.id})", flush=True)
-            except Exception as e:
-                print(f"[Bot] Guild sync error for {guild.name}: {e}", flush=True)
+                print(f"[Bot] Guild cleanup error for {guild.name}: {e}", flush=True)
 
     @bot.tree.interaction_check
     async def global_permission_check(interaction: discord.Interaction) -> bool:
