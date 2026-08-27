@@ -161,15 +161,30 @@ def guild_admin_required(f):
         user = get_current_user()
         if not user:
             return redirect(url_for("login"))
+        user_id = str(user.get("id", ""))
+        is_owner = bool(BOT_OWNER_ID) and user_id == str(BOT_OWNER_ID)
+
         user_guilds = {g["id"]: g for g in get_user_guilds()}
+        admin_guilds = {g["id"]: g for g in get_bot_guilds()}
+
+        # Owner gains access to any of the bot's servers (bypasses flaky user-token checks)
+        if is_owner and str(guild_id) in admin_guilds:
+            return f(guild_id, *args, **kwargs)
+
+        if str(guild_id) not in admin_guilds:
+            app.logger.warning(
+                "guild_admin_required: guild %s not in bot's servers (raise_bot_or_check_bot_token)",
+                guild_id,
+            )
+
         if str(guild_id) not in user_guilds:
             return "You don't have access to this server.", 403
-        
+
         guild_perms = int(user_guilds[str(guild_id)].get("permissions", 0))
         ADMINISTRATOR_FLAG = 0x8
         if not (guild_perms & ADMINISTRATOR_FLAG):
             return "You need Administrator permission to access this.", 403
-        
+
         return f(guild_id, *args, **kwargs)
     return decorated
 
