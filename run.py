@@ -118,6 +118,13 @@ def run_dashboard():
 
 
 if __name__ == "__main__":
-    bot_thread = threading.Thread(target=run_bot, daemon=True)
+    def _bot_worker():
+        try:
+            run_bot()
+        except Exception as e:
+            import traceback
+            print(f"[Bot] FATAL error in bot thread:\n{traceback.format_exc()}", flush=True)
+
+    bot_thread = threading.Thread(target=_bot_worker, daemon=True)
     bot_thread.start()
     run_dashboard()
