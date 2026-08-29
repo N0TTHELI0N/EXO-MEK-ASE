@@ -702,13 +702,15 @@ def section_tribelog(guild_id):
                 with conn.cursor() as cur:
                     cur.execute("INSERT INTO tribe_log_config (guild_id) VALUES (%s) ON CONFLICT (guild_id) DO NOTHING", (guild_id,))
                     cur.execute("UPDATE tribe_log_config SET enabled=%s WHERE guild_id=%s",
-                                (request.form.get("enabled") == "on", guild_id))
+                                (request.form.get("enabled") in ("on", "1", "true"), guild_id))
                     cur.execute("UPDATE tribe_log_config SET channel_id=%s WHERE guild_id=%s",
                                 (int(request.form["channel_id"]) if request.form.get("channel_id") else None, guild_id))
+                    source = request.form.get("source_type") or request.form.get("log_source", "file")
                     cur.execute("UPDATE tribe_log_config SET log_source=%s WHERE guild_id=%s",
-                                (request.form.get("log_source", "file"), guild_id))
+                                (source, guild_id))
+                    path = request.form.get("log_file_path") or request.form.get("log_path", "")
                     cur.execute("UPDATE tribe_log_config SET log_path=%s WHERE guild_id=%s",
-                                (request.form.get("log_path", ""), guild_id))
+                                (path, guild_id))
                 conn.commit()
             finally:
                 conn.close()
@@ -737,18 +739,24 @@ def section_tribelog(guild_id):
     try:
         with conn.cursor() as cur:
             cur.execute("SELECT enabled, channel_id, log_source, log_path FROM tribe_log_config WHERE guild_id = %s", (guild_id,))
-            tribelog_config = cur.fetchone()
+            row = cur.fetchone()
             cur.execute("SELECT tribe_name FROM known_tribes WHERE guild_id = %s", (guild_id,))
             known_tribes = [r[0] for r in cur.fetchall()]
     finally:
         conn.close()
+    tribe_config = {
+        "enabled": bool(row[0]) if row else False,
+        "channel_id": row[1] if row else None,
+        "source_type": (row[2] if row else None) or "file",
+        "log_file_path": (row[3] if row else None) or "",
+    }
     return render_template(
         "sections/tribelog.html",
         user=get_current_user(),
         guild_id=guild_id,
         active_section="tribelog",
-        tribelog_config=tribelog_config,
-        known_tribes=known_tribes,
+        tribe_config=tribe_config,
+        tribes=known_tribes,
     )
 
 
