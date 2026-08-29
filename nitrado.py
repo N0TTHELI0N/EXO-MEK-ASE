@@ -202,12 +202,27 @@ class NitradoClient:
             if not isinstance(info, dict):
                 info = {}
         except Exception as e:
-            info = {}
             print(f"[nitrado-fs] gameservers info error: {type(e).__name__}: {e}")
-        print(f"[nitrado-fs] service info keys: {list(info.keys())[:40]}")
-        print(f"[nitrado-fs] relevant: folder_short={info.get('folder_short')!r} folder={info.get('folder')!r} game={info.get('game')!r} username={info.get('username')!r}")
-        fs = info.get("folder_short") or info.get("folder") or info.get("game") or ""
-        uname = info.get("username") or ""
+        gs = info.get("gameserver") if isinstance(info, dict) else None
+        if not isinstance(gs, dict):
+            gs = {}
+        print(f"[nitrado-fs] gameserver keys: {list(gs.keys())[:60]}")
+        for k in ("folder_short", "folder", "game", "username", "base_path", "path", "home_path", "root", "server_username"):
+            print(f"[nitrado-fs] gs.{k}={gs.get(k)!r}")
+        fs = (
+            gs.get("folder_short")
+            or gs.get("folder")
+            or gs.get("game")
+            or info.get("folder_short")
+            or info.get("folder")
+            or info.get("game")
+            or ""
+        )
+        uname = gs.get("username") or info.get("username") or gs.get("server_username") or ""
+        base_path = gs.get("base_path") or gs.get("path") or gs.get("home_path") or gs.get("root") or ""
+        if base_path:
+            roots.append(base_path)
+            roots.append(base_path.rstrip("/") + "/ShooterGame")
         if fs:
             roots.append(fs)
             if uname:
