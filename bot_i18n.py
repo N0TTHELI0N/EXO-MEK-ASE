@@ -52,13 +52,41 @@ STRINGS = {
         "ar": "تحتاج **{price}** نقطة بس عندك **{current}** بس.",
         "en": "You need **{price}** points but you only have **{current}**.",
     },
-    "purchase_rcon_failed": {
-        "ar": "فشل الاتصال بالسيرفر. حاول مرة ثانية.",
-        "en": "Failed to connect to the server. Please try again later.",
+    "purchase_queued": {
+        "ar": "تم شراء **{dino}** بالمستوى **{level}**! سيتم التسليم داخل اللعبة بواسطة الإدمن قريباً.",
+        "en": "Purchased **{dino}** at level **{level}**! Delivery in-game by an admin will be arranged shortly.",
     },
-    "purchase_success": {
-        "ar": "تم شراء ورسبنة **{dino}** بالمستوى **{level}** بنجاح!",
-        "en": "Successfully purchased and spawned **{dino}** at level **{level}**!",
+    "pending_title": {
+        "ar": "المشتريات المعلّقة",
+        "en": "Pending Purchases",
+    },
+    "pending_empty": {
+        "ar": "لا توجد مشتريات معلّقة.",
+        "en": "No pending purchases.",
+    },
+    "pending_not_found": {
+        "ar": "لم يتم العثور على هذا الشراء.",
+        "en": "That purchase was not found.",
+    },
+    "purchase_spawn_failed": {
+        "ar": "فشل تسليم الشراء **#{purchase_id}**. تأكد أن Nitrado مُعد وأنك داخل اللعبة.",
+        "en": "Failed to deliver purchase **#{purchase_id}**. Make sure Nitrado is configured and you are in-game.",
+    },
+    "purchase_delivered": {
+        "ar": "تم تسليم **{dino}** بالمستوى **{level}** (شراء **#{purchase_id}**).",
+        "en": "Delivered **{dino}** at level **{level}** (purchase **#{purchase_id}**).",
+    },
+    "purchase_cancelled": {
+        "ar": "تم إلغاء الشراء **#{purchase_id}** واسترداد **{amount}** نقطة.",
+        "en": "Purchase **#{purchase_id}** cancelled and **{amount}** points refunded.",
+    },
+    "pending_embed": {
+        "ar": "**{buyer}** اشترى **{dino}** بالمستوى {level} ({price} نقطة).\nاضغط تسليم عندما تكون بجانبه داخل اللعبة.\n`{blueprint}`",
+        "en": "**{buyer}** bought **{dino}** at level {level} ({price} pts).\nClick **Deliver** when you are next to them in-game.\n`{blueprint}`",
+    },
+    "done_embed": {
+        "ar": "**{buyer}** - {dino} Lvl {level} ({price} نقطة)\nتم التسليم بواسطة: {delivered_by}",
+        "en": "**{buyer}** - {dino} Lvl {level} ({price} pts)\nDelivered by: {delivered_by}",
     },
     "points_added": {
         "ar": "تم إضافة **{amount}** نقطة. الرصيد الجديد: **{balance}**.",

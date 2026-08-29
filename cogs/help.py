@@ -23,7 +23,7 @@ CATEGORY_LABELS = {
 }
 
 COMMAND_CATEGORIES = {
-    "shop": ["add-shop-dino", "remove-shop-dino", "list-dinos", "buy-dino", "balance", "add-points", "remove-points", "set-min-level"],
+    "shop": ["add-shop-dino", "remove-shop-dino", "list-dinos", "buy-dino", "balance", "add-points", "remove-points", "set-min-level", "pending-purchases", "spawn-pending", "cancel-pending", "set-shop-channels"],
     "whitelist": ["whitelist", "linkpsn", "unlinkpsn", "wl-status", "wl-list", "set-wl-path", "set-restart-time"],
     "moderation": ["ban", "kick", "mute", "unmute", "warn", "warnings", "clear-warnings", "banplayer", "unbanplayer", "wipe-player"],
     "tribelog": ["tribe-log", "enable-tribe-log", "disable-tribe-log", "set-tribe-log-channel", "set-tribe-log-config", "set-tribe-log-source"],

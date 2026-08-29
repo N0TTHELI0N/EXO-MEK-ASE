@@ -28,6 +28,23 @@ def init_shop_db():
                     category    TEXT DEFAULT 'General'
                 )
             """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS pending_purchases (
+                    id          SERIAL PRIMARY KEY,
+                    guild_id    BIGINT NOT NULL,
+                    user_id     BIGINT NOT NULL,
+                    user_name   TEXT NOT NULL,
+                    dino_name   TEXT NOT NULL,
+                    blueprint   TEXT NOT NULL,
+                    level       INTEGER NOT NULL,
+                    price       INTEGER NOT NULL,
+                    status      TEXT DEFAULT 'pending',
+                    message_id  BIGINT,
+                    delivered_by BIGINT,
+                    delivered_at TIMESTAMP WITH TIME ZONE,
+                    created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """)
         conn.commit()
     finally:
         conn.close()
@@ -220,5 +237,147 @@ def update_leaderboard_config(guild_id: int, channel_id=None, message=None, inte
                     last_update = NOW()
             """, (guild_id, channel_id, message, interval))
         conn.commit()
+    finally:
+        conn.close()
+
+
+# ---------- Pending Purchases ----------
+
+def create_purchase(guild_id: int, user_id: int, user_name: str, dino_name: str, blueprint: str, level: int, price: int) -> int:
+    conn = _get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO pending_purchases (guild_id, user_id, user_name, dino_name, blueprint, level, price)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+            """, (guild_id, user_id, user_name, dino_name, blueprint, level, price))
+            purchase_id = cur.fetchone()[0]
+        conn.commit()
+        return purchase_id
+    finally:
+        conn.close()
+
+
+def get_pending_purchases(guild_id: int):
+    conn = _get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, user_id, user_name, dino_name, blueprint, level, price, created_at, message_id
+                FROM pending_purchases
+                WHERE guild_id = %s AND status = 'pending'
+                ORDER BY created_at ASC
+            """, (guild_id,))
+            return [{
+                "id": r[0],
+                "user_id": r[1],
+                "user_name": r[2],
+                "dino_name": r[3],
+                "blueprint": r[4],
+                "level": r[5],
+                "price": r[6],
+                "created_at": r[7],
+                "message_id": r[8],
+            } for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+def get_purchase_by_id(guild_id: int, purchase_id: int):
+    conn = _get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, user_id, user_name, dino_name, blueprint, level, price, created_at, message_id
+                FROM pending_purchases
+                WHERE guild_id = %s AND id = %s AND status = 'pending'
+            """, (guild_id, purchase_id))
+            row = cur.fetchone()
+            if not row:
+                return None
+            return {
+                "id": row[0],
+                "user_id": row[1],
+                "user_name": row[2],
+                "dino_name": row[3],
+                "blueprint": row[4],
+                "level": row[5],
+                "price": row[6],
+                "created_at": row[7],
+                "message_id": row[8],
+            }
+    finally:
+        conn.close()
+
+
+def set_purchase_message(guild_id: int, purchase_id: int, message_id: int):
+    conn = _get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE pending_purchases
+                SET message_id = %s
+                WHERE guild_id = %s AND id = %s
+            """, (message_id, guild_id, purchase_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def mark_purchase_done(guild_id: int, purchase_id: int, delivered_by: int = None):
+    conn = _get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE pending_purchases
+                SET status = 'done', delivered_by = %s, delivered_at = NOW()
+                WHERE guild_id = %s AND id = %s
+            """, (delivered_by, guild_id, purchase_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def cancel_purchase(guild_id: int, purchase_id: int) -> bool:
+    """Mark a purchase as cancelled. Returns True if a pending row was affected."""
+    conn = _get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE pending_purchases
+                SET status = 'cancelled'
+                WHERE guild_id = %s AND id = %s AND status = 'pending'
+            """, (guild_id, purchase_id))
+            affected = cur.rowcount > 0
+        conn.commit()
+        return affected
+    finally:
+        conn.close()
+
+
+def get_resolved_purchases_with_message(guild_id: int):
+    """Return done/cancelled purchases that still have a posted Discord message, so it can be cleaned up."""
+    conn = _get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, user_id, user_name, dino_name, blueprint, level, price, created_at, message_id, status
+                FROM pending_purchases
+                WHERE guild_id = %s AND status <> 'pending' AND message_id IS NOT NULL
+                ORDER BY created_at DESC
+            """, (guild_id,))
+            return [{
+                "id": r[0],
+                "user_id": r[1],
+                "user_name": r[2],
+                "dino_name": r[3],
+                "blueprint": r[4],
+                "level": r[5],
+                "price": r[6],
+                "created_at": r[7],
+                "message_id": r[8],
+                "status": r[9],
+            } for r in cur.fetchall()]
     finally:
         conn.close()

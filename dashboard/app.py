@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import guild_settings
 import shop_db
+import nitrado
 from security import validate_path
 from translations import TRANSLATIONS, DASHBOARD_DEFAULT_LANG, DASHBOARD_LANGS
 
@@ -535,6 +536,12 @@ def section_shop(guild_id):
             )
         elif action == "remove":
             shop_db.remove_shop_dino(guild_id, request.form.get("name", ""))
+        elif action in ("deliver_pending", "cancel_pending"):
+            try:
+                purchase_id = int(request.form.get("purchase_id", 0))
+            except (TypeError, ValueError):
+                purchase_id = 0
+            _handle_pending_shop_action(guild_id, action, purchase_id)
         return redirect(url_for("section_shop", guild_id=guild_id))
     return render_template(
         "sections/shop.html",
@@ -542,7 +549,35 @@ def section_shop(guild_id):
         guild_id=guild_id,
         active_section="shop",
         dinos=shop_db.get_all_shop_dinos(guild_id),
+        pending=shop_db.get_pending_purchases(guild_id),
+        pending_channel_set=bool(guild_settings.get_setting(guild_id, "shop_pending_channel", 0)),
+        done_channel_set=bool(guild_settings.get_setting(guild_id, "shop_done_channel", 0)),
     )
+
+
+def _handle_pending_shop_action(guild_id: int, action: str, purchase_id: int):
+    """Deliver or cancel a pending purchase from the dashboard (sync-friendly)."""
+    purchase = shop_db.get_purchase_by_id(guild_id, purchase_id)
+    if not purchase:
+        return
+    if action == "deliver_pending":
+        class_name = purchase["blueprint"]
+        if "Blueprint'" in class_name:
+            class_name = class_name.split('.')[-1].rstrip("'").strip()
+        if not class_name.endswith("_C"):
+            class_name += "_C"
+        cmd = f'GMSummon "{class_name}" {purchase["level"]}'
+        result = nitrado.send_rcon(guild_id, cmd)
+        if result is None:
+            return  # failed to reach server; leave pending for retry
+        shop_db.mark_purchase_done(guild_id, purchase_id)
+        guild_settings.log_action(guild_id, "leaderboard", None, None, purchase["dino_name"],
+                                  sub_type="purchase_delivered", details={"level": purchase["level"], "purchase_id": purchase_id, "source": "dashboard"})
+    elif action == "cancel_pending":
+        if shop_db.cancel_purchase(guild_id, purchase_id):
+            shop_db.add_points(guild_id, purchase["user_name"], purchase["price"])
+        guild_settings.log_action(guild_id, "leaderboard", None, None, purchase["dino_name"],
+                                  sub_type="purchase_cancelled", details={"purchase_id": purchase_id, "refund": purchase["price"], "source": "dashboard"})
 
 
 @app.route("/dashboard/<int:guild_id>/points", methods=["GET", "POST"])
