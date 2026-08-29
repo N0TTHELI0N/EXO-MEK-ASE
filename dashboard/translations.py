@@ -204,6 +204,12 @@ TRANSLATIONS = {
     "server_harvest": {"ar": "مضاعف كمية الحصاد", "en": "Harvest Amount Multiplier"},
     "server_xp": {"ar": "مضاعف XP", "en": "XP Multiplier"},
     "server_save_settings": {"ar": "حفظ إعدادات السيرفر", "en": "Save Server Settings"},
+    "server_passwords": {"ar": "كلمات المرور", "en": "Passwords"},
+    "server_admin_password": {"ar": "كلمة مرور الأدمن", "en": "Admin Password"},
+    "server_password": {"ar": "كلمة مرور السيرفر", "en": "Server Password"},
+    "server_password_hint": {"ar": "اترك الحقل فارغًا إذا كنت لا تريد تغييره. كلمة مرور السيرفر تُطبَّق عبر إعدادات نايترادو وقد تتطلب إعادة تشغيل. كلمة مرور الأدمن تُطبَّق فورًا عبر أمر RCON.", "en": "Leave a field empty to keep it unchanged. The server password is applied via Nitrado settings (may need a restart). The admin password is applied immediately via RCON."},
+    "server_password_confirm": {"ar": "تأكيد تغيير كلمات المرور؟", "en": "Apply password changes?"},
+    "server_save_passwords": {"ar": "حفظ كلمات المرور", "en": "Save Passwords"},
 
     "embeds_title": {"ar": "الرسائل المدمجة", "en": "Embeds"},
     "embeds_desc": {"ar": "خصص رسائل البوت المدمجة", "en": "Customize bot embed messages"},

@@ -126,6 +126,21 @@ class NitradoClient:
         )
         return bool(data)
 
+    def update_game_setting(self, category: str, key: str, value: str) -> bool:
+        """Update a single game setting via the Nitrado gameservers/settings API.
+
+        Body format: {"category": ..., "key": ..., "value": ...} where category is the
+        ini section (e.g. "settings" for [ServerSettings] in GameUserSettings.ini).
+        """
+        data = self._request(
+            "POST",
+            f"/services/{self.service_id}/gameservers/settings",
+            json={"category": category, "key": key, "value": value},
+        )
+        if isinstance(data, dict):
+            return data.get("status") == "success" or bool(data)
+        return bool(data)
+
     # ── file server (replaces SFTP file access) ──────────────
 
     def fs_base(self) -> str:
@@ -250,3 +265,26 @@ def get_server_info(guild_id: int) -> dict:
     if not client:
         return {}
     return client.get_server_status()
+
+
+def change_admin_password(guild_id: int, password: str) -> str:
+    """Change the ARK admin password via the RCON SetAdminPassword command."""
+    client = get_client(guild_id)
+    if not client:
+        return "Nitrado not configured"
+    if not password:
+        return "No password provided"
+    result = client.send_command(f"SetAdminPassword {password}")
+    return "Applied" if result is not None else "Command failed"
+
+
+def change_server_password(guild_id: int, password: str) -> str:
+    """Change the ARK server (join) password via the Nitrado settings API."""
+    client = get_client(guild_id)
+    if not client:
+        return "Nitrado not configured"
+    if not password:
+        return "No password provided"
+    ok = client.update_game_setting("settings", "ServerPassword", password)
+    return "Applied" if ok else "Failed"
+

@@ -953,7 +953,29 @@ def section_leaderboard(guild_id):
 @validate_csrf
 def section_server_control(guild_id):
     if request.method == "POST":
-        return redirect(url_for("section_server_control", guild_id=guild_id))
+        action = request.form.get("action", "")
+        notice = ""
+        notice_type = "error"
+        if action == "change_passwords":
+            admin_pw = request.form.get("password_admin", "")
+            server_pw = request.form.get("password_server", "")
+            results = []
+            if admin_pw:
+                try:
+                    results.append("Admin: " + nitrado.change_admin_password(guild_id, admin_pw))
+                except Exception as e:
+                    results.append("Admin: Failed (" + type(e).__name__ + ")")
+            if server_pw:
+                try:
+                    results.append("Join: " + nitrado.change_server_password(guild_id, server_pw))
+                except Exception as e:
+                    results.append("Join: Failed (" + type(e).__name__ + ")")
+            if results:
+                notice = " | ".join(results)
+                notice_type = "ok" if all("Applied" in r for r in results) else "error"
+        return redirect(url_for("section_server_control", guild_id=guild_id, notice=notice, notice_type=notice_type))
+    notice = request.args.get("notice", "")
+    notice_type = request.args.get("notice_type", "ok")
     info = {}
     try:
         raw = nitrado.get_server_info(guild_id) or {}
@@ -987,6 +1009,8 @@ def section_server_control(guild_id):
         guild_id=guild_id,
         active_section="server-control",
         server_status=server_status,
+        notice=notice,
+        notice_type=notice_type,
     )
 
 
