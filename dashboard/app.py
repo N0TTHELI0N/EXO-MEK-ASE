@@ -1177,6 +1177,33 @@ def section_backup(guild_id):
                     }
                 )
             save_files.sort(key=lambda f: (not f["is_dir"], f["name"].lower()))
+            # Fallback: if the chosen folder is empty, list the server root so the
+            # user can navigate through the actual folder tree instead of guessing.
+            if not save_files:
+                root_entries = client.list_file_entries("") or []
+                root_files = []
+                for e in root_entries:
+                    name = e.get("name") or ""
+                    is_dir = e.get("type") == "dir"
+                    size = e.get("size") or 0
+                    if size and size < 1000:
+                        size_s = f"{size} B"
+                    elif size:
+                        size_s = f"{size/1024:.1f} KB"
+                    else:
+                        size_s = ""
+                    root_files.append(
+                        {
+                            "name": name,
+                            "size_s": size_s,
+                            "is_dir": is_dir,
+                            "path": e.get("path") or "",
+                        }
+                    )
+                root_files.sort(key=lambda f: (not f["is_dir"], f["name"].lower()))
+                save_files = root_files
+                save_dir = ""
+                save_error = "folder is empty/invalid - showing server root; click a folder to navigate"
         except Exception as e:
             save_error = str(e)
     elif save_browsed and not client:
@@ -1205,7 +1232,7 @@ def section_backup(guild_id):
 @login_required
 @guild_admin_required
 def api_save_download(guild_id):
-    path = (request.args.get("path") or "").replace("\\", "/").lstrip("/")
+    path = (request.args.get("path") or "").replace("\\", "/")
     if not path or ".." in path.split("/"):
         return "Invalid path.", 400
     client = nitrado_client_for(guild_id)
