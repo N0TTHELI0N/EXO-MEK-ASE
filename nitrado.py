@@ -63,6 +63,20 @@ class NitradoClient:
             print(f"Nitrado download error: {type(e).__name__}")
             return ""
 
+    def _get_bytes(self, url: str, token: str) -> bytes:
+        """GET raw bytes from a Nitrado download URL (binary-safe)."""
+        try:
+            resp = requests.get(
+                url,
+                params={"token": token},
+                timeout=120,
+            )
+            resp.raise_for_status()
+            return resp.content
+        except requests.RequestException as e:
+            print(f"Nitrado binary download error: {type(e).__name__}")
+            return b""
+
     # ── server control ───────────────────────────────────────
 
     def get_server_status(self) -> dict:
@@ -178,6 +192,38 @@ class NitradoClient:
         if not token or not url:
             return ""
         return self._get_binary(url, token)
+
+    def list_file_entries(self, directory: str) -> list[dict]:
+        """List file/dir entries (name, size, type, path) in a directory."""
+        data = self._request(
+            "GET",
+            f"{self.fs_base()}/list",
+            params={"dir": directory},
+        )
+        entries = data.get("entries", []) if isinstance(data, dict) else []
+        out = []
+        for e in entries:
+            if not isinstance(e, dict):
+                continue
+            out.append(
+                {
+                    "name": e.get("name"),
+                    "size": e.get("size") or 0,
+                    "type": e.get("type"),
+                    "path": e.get("path") or directory,
+                }
+            )
+        return out
+
+    def download_file_bytes(self, file: str) -> bytes:
+        """Download a file as raw bytes (binary-safe). Returns b'' on failure."""
+        data = self._request("GET", f"{self.fs_base()}/download", params={"file": file})
+        token_info = data.get("token") or data
+        token = token_info.get("token")
+        url = token_info.get("url")
+        if not token or not url:
+            return b""
+        return self._get_bytes(url, token)
 
     def delete_file(self, file: str) -> bool:
         """Delete a file on the server."""

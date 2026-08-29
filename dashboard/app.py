@@ -1062,6 +1062,11 @@ def section_backup(guild_id):
                 notice = "cloud_deleted"
             else:
                 notice = "cloud_failed"
+        elif action == "save_browse":
+            save_dir = (request.form.get("save_dir") or "").strip()
+            if save_dir:
+                guild_settings.update_setting(guild_id, "save_dir", save_dir)
+            return redirect(url_for("section_backup", guild_id=guild_id) + "?savedir=" + (save_dir or "ShooterGame/Saved/SavedArks"))
         return redirect(url_for("section_backup", guild_id=guild_id) + "?notice=" + notice)
 
     conn = guild_settings.get_conn()
@@ -1122,6 +1127,41 @@ def section_backup(guild_id):
         except Exception as e:
             cloud_error = str(e)
 
+    # Save-file browser (opt-in via ?savedir=)
+    save_dir = request.args.get("savedir") or ""
+    if save_dir:
+        save_dir = save_dir.replace("\\", "/")
+    if not save_dir:
+        save_dir = guild_settings.get_setting(guild_id, "save_dir", "ShooterGame/Saved/SavedArks") or "ShooterGame/Saved/SavedArks"
+        save_dir = str(save_dir)
+    save_files = []
+    save_error = None
+    if client:
+        try:
+            import urllib.parse
+            entries = client.list_file_entries(save_dir) or []
+            for e in entries:
+                name = e.get("name") or ""
+                is_dir = e.get("type") == "dir"
+                size = e.get("size") or 0
+                if size and size < 1000:
+                    size_s = f"{size} B"
+                elif size:
+                    size_s = f"{size/1024:.1f} KB"
+                else:
+                    size_s = ""
+                save_files.append(
+                    {
+                        "name": name,
+                        "size_s": size_s,
+                        "is_dir": is_dir,
+                        "path": e.get("path") or save_dir,
+                    }
+                )
+            save_files.sort(key=lambda f: (not f["is_dir"], f["name"].lower()))
+        except Exception as e:
+            save_error = str(e)
+
     return render_template(
         "sections/backup.html",
         user=user,
@@ -1133,7 +1173,27 @@ def section_backup(guild_id):
         cloud_error=cloud_error,
         is_owner=is_owner,
         notice=request.args.get("notice", ""),
+        save_dir=save_dir,
+        save_files=save_files,
+        save_error=save_error,
     )
+
+
+@app.route("/api/guild/<int:guild_id>/backup/save-download")
+@login_required
+@guild_admin_required
+def api_save_download(guild_id):
+    path = (request.args.get("path") or "").replace("\\", "/").lstrip("/")
+    if not path or ".." in path.split("/"):
+        return "Invalid path.", 400
+    client = nitrado_client_for(guild_id)
+    if not client:
+        return "Nitrado not configured.", 400
+    data = client.download_file_bytes(path)
+    if not data:
+        return "File not found or empty.", 404
+    name = os.path.basename(path) or "save"
+    return send_file(io.BytesIO(data), as_attachment=True, download_name=name)
 
 
 @app.route("/dashboard/<int:guild_id>/leaderboard", methods=["GET", "POST"])

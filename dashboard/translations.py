@@ -219,6 +219,13 @@ TRANSLATIONS = {
     "backup_confirm_title": {"ar": "⚠️ تأكيد استعادة/حذف النسخة السحابية", "en": "⚠️ Confirm Cloud Restore/Delete"},
     "backup_confirm_desc": {"ar": "استعادة نسخة سحابية تعيد تشغيل السيرفر وتعيد إعداداته، والحذف نهائي. اكتب WIPE للتأكيد.", "en": "Restoring a cloud backup restarts the server and reverts its settings; deleting is permanent. Type WIPE to confirm."},
 
+    "save_title": {"ar": "تنزيل ملفات الحفظ (الألعاب)", "en": "In-Game Save Files"},
+    "save_desc": {"ar": "تصفح وافتح ملفات الحفظ على سيرفر ARK (مثل ملفات .ark) مباشرة من خادم الملفات في Nitrado.", "en": "Browse and download ARK server save files (e.g. .ark files) directly from the Nitrado file server."},
+    "save_dir_ph": {"ar": "مسار مجلد الحفظ (مثال: ShooterGame/Saved/SavedArks)", "en": "Save folder path (e.g. ShooterGame/Saved/SavedArks)"},
+    "save_browse": {"ar": "تصفح", "en": "Browse"},
+    "save_load_failed": {"ar": "تعذر تصفح المجلد:", "en": "Could not browse folder:"},
+    "save_empty": {"ar": "أدخل مسار مجلد الحفظ واضغط تصفح لعرض الملفات.", "en": "Enter the save folder path and press Browse to list its files."},
+
     "lb_display": {"ar": "عرض لوحة الترتيب", "en": "Leaderboard Display"},
     "lb_display_desc": {"ar": "تفعيل أو تعطيل لوحة الترتيب المحدثة تلقائيًا", "en": "Enable or disable the auto-updating leaderboard"},
     "lb_config": {"ar": "الإعدادات", "en": "Configuration"},
