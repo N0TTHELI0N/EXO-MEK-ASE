@@ -5,6 +5,12 @@
   <p class="text-gray-400 mt-1">{{ t('logs_desc') }}</p>
 </div>
 
+{% if request.args.get('notice') %}
+<div class="mb-6 px-5 py-4 rounded-lg border {{ 'bg-green-500/10 border-green-500/40 text-green-300' if request.args.get('notice') == 'wiped' else 'bg-red-500/10 border-red-500/40 text-red-300' }}">
+  {% if request.args.get('notice') == 'wiped' %}{{ t('wipe_done') }}{% else %}{{ t('wipe_owner_only') }}{% endif %}
+</div>
+{% endif %}
+
 <!-- Filter Bar -->
 <div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6 mb-6">
   <form method="GET" class="flex flex-col sm:flex-row gap-4">
@@ -88,6 +94,15 @@
       </tbody>
     </table>
   </div>
+  {% if is_owner %}
+  <div class="border-t border-gray-700 px-4 py-4 flex items-center justify-between flex-wrap gap-3">
+    <p class="text-sm text-gray-400">{{ t('wipe_all_logs_desc') }}</p>
+    <button type="button" onclick="openWipe('wipe_logs')"
+            class="px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white font-medium rounded-lg transition-colors">
+      {{ t('wipe_all_logs') }}
+    </button>
+  </div>
+  {% endif %}
 </div>
 
 <!-- Pagination -->
@@ -142,4 +157,76 @@
     </div>
   </form>
 </div>
+
+{% if is_owner %}
+<!-- Wipe Data -->
+<div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6 mt-6">
+  <h3 class="text-lg font-semibold text-white mb-2">{{ t('wipe_data_title') }}</h3>
+  <p class="text-sm text-gray-400 mb-5">{{ t('wipe_data_sub') }}</p>
+  <div class="space-y-3">
+    <div class="flex items-center justify-between flex-wrap gap-3 bg-gray-700 rounded-xl px-4 py-3">
+      <div>
+        <p class="text-sm font-medium text-white">{{ t('wipe_warnings') }}</p>
+        <p class="text-xs text-gray-400 mt-0.5">{{ t('wipe_warnings_desc') }}</p>
+      </div>
+      <button type="button" onclick="openWipe('wipe_warnings')" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-medium rounded-lg transition-colors">{{ t('wipe_button') }}</button>
+    </div>
+    <div class="flex items-center justify-between flex-wrap gap-3 bg-gray-700 rounded-xl px-4 py-3">
+      <div>
+        <p class="text-sm font-medium text-white">{{ t('wipe_punishments') }}</p>
+        <p class="text-xs text-gray-400 mt-0.5">{{ t('wipe_punishments_desc') }}</p>
+      </div>
+      <button type="button" onclick="openWipe('wipe_punishments')" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-medium rounded-lg transition-colors">{{ t('wipe_button') }}</button>
+    </div>
+    <div class="flex items-center justify-between flex-wrap gap-3 bg-gray-700 rounded-xl px-4 py-3">
+      <div>
+        <p class="text-sm font-medium text-white">{{ t('wipe_purchases') }}</p>
+        <p class="text-xs text-gray-400 mt-0.5">{{ t('wipe_purchases_desc') }}</p>
+      </div>
+      <button type="button" onclick="openWipe('wipe_purchases')" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-medium rounded-lg transition-colors">{{ t('wipe_button') }}</button>
+    </div>
+  </div>
+</div>
+
+<!-- Wipe confirmation modal -->
+<div id="wipe-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/60 p-4">
+  <div class="bg-gray-800 border border-red-500/40 rounded-2xl max-w-md w-full p-6">
+    <h3 class="text-lg font-bold text-white mb-2">{{ t('wipe_confirm_title') }}</h3>
+    <p class="text-sm text-gray-400 mb-4">{{ t('wipe_confirm_desc') }}</p>
+    <form method="POST" id="wipe-form">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" id="wipe-action" value="">
+      <input type="text" id="wipe-input" autocomplete="off" placeholder="{{ t('wipe_type') }}"
+             class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none mb-4">
+      <div class="flex gap-3 justify-end">
+        <button type="button" onclick="closeWipe()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg">{{ t('server_cancel') }}</button>
+        <button type="submit" id="wipe-submit" disabled class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg transition-opacity opacity-50 cursor-not-allowed">{{ t('wipe_confirm_btn') }}</button>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+function openWipe(action) {
+  document.getElementById('wipe-action').value = action;
+  document.getElementById('wipe-input').value = '';
+  document.getElementById('wipe-submit').disabled = true;
+  document.getElementById('wipe-modal').classList.remove('hidden');
+  document.getElementById('wipe-modal').classList.add('flex');
+  document.getElementById('wipe-input').focus();
+}
+function closeWipe() {
+  document.getElementById('wipe-modal').classList.add('hidden');
+  document.getElementById('wipe-modal').classList.remove('flex');
+}
+document.addEventListener('input', function(e) {
+  if (e.target && e.target.id === 'wipe-input') {
+    var ok = e.target.value.trim().toUpperCase() === 'WIPE';
+    var btn = document.getElementById('wipe-submit');
+    btn.disabled = !ok;
+    btn.classList.toggle('opacity-50', !ok);
+    btn.classList.toggle('cursor-not-allowed', !ok);
+  }
+});
+</script>
+{% endif %}
 {% endblock %}

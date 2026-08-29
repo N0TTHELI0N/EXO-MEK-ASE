@@ -120,6 +120,18 @@ STRINGS = {
         "ar": "قسم **{label}** - تظهر هنا حركة المتجر.",
         "en": "**{label}** section - shop activity appears here.",
     },
+    "tribe_forum_topic": {
+        "ar": "سجلات قبائل السيرفر - مشاركة لكل قبيلة",
+        "en": "Server tribe logs - one post per tribe",
+    },
+    "tribe_forum_thread_intro": {
+        "ar": "سجل أحداث قبيلة **{tribe}** - تظهر أحداثها هنا.",
+        "en": "Tribe **{tribe}** event log - its events appear here.",
+    },
+    "tribe_forum_no_tribes": {
+        "ar": "لا توجد قبائل بعد. أضف قبائل عبر /add-tribe-name وستُنشأ مشاركاتها تلقائيًا.",
+        "en": "No tribes yet. Add tribes via /add-tribe-name and their posts will be created automatically.",
+    },
     "points_added": {
         "ar": "تم إضافة **{amount}** نقطة. الرصيد الجديد: **{balance}**.",
         "en": "**{amount}** points added. New balance: **{balance}**.",

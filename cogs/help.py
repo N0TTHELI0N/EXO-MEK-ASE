@@ -28,7 +28,7 @@ COMMAND_CATEGORIES = {
     "custom": ["custom", "custom-list", "custom-add", "custom-remove", "ark-command", "setup-forum-logs", "setup-shop-forum"],
     "whitelist": ["whitelist", "linkpsn", "unlinkpsn", "wl-status", "wl-list", "set-wl-path", "set-restart-time"],
     "moderation": ["ban", "kick", "mute", "unmute", "warn", "warnings", "clear-warnings", "banplayer", "unbanplayer", "wipe-player"],
-    "tribelog": ["tribe-log", "enable-tribe-log", "disable-tribe-log", "set-tribe-log-channel", "set-tribe-log-config", "set-tribe-log-source"],
+    "tribelog": ["tribe-log", "enable-tribe-log", "disable-tribe-log", "set-tribe-log-channel", "set-tribe-log-config", "set-tribe-log-source", "setup-tribe-forum", "add-tribe-name", "view-tribelog"],
     "leaderboard": ["leaderboard", "setup-leaderboard", "leaderboard-preview", "set-tribe-owner", "add-tribe-points", "remove-tribe-points"],
     "admin": ["set-nitrado-token", "set-log-channel", "set-license", "set-language", "ban-user", "view-guilds", "force-sync-guild"],
     "automod": ["automod-toggle", "automod-set-log-channel", "automod-set-log-path", "automod-add-word", "automod-remove-word", "automod-list-words", "automod-clear-words"],

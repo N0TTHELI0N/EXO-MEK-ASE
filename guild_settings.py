@@ -297,6 +297,32 @@ def init_db():
                     created_at     TIMESTAMP WITH TIME ZONE DEFAULT NOW()
                 )
             """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS tribe_forum_config (
+                    guild_id   BIGINT PRIMARY KEY,
+                    forum_id   BIGINT,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS tribe_forum_threads (
+                    guild_id   BIGINT NOT NULL,
+                    tribe_name TEXT NOT NULL,
+                    thread_id  BIGINT NOT NULL,
+                    PRIMARY KEY (guild_id, tribe_name)
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS tribe_log_events (
+                    id          SERIAL PRIMARY KEY,
+                    guild_id    BIGINT NOT NULL,
+                    tribe_name  TEXT NOT NULL,
+                    content     TEXT NOT NULL,
+                    created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    posted_forum BOOLEAN DEFAULT FALSE
+                )
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_tribe_events ON tribe_log_events(guild_id, tribe_name, created_at DESC)")
         conn.commit()
     finally:
         conn.close()
@@ -1555,6 +1581,205 @@ def set_shop_forum_config(guild_id: int, forum_id: int, thread_done: int = None,
                     thread_done = COALESCE(EXCLUDED.thread_done, shop_forum_config.thread_done),
                     thread_pending = COALESCE(EXCLUDED.thread_pending, shop_forum_config.thread_pending)
             """, (guild_id, forum_id, thread_done, thread_pending))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+# ============================================================
+#  TRIBE FORUM / TRIBE LOG EVENTS
+# ============================================================
+
+def get_tribe_forum_config(guild_id: int):
+    """Return {forum_id, threads: {tribe_name: thread_id}} or None."""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT forum_id FROM tribe_forum_config WHERE guild_id = %s", (guild_id,))
+            row = cur.fetchone()
+            if not row:
+                return None
+            threads = {}
+            cur.execute("SELECT tribe_name, thread_id FROM tribe_forum_threads WHERE guild_id = %s", (guild_id,))
+            for t, tid in cur.fetchall():
+                threads[t] = tid
+            return {"forum_id": row[0], "threads": threads}
+    finally:
+        conn.close()
+
+
+def set_tribe_forum_config(guild_id: int, forum_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO tribe_forum_config (guild_id, forum_id) VALUES (%s, %s)
+                ON CONFLICT (guild_id) DO UPDATE SET forum_id = EXCLUDED.forum_id
+            """, (guild_id, forum_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def set_tribe_thread(guild_id: int, tribe_name: str, thread_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO tribe_forum_threads (guild_id, tribe_name, thread_id)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (guild_id, tribe_name) DO UPDATE SET thread_id = EXCLUDED.thread_id
+            """, (guild_id, tribe_name, thread_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def clear_tribe_threads(guild_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM tribe_forum_threads WHERE guild_id = %s", (guild_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def add_tribe_log_event(guild_id: int, tribe_name: str, content: str):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO tribe_log_events (guild_id, tribe_name, content) VALUES (%s, %s, %s)",
+                (guild_id, tribe_name, content),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_unposted_tribe_events(guild_id: int, limit: int = 50):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, tribe_name, content, created_at
+                FROM tribe_log_events
+                WHERE guild_id = %s AND posted_forum = FALSE
+                ORDER BY id ASC
+                LIMIT %s
+            """, (guild_id, limit))
+            return [
+                {"id": r[0], "tribe_name": r[1], "content": r[2], "created_at": r[3]}
+                for r in cur.fetchall()
+            ]
+    finally:
+        conn.close()
+
+
+def mark_tribe_event_posted(log_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE tribe_log_events SET posted_forum = TRUE WHERE id = %s", (log_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_tribe_log_events(guild_id: int, tribe_name: str = None, limit: int = 100, offset: int = 0):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            if tribe_name:
+                cur.execute("""
+                    SELECT id, tribe_name, content, created_at
+                    FROM tribe_log_events
+                    WHERE guild_id = %s AND tribe_name = %s
+                    ORDER BY created_at DESC
+                    LIMIT %s OFFSET %s
+                """, (guild_id, tribe_name, limit, offset))
+            else:
+                cur.execute("""
+                    SELECT id, tribe_name, content, created_at
+                    FROM tribe_log_events
+                    WHERE guild_id = %s
+                    ORDER BY created_at DESC
+                    LIMIT %s OFFSET %s
+                """, (guild_id, limit, offset))
+            return [
+                {"id": r[0], "tribe_name": r[1], "content": r[2], "created_at": r[3]}
+                for r in cur.fetchall()
+            ]
+    finally:
+        conn.close()
+
+
+def get_tribe_log_event_count(guild_id: int, tribe_name: str = None):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            if tribe_name:
+                cur.execute("SELECT COUNT(*) FROM tribe_log_events WHERE guild_id = %s AND tribe_name = %s", (guild_id, tribe_name))
+            else:
+                cur.execute("SELECT COUNT(*) FROM tribe_log_events WHERE guild_id = %s", (guild_id,))
+            return cur.fetchone()[0]
+    finally:
+        conn.close()
+
+
+def get_tribe_event_counts(guild_id: int) -> dict:
+    """Return {tribe_name: event_count}."""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT tribe_name, COUNT(*) FROM tribe_log_events WHERE guild_id = %s GROUP BY tribe_name", (guild_id,))
+            return {r[0]: r[1] for r in cur.fetchall()}
+    finally:
+        conn.close()
+
+
+# ============================================================
+#  WIPE HELPERS
+# ============================================================
+
+def wipe_tribe_logs(guild_id: int):
+    """Delete all stored tribe log events for a guild."""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM tribe_log_events WHERE guild_id = %s", (guild_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def wipe_bot_logs(guild_id: int):
+    """Delete all stored bot/action logs for a guild."""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM bot_logs WHERE guild_id = %s", (guild_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def wipe_warnings(guild_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM player_warnings WHERE guild_id = %s", (guild_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def wipe_punishments(guild_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM player_punishments WHERE guild_id = %s", (guild_id,))
         conn.commit()
     finally:
         conn.close()

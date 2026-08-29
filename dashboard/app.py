@@ -747,6 +747,11 @@ def section_tribelog(guild_id):
                     conn.commit()
                 finally:
                     conn.close()
+        elif action == "wipe_tribe_logs":
+            if session.get("user", {}).get("id") != BOT_OWNER_ID:
+                return redirect(url_for("section_tribelog", guild_id=guild_id) + "?notice=" + "owner only").replace(" ", "+")
+            guild_settings.wipe_tribe_logs(guild_id)
+            return redirect(url_for("section_tribelog", guild_id=guild_id) + "?notice=wiped")
         return redirect(url_for("section_tribelog", guild_id=guild_id))
     conn = guild_settings.get_conn()
     try:
@@ -763,6 +768,9 @@ def section_tribelog(guild_id):
         "source_type": (row[2] if row else None) or "file",
         "log_file_path": (row[3] if row else None) or "",
     }
+    forum_cfg = guild_settings.get_tribe_forum_config(guild_id) or {}
+    tribe_counts = guild_settings.get_tribe_event_counts(guild_id)
+    tribe_events = guild_settings.get_tribe_log_events(guild_id, limit=200)
     return render_template(
         "sections/tribelog.html",
         user=get_current_user(),
@@ -770,6 +778,11 @@ def section_tribelog(guild_id):
         active_section="tribelog",
         tribe_config=tribe_config,
         tribes=known_tribes,
+        tribe_forum=forum_cfg,
+        tribe_threads=forum_cfg.get("threads", {}),
+        tribe_counts=tribe_counts,
+        tribe_events=tribe_events,
+        is_owner=(get_current_user() or {}).get("id") == BOT_OWNER_ID,
     )
 
 
@@ -1199,6 +1212,20 @@ def serve_evidence(guild_id, filename):
 @guild_admin_required
 @validate_csrf
 def section_logs(guild_id):
+    if request.method == "POST":
+        action = request.form.get("action")
+        if session.get("user", {}).get("id") != BOT_OWNER_ID:
+            return redirect(url_for("section_logs", guild_id=guild_id) + "?notice=owner")
+        if action == "wipe_logs":
+            guild_settings.wipe_bot_logs(guild_id)
+        elif action == "wipe_warnings":
+            guild_settings.wipe_warnings(guild_id)
+        elif action == "wipe_punishments":
+            guild_settings.wipe_punishments(guild_id)
+        elif action == "wipe_purchases":
+            import shop_db
+            shop_db.wipe_purchases(guild_id)
+        return redirect(url_for("section_logs", guild_id=guild_id) + "?notice=wiped")
     page = int(request.args.get("page", 1))
     per_page = 50
     offset = (page - 1) * per_page
@@ -1219,6 +1246,7 @@ def section_logs(guild_id):
         per_page=per_page,
         log_count=total,
         log_settings=log_settings,
+        is_owner=(get_current_user() or {}).get("id") == BOT_OWNER_ID,
     )
 
 
@@ -1261,7 +1289,7 @@ ALL_COMMANDS_LIST = [
     "shop-add", "shop-remove", "shop-list", "shop-edit",
     "points-add", "points-remove", "points-check", "points-leaderboard",
     "whitelist-add", "whitelist-remove", "whitelist-restart", "whitelist-link", "whitelist-unlink",
-    "tribelog-config", "tribelog-test",
+    "tribelog-config", "tribelog-test", "setup-tribe-forum", "add-tribe-name", "set-tribe-log-source", "set-tribelog-enabled", "set-tribe-log-channel", "set-tribe-log-config", "view-tribelog",
     "automod-config", "automod-list", "automod-remove",
     "backup-create", "backup-list", "backup-restore",
     "leaderboard-config", "leaderboard-set-channel", "leaderboard-toggle", "leaderboard-force", "leaderboard-sync",

@@ -381,3 +381,14 @@ def get_resolved_purchases_with_message(guild_id: int):
             } for r in cur.fetchall()]
     finally:
         conn.close()
+
+
+def wipe_purchases(guild_id: int):
+    """Delete all shop purchase records for a guild."""
+    conn = _get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM pending_purchases WHERE guild_id = %s", (guild_id,))
+        conn.commit()
+    finally:
+        conn.close()

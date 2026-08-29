@@ -5,6 +5,12 @@
   <p class="text-gray-400 mt-1">{{ t('tribelog_desc') }}</p>
 </div>
 
+{% if request.args.get('notice') %}
+<div class="mb-6 px-5 py-4 rounded-lg border {{ 'bg-green-500/10 border-green-500/40 text-green-300' if request.args.get('notice') == 'wiped' else 'bg-red-500/10 border-red-500/40 text-red-300' }}">
+  {% if request.args.get('notice') == 'wiped' %}{{ t('wipe_done') }}{% else %}{{ t('wipe_owner_only') }}{% endif %}
+</div>
+{% endif %}
+
 <form method="POST">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="action" value="config">
@@ -86,6 +92,131 @@
   </button>
 </form>
 
+<!-- Tribe Forum -->
+<div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6 mt-6">
+  <h3 class="text-lg font-semibold text-white mb-2">{{ t('tribe_forum_title') }}</h3>
+  <p class="text-sm text-gray-400 mb-4">{{ t('tribe_forum_desc') }}</p>
+  {% if tribe_forum and tribe_forum.forum_id %}
+  <div class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-green-500/10 border border-green-500/20 text-green-400 text-sm font-medium">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+    {{ t('tribe_forum_configured') }}: <code>&lt;#{{ tribe_forum.forum_id }}&gt;</code>
+  </div>
+  {% else %}
+  <div class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 text-sm font-medium">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+    {{ t('tribe_forum_not_configured') }} — {{ t('tribe_forum_run') }} <code>/setup-tribe-forum</code>
+  </div>
+  {% endif %}
+</div>
+
+<!-- All Tribes -->
+<div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6 mt-6">
+  <div class="flex items-center justify-between mb-4">
+    <div>
+      <h3 class="text-lg font-semibold text-white">{{ t('tribe_forum_all_tribes') }} ({{ tribes|length }})</h3>
+      <p class="text-sm text-gray-400 mt-1">{{ t('tribe_forum_all_tribes_desc') }}</p>
+    </div>
+  </div>
+  {% if tribes %}
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+    {% for tribe in tribes %}
+    <div class="flex items-center justify-between bg-gray-700 rounded-lg px-4 py-3">
+      <div class="min-w-0">
+        <p class="text-sm font-medium text-white truncate">{{ tribe }}</p>
+        {% if tribe_threads.get(tribe) %}
+        <p class="text-xs text-gray-400 mt-0.5">{{ t('tribe_forum_post') }} <code>&lt;#{{ tribe_threads[tribe] }}&gt;</code> · {{ tribe_counts.get(tribe, 0) }} {{ t('tribe_log_events') }}</p>
+        {% else %}
+        <p class="text-xs text-gray-400 mt-0.5">{{ tribe_counts.get(tribe, 0) }} {{ t('tribe_log_events') }} · {{ t('tribe_forum_no_post') }}</p>
+        {% endif %}
+      </div>
+      <div class="flex items-center gap-2 flex-shrink-0">
+        {% if tribe_threads.get(tribe) %}
+        <a href="https://discord.com/channels/{{ guild_id }}/{{ tribe_threads[tribe] }}" target="_blank"
+           class="px-3 py-1.5 bg-gray-600 hover:bg-gray-500 text-gray-200 text-xs font-medium rounded-lg transition-colors">{{ t('tribe_forum_open') }}</a>
+        {% endif %}
+        <form method="POST" class="inline" onsubmit="return false;">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="action" value="remove_tribe">
+          <input type="hidden" name="tribe_name" value="{{ tribe }}">
+          <button type="submit" class="text-gray-400 hover:text-red-400 transition-colors">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="text-gray-500 text-sm py-4 text-center">{{ t('tribelog_no_tribes') }}</p>
+  {% endif %}
+</div>
+
+<!-- Tribe Log Events -->
+<div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6 mt-6">
+  <h3 class="text-lg font-semibold text-white mb-2">{{ t('tribe_log_events') }}</h3>
+  <p class="text-sm text-gray-400 mb-4">{{ t('tribe_log_events_desc') }}</p>
+  {% if tribe_events %}
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm text-left">
+      <thead class="text-xs text-gray-400 uppercase border-b border-gray-700">
+        <tr>
+          <th class="px-4 py-3">{{ t('tribe_log_tribe') }}</th>
+          <th class="px-4 py-3">{{ t('logs_timestamp') }}</th>
+          <th class="px-4 py-3">{{ t('tribe_log_content') }}</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-700">
+        {% for ev in tribe_events %}
+        <tr class="hover:bg-gray-800">
+          <td class="px-4 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-red-900 text-red-300">{{ ev.tribe_name }}</span></td>
+          <td class="px-4 py-3 text-gray-400 text-xs font-mono whitespace-nowrap">{{ ev.created_at }}</td>
+          <td class="px-4 py-3 text-gray-300 text-xs break-words max-w-md">{{ ev.content }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-gray-500 text-sm py-4 text-center">{{ t('tribe_log_no_events') }}</p>
+  {% endif %}
+
+  <!-- Wipe Tribe Logs -->
+  <div class="border-t border-gray-700 mt-5 pt-5">
+    {% if is_owner %}
+    <button type="button" onclick="openWipe('wipe-tribelogs')"
+            class="inline-flex items-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white font-medium rounded-lg transition-colors">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+      {{ t('wipe_tribe_logs') }}
+    </button>
+    {% else %}
+    <button type="button" disabled title="{{ t('wipe_owner_only') }}"
+            class="inline-flex items-center gap-2 px-5 py-2.5 bg-gray-700 text-gray-500 font-medium rounded-lg cursor-not-allowed">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+      {{ t('wipe_tribe_logs') }}
+    </button>
+    {% endif %}
+    <p class="text-xs text-gray-500 mt-2">{{ t('wipe_under_target') }}</p>
+  </div>
+</div>
+
+<!-- Wipe confirmation modal -->
+<div id="wipe-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/60 p-4">
+  <div class="bg-gray-800 border border-red-500/40 rounded-2xl max-w-md w-full p-6">
+    <h3 class="text-lg font-bold text-white mb-2">{{ t('wipe_confirm_title') }}</h3>
+    <p class="text-sm text-gray-400 mb-4">{{ t('wipe_confirm_desc') }}</p>
+    <form method="POST" id="wipe-form">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" id="wipe-action" value="">
+      <input type="text" id="wipe-input" autocomplete="off" placeholder="{{ t('wipe_type') }}"
+             class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none mb-4">
+      <div class="flex gap-3 justify-end">
+        <button type="button" onclick="closeWipe()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg">{{ t('server_cancel') }}</button>
+        <button type="submit" id="wipe-submit" disabled class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg transition-opacity opacity-50 cursor-not-allowed">{{ t('wipe_confirm_btn') }}</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script>
 function addTribe() {
   const list = document.getElementById('tribe-list');
@@ -95,5 +226,26 @@ function addTribe() {
   list.appendChild(entry);
   entry.querySelector('input').focus();
 }
+function openWipe(action) {
+  document.getElementById('wipe-action').value = action;
+  document.getElementById('wipe-input').value = '';
+  document.getElementById('wipe-submit').disabled = true;
+  document.getElementById('wipe-modal').classList.remove('hidden');
+  document.getElementById('wipe-modal').classList.add('flex');
+  document.getElementById('wipe-input').focus();
+}
+function closeWipe() {
+  document.getElementById('wipe-modal').classList.add('hidden');
+  document.getElementById('wipe-modal').classList.remove('flex');
+}
+document.addEventListener('input', function(e) {
+  if (e.target && e.target.id === 'wipe-input') {
+    var ok = e.target.value.trim().toUpperCase() === 'WIPE';
+    var btn = document.getElementById('wipe-submit');
+    btn.disabled = !ok;
+    btn.classList.toggle('opacity-50', !ok);
+    btn.classList.toggle('cursor-not-allowed', !ok);
+  }
+});
 </script>
 {% endblock %}

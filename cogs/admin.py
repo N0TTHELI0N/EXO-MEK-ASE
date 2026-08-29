@@ -17,7 +17,7 @@ ALL_COMMANDS = [
     "shop-add", "shop-remove", "shop-list", "shop-edit",
     "points-add", "points-remove", "points-check", "points-leaderboard",
     "whitelist-add", "whitelist-remove", "whitelist-restart", "whitelist-link", "whitelist-unlink",
-    "tribelog-config", "tribelog-test",
+    "tribelog-config", "tribelog-test", "setup-tribe-forum", "add-tribe-name", "set-tribe-log-source", "set-tribelog-enabled", "set-tribe-log-channel", "set-tribe-log-config", "view-tribelog",
     "automod-config", "automod-list", "automod-remove",
     "automod-add-word", "automod-remove-word", "automod-list-words", "automod-clear-words",
     "backup-create", "backup-list", "backup-restore", "backup-download",
