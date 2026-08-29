@@ -572,12 +572,64 @@ def _handle_pending_shop_action(guild_id: int, action: str, purchase_id: int):
             return  # failed to reach server; leave pending for retry
         shop_db.mark_purchase_done(guild_id, purchase_id)
         guild_settings.log_action(guild_id, "leaderboard", None, None, purchase["dino_name"],
-                                  sub_type="purchase_delivered", details={"level": purchase["level"], "purchase_id": purchase_id, "source": "dashboard"})
+                                  sub_type="purchase_delivered", details={"level": purchase["level"], "purchase_id": purchase_id, "source": "dashboard", "command": cmd})
     elif action == "cancel_pending":
         if shop_db.cancel_purchase(guild_id, purchase_id):
             shop_db.add_points(guild_id, purchase["user_name"], purchase["price"])
         guild_settings.log_action(guild_id, "leaderboard", None, None, purchase["dino_name"],
                                   sub_type="purchase_cancelled", details={"purchase_id": purchase_id, "refund": purchase["price"], "source": "dashboard"})
+
+
+@app.route("/dashboard/<int:guild_id>/custom-commands", methods=["GET", "POST"])
+@login_required
+@guild_admin_required
+@validate_csrf
+def section_custom_commands(guild_id):
+    if request.method == "POST":
+        app_action = request.form.get("app_action")
+        if app_action == "toggle_runner":
+            current = guild_settings.get_bool_setting(guild_id, "runner_enabled", False)
+            guild_settings.update_setting(guild_id, "runner_enabled", "0" if current else "1")
+        elif app_action == "add_custom":
+            name = request.form.get("name", "").strip().lower().replace(" ", "-")
+            command_string = request.form.get("command_string", "").strip()
+            category = request.form.get("category") or None
+            if name and command_string:
+                guild_settings.add_custom_command(guild_id, name, command_string, category)
+        elif app_action == "update_custom":
+            name = request.form.get("name", "").strip()
+            command_string = request.form.get("command_string", "").strip() or None
+            category = request.form.get("category") or None
+            enabled = request.form.get("enabled")
+            guild_settings.update_custom_command(guild_id, name, command_string, category,
+                                                 True if enabled != "0" else False)
+        elif app_action == "delete_custom":
+            name = request.form.get("name", "").strip()
+            guild_settings.remove_custom_command(guild_id, name)
+        elif app_action == "toggle_enable":
+            name = request.form.get("name", "").strip()
+            enabled_str = request.form.get("enabled", "")
+            enabled = enabled_str != "0"
+            guild_settings.update_custom_command(guild_id, name, enabled=enabled)
+        elif app_action == "save_rules":
+            rules = {}
+            for cat in ["dino_spawn", "gfi", "player", "gcm"]:
+                raw = request.form.get(f"rules_{cat}", "").strip()
+                if raw:
+                    rules[cat] = [k.strip() for k in raw.split(",") if k.strip()]
+            guild_settings.set_category_rules(guild_id, rules)
+        return redirect(url_for("section_custom_commands", guild_id=guild_id))
+    return render_template(
+        "sections/custom_commands.html",
+        user=get_current_user(),
+        guild_id=guild_id,
+        active_section="custom-commands",
+        runner_enabled=guild_settings.get_bool_setting(guild_id, "runner_enabled", False),
+        custom_commands=guild_settings.get_custom_commands(guild_id),
+        category_rules=guild_settings.get_category_rules(guild_id),
+        forum_cfg=guild_settings.get_forum_log_config(guild_id),
+        shop_forum_cfg=guild_settings.get_shop_forum_config(guild_id),
+    )
 
 
 @app.route("/dashboard/<int:guild_id>/points", methods=["GET", "POST"])
@@ -962,6 +1014,7 @@ ALL_COMMANDS_LIST = [
     "punishment-history", "set-warning-threshold", "set-warning-punishment",
     "set-warning-tempban-duration", "set-warning-default-expiry", "set-punishment-log",
     "add-tribe-member", "server-status", "server-restart", "server-stop",
+    "custom", "custom-list", "custom-add", "custom-remove", "ark-command", "setup-forum-logs", "setup-shop-forum",
 ]
 
 

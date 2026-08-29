@@ -1,0 +1,171 @@
+{% extends "dashboard.html" %}
+{% block dashboard_content %}
+{% set cat_labels = {
+  "dino_spawn": "🦖 Dino Spawning",
+  "gfi": "🎁 GFI Commands",
+  "player": "🧍 Player Features",
+  "gcm": "🎮 GCM"
+} %}
+<div class="mb-6">
+  <h2 class="text-2xl font-bold text-white">Custom Commands & Server Logs</h2>
+  <p class="text-gray-400 mt-1">Create named custom commands that run ARK console commands, enable the raw command runner, and configure the server-log forum.</p>
+</div>
+
+<!-- Command Runner Toggle -->
+<div class="mb-6 bg-gray-800/50 border border-gray-700/50 rounded-2xl shadow-lg p-6">
+  <div class="flex items-center justify-between">
+    <div>
+      <h3 class="text-lg font-bold text-white">🎮 Raw Command Runner (<code>/ark-command</code>)</h3>
+      <p class="text-gray-400 text-sm mt-1">When enabled, admins can run any ARK console command via <code>/ark-command &lt;command&gt;</code>. Off by default.</p>
+    </div>
+    <form method="POST" action="">
+      <input type="hidden" name="app_action" value="toggle_runner">
+      <button type="submit"
+        class="px-4 py-2 rounded-lg font-semibold transition-colors
+        {% if runner_enabled %}bg-green-600 hover:bg-green-500 text-white{% else %}bg-gray-700 hover:bg-gray-600 text-gray-300{% endif %}">
+        {{ 'RUNNER: ON' if runner_enabled else 'RUNNER: OFF' }}
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- Forum Status -->
+<div class="mb-6 bg-gray-800/50 border border-gray-700/50 rounded-2xl shadow-lg p-6">
+  <div class="flex items-center justify-between">
+    <div>
+      <h3 class="text-lg font-bold text-white">📋 Server-Log Forum</h3>
+      <p class="text-gray-400 text-sm mt-1">Logged commands are posted into 4 forum threads (Dino Spawning / GFI / Player Features / GCM).</p>
+    </div>
+  </div>
+  {% if forum_cfg and forum_cfg.forum_id %}
+  <div class="mt-3 text-sm text-green-300">
+    ✅ Forum configured: <code>forum {{ forum_cfg.forum_id }}</code>
+    · 🦖 {{ forum_cfg.thread_dino }} · 🎁 {{ forum_cfg.thread_gfi }} · 🧍 {{ forum_cfg.thread_player }} · 🎮 {{ forum_cfg.thread_gcm }}
+  </div>
+  {% else %}
+  <div class="mt-3 px-4 py-3 bg-yellow-500/10 border border-yellow-500/40 rounded-xl text-yellow-300 text-sm">
+    ⚠️ Forum not set up. Run <code>/setup-forum-logs</code> in Discord (Admin only) to create the forum channel
+    <b>server-logs</b> with its 4 category threads. The bot will then post logged commands automatically.
+  </div>
+  {% endif %}
+</div>
+
+<!-- Shop Forum Status -->
+<div class="mb-6 bg-gray-800/50 border border-gray-700/50 rounded-2xl shadow-lg p-6">
+  <div class="flex items-center justify-between">
+    <div>
+      <h3 class="text-lg font-bold text-white">🛒 Shop-Logs Forum</h3>
+      <p class="text-gray-400 text-sm mt-1">A separate forum for shop deliveries, split into <b>✅ Done</b> and <b>⏳ Pending</b> threads.</p>
+    </div>
+  </div>
+  {% if shop_forum_cfg and shop_forum_cfg.forum_id %}
+  <div class="mt-3 text-sm text-green-300">
+    ✅ Shop forum configured: <code>forum {{ shop_forum_cfg.forum_id }}</code>
+    · ✅ Done <code>{{ shop_forum_cfg.thread_done }}</code> · ⏳ Pending <code>{{ shop_forum_cfg.thread_pending }}</code>
+  </div>
+  {% else %}
+  <div class="mt-3 px-4 py-3 bg-yellow-500/10 border border-yellow-500/40 rounded-xl text-yellow-300 text-sm">
+    ⚠️ Shop forum not set up. Run <code>/setup-shop-forum</code> in Discord (Admin only) to create the
+    <b>shop-logs</b> forum with Done + Pending threads.
+  </div>
+  {% endif %}
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+  <!-- Add / Edit Custom Command -->
+  <div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl shadow-lg p-6">
+    <h3 class="text-lg font-bold text-white mb-4">➕ Create Custom Command</h3>
+    <form method="POST" action="" class="space-y-4">
+      <input type="hidden" name="app_action" value="add_custom">
+      <div>
+        <label class="block text-sm text-gray-400 mb-1">Name</label>
+        <input name="name" required placeholder="e.g. speed-buff"
+          class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500">
+      </div>
+      <div>
+        <label class="block text-sm text-gray-400 mb-1">ARK Command</label>
+        <input name="command_string" required placeholder="e.g. GiveResources 100 1 1 1 1000"
+          class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-red-500">
+        <p class="text-xs text-gray-500 mt-1">Placeholders: <code>{display_name}</code> = who runs it.</p>
+      </div>
+      <div>
+        <label class="block text-sm text-gray-400 mb-1">Forum Category</label>
+        <select name="category" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white">
+          <option value="">Auto-detect</option>
+          <option value="dino_spawn">🦖 Dino Spawning</option>
+          <option value="gfi">🎁 GFI Commands</option>
+          <option value="player">🧍 Player Features</option>
+          <option value="gcm">🎮 GCM</option>
+        </select>
+      </div>
+      <button type="submit" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-medium transition-colors">Create</button>
+    </form>
+  </div>
+
+  <!-- Category Rules -->
+  <div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl shadow-lg p-6">
+    <h3 class="text-lg font-bold text-white mb-4">🔍 Auto-Detection Rules</h3>
+    <p class="text-gray-400 text-sm mb-4">Keywords used to auto-assign a forum category to commands. Add your own per category (comma-separated).</p>
+    <form method="POST" action="" class="space-y-4">
+      <input type="hidden" name="app_action" value="save_rules">
+      {% for cat, label in cat_labels.items() %}
+      {% set rules = category_rules.get(cat, []) %}
+      <div>
+        <label class="block text-sm text-gray-400 mb-1">{{ label }}</label>
+        <input name="rules_{{ cat }}" value="{{ rules | join(', ') }}"
+          placeholder="e.g. gmsummon, summon"
+          class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-red-500">
+      </div>
+      {% endfor %}
+      <button type="submit" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-medium transition-colors">Save Rules</button>
+    </form>
+  </div>
+</div>
+
+<!-- Custom Commands List -->
+<div class="mt-6 bg-gray-800/50 border border-gray-700/50 rounded-2xl shadow-lg overflow-hidden">
+  <div class="px-6 py-4 border-b border-gray-700">
+    <h3 class="text-lg font-bold text-white">⚙️ Custom Commands</h3>
+  </div>
+  {% if custom_commands %}
+  <div class="overflow-x-auto">
+    <table class="w-full text-left">
+      <thead class="bg-gray-800">
+        <tr>
+          <th class="px-6 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Name</th>
+          <th class="px-6 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Command</th>
+          <th class="px-6 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Category</th>
+          <th class="px-6 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Status</th>
+          <th class="px-6 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-700">
+        {% for c in custom_commands %}
+        <tr class="hover:bg-gray-800">
+          <td class="px-6 py-4 text-sm text-white font-mono">/{{ c.name }}</td>
+          <td class="px-6 py-4 text-sm text-gray-300 font-mono break-all">{{ c.command_string }}</td>
+          <td class="px-6 py-4 text-sm">{{ cat_labels.get(c.category, c.category) }}</td>
+          <td class="px-6 py-4 text-sm">{% if c.enabled %}<span class="text-green-400">enabled</span>{% else %}<span class="text-red-400">disabled</span>{% endif %}</td>
+          <td class="px-6 py-4 text-sm space-x-2 whitespace-nowrap">
+            <form method="POST" action="" class="inline">
+              <input type="hidden" name="app_action" value="toggle_enable">
+              <input type="hidden" name="name" value="{{ c.name }}">
+              <input type="hidden" name="enabled" value="{{ '0' if c.enabled else '1' }}">
+              <button type="submit" class="text-xs px-3 py-1 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-lg">{{ 'Disable' if c.enabled else 'Enable' }}</button>
+            </form>
+            <form method="POST" action="" class="inline" onsubmit="return confirm('Delete /{{ c.name }} ?')">
+              <input type="hidden" name="app_action" value="delete_custom">
+              <input type="hidden" name="name" value="{{ c.name }}">
+              <button type="submit" class="text-xs px-3 py-1 bg-red-600/80 hover:bg-red-500 text-white rounded-lg">Delete</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="px-6 py-8 text-center text-gray-500">No custom commands yet. Create one above, or in Discord with <code>/custom-add</code>.</div>
+  {% endif %}
+</div>
+{% endblock %}

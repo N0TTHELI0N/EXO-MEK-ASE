@@ -205,6 +205,9 @@ def init_db():
                     created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW()
                 )
             """)
+            cur.execute("ALTER TABLE bot_logs ADD COLUMN IF NOT EXISTS log_category TEXT")
+            cur.execute("ALTER TABLE bot_logs ADD COLUMN IF NOT EXISTS posted_forum BOOLEAN DEFAULT FALSE")
+            cur.execute("ALTER TABLE bot_logs ADD COLUMN IF NOT EXISTS posted_shop_forum BOOLEAN DEFAULT FALSE")
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS pending_actions (
                     id          SERIAL PRIMARY KEY,
@@ -249,6 +252,39 @@ def init_db():
                     PRIMARY KEY (content_key, lang)
                 )
             """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS custom_commands (
+                    id             SERIAL PRIMARY KEY,
+                    guild_id       BIGINT NOT NULL,
+                    name           TEXT NOT NULL,
+                    command_string TEXT NOT NULL,
+                    category       TEXT DEFAULT 'dino_spawn',
+                    enabled        BOOLEAN DEFAULT TRUE,
+                    created_by     BIGINT,
+                    created_at     TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    UNIQUE (guild_id, name)
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS forum_log_config (
+                    guild_id       BIGINT PRIMARY KEY,
+                    forum_id       BIGINT,
+                    thread_dino    BIGINT,
+                    thread_gfi     BIGINT,
+                    thread_player  BIGINT,
+                    thread_gcm     BIGINT,
+                    created_at     TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS shop_forum_config (
+                    guild_id       BIGINT PRIMARY KEY,
+                    forum_id       BIGINT,
+                    thread_done    BIGINT,
+                    thread_pending BIGINT,
+                    created_at     TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """)
         conn.commit()
     finally:
         conn.close()
@@ -283,6 +319,15 @@ def get_setting(guild_id: int, key: str, default=None):
     if key in ENCRYPTED_FIELDS and isinstance(value, str):
         return _decrypt(value)
     return value
+
+
+def get_bool_setting(guild_id: int, key: str, default: bool = False) -> bool:
+    value = get_settings(guild_id).get(key, default)
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.lower() in ("1", "true", "yes", "on")
+    return bool(value)
 
 
 def update_setting(guild_id: int, key: str, value):
@@ -447,15 +492,15 @@ LOG_TYPES = ["chat", "admin_command", "punishment", "leaderboard", "whitelist", 
 
 
 def log_action(guild_id: int, log_type: str, user_id=None, user_name=None,
-               player_name=None, command=None, sub_type=None, details=None):
+               player_name=None, command=None, sub_type=None, details=None, log_category=None):
     conn = get_conn()
     try:
         with conn.cursor() as cur:
             cur.execute("""
-                INSERT INTO bot_logs (guild_id, log_type, sub_type, user_id, user_name, player_name, command, details)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+                INSERT INTO bot_logs (guild_id, log_type, sub_type, user_id, user_name, player_name, command, details, log_category)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s)
             """, (guild_id, log_type, sub_type, user_id, user_name, player_name, command,
-                  json.dumps(details) if details else None))
+                  json.dumps(details) if details else None, log_category))
         conn.commit()
     finally:
         conn.close()
@@ -465,7 +510,7 @@ def get_logs(guild_id: int, log_type=None, user_id=None, limit=50, offset=0):
     conn = get_conn()
     try:
         with conn.cursor() as cur:
-            query = "SELECT id, log_type, sub_type, user_id, user_name, player_name, command, details, created_at FROM bot_logs WHERE guild_id = %s"
+            query = "SELECT id, log_type, sub_type, user_id, user_name, player_name, command, details, created_at, log_category FROM bot_logs WHERE guild_id = %s"
             params = [guild_id]
             if log_type:
                 query += " AND log_type = %s"
@@ -478,7 +523,7 @@ def get_logs(guild_id: int, log_type=None, user_id=None, limit=50, offset=0):
             cur.execute(query, params)
             return [
                 {"id": r[0], "log_type": r[1], "sub_type": r[2], "user_id": r[3], "user_name": r[4],
-                 "player_name": r[5], "command": r[6], "details": r[7] if isinstance(r[7], dict) else json.loads(r[7]) if r[7] else None, "created_at": r[8]}
+                 "player_name": r[5], "command": r[6], "details": r[7] if isinstance(r[7], dict) else json.loads(r[7]) if r[7] else None, "created_at": r[8], "log_category": r[9]}
                 for r in cur.fetchall()
             ]
     finally:
@@ -1176,3 +1221,295 @@ def get_content_override(content_key: str, lang: str) -> str:
             return row[0] if row else None
     finally:
         conn.close()
+
+
+# ============================================================
+#  CUSTOM COMMANDS
+# ============================================================
+
+LOG_CATEGORIES = ["dino_spawn", "gfi", "player", "gcm"]
+
+# Default keyword detection for auto-categorizing ARK commands.
+DEFAULT_CATEGORY_RULES = {
+    "dino_spawn": ["gmsummon", "summontamed", "summon ", "spawndino", "spawnactor", "sdf", "do injure", "force tame", "tame "],
+    "gfi": ["gfi", "giveitemtoplayer", "giveitemnum", "giveitem ", "giveengrams", "giveresources"],
+    "player": ["teleport", "tpname", "teleportplayername", "addexperience", "addexp", "addxp", "givecolors", "setplayername", "god", "infinitestats", "walk", "fly"],
+    "gcm": ["gcm", "gmc", "cheatmenu", "setcheat", "setgm"],
+}
+
+
+def detect_log_category(command: str, custom_rules: dict = None) -> str:
+    """Auto-detect a log category from an ARK command string, honoring custom rules."""
+    lowered = (command or "").lower()
+    rules = DEFAULT_CATEGORY_RULES
+    if custom_rules:
+        merged = {}
+        for cat in LOG_CATEGORIES:
+            merged[cat] = list(DEFAULT_CATEGORY_RULES.get(cat, []))
+            merged[cat] += [r.lower() for r in custom_rules.get(cat, [])]
+        rules = merged
+    for cat in LOG_CATEGORIES:
+        for keyword in rules.get(cat, []):
+            if keyword in lowered:
+                return cat
+    return "gcm"
+
+
+def detect_log_category_for_guild(guild_id: int, command: str) -> str:
+    """Detect a log category using the guild's custom rules, falling back to defaults."""
+    return detect_log_category(command, get_category_rules(guild_id))
+
+
+def add_custom_command(guild_id: int, name: str, command_string: str, category: str = None, created_by: int = None) -> str:
+    """Create a custom command. Returns 'ok' or an error string."""
+    if category is None:
+        category = detect_log_category(command_string)
+    if category not in LOG_CATEGORIES:
+        category = "gcm"
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO custom_commands (guild_id, name, command_string, category, created_by)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (guild_id, name) DO UPDATE
+                    SET command_string = EXCLUDED.command_string,
+                        category = EXCLUDED.category,
+                        enabled = TRUE
+                RETURNING 1
+            """, (guild_id, name, command_string, category, created_by))
+        conn.commit()
+        return "ok"
+    finally:
+        conn.close()
+
+
+def get_custom_commands(guild_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, name, command_string, category, enabled, created_at
+                FROM custom_commands
+                WHERE guild_id = %s
+                ORDER BY name ASC
+            """, (guild_id,))
+            return [{"id": r[0], "name": r[1], "command_string": r[2], "category": r[3], "enabled": r[4], "created_at": r[5]} for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+def get_custom_command(guild_id: int, name: str):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, name, command_string, category, enabled
+                FROM custom_commands
+                WHERE guild_id = %s AND name = %s AND enabled = TRUE
+            """, (guild_id, name))
+            row = cur.fetchone()
+            if not row:
+                return None
+            return {"id": row[0], "name": row[1], "command_string": row[2], "category": row[3], "enabled": row[4]}
+    finally:
+        conn.close()
+
+
+def update_custom_command(guild_id: int, name: str, command_string: str = None, category: str = None, enabled: bool = None):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT command_string, category FROM custom_commands WHERE guild_id = %s AND name = %s
+            """, (guild_id, name))
+            row = cur.fetchone()
+            if not row:
+                return False
+            cur_cmd = command_string if command_string is not None else row[0]
+            cur_cat = category if category is not None else row[1]
+            if cur_cat not in LOG_CATEGORIES:
+                cur_cat = detect_log_category(cur_cmd)
+            cur_enabled = enabled if enabled is not None else True
+            cur.execute("""
+                UPDATE custom_commands
+                SET command_string = %s, category = %s, enabled = %s
+                WHERE guild_id = %s AND name = %s
+            """, (cur_cmd, cur_cat, cur_enabled, guild_id, name))
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
+
+def remove_custom_command(guild_id: int, name: str) -> bool:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM custom_commands WHERE guild_id = %s AND name = %s", (guild_id, name))
+            deleted = cur.rowcount
+        conn.commit()
+        return deleted > 0
+    finally:
+        conn.close()
+
+
+# ============================================================
+#  FORUM LOG CONFIG
+# ============================================================
+
+def get_forum_log_config(guild_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT forum_id, thread_dino, thread_gfi, thread_player, thread_gcm
+                FROM forum_log_config WHERE guild_id = %s
+            """, (guild_id,))
+            row = cur.fetchone()
+            if not row:
+                return None
+            return {
+                "forum_id": row[0],
+                "thread_dino": row[1],
+                "thread_gfi": row[2],
+                "thread_player": row[3],
+                "thread_gcm": row[4],
+            }
+    finally:
+        conn.close()
+
+
+def set_forum_log_config(guild_id: int, forum_id: int, thread_dino: int = None,
+                         thread_gfi: int = None, thread_player: int = None, thread_gcm: int = None):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO forum_log_config (guild_id, forum_id, thread_dino, thread_gfi, thread_player, thread_gcm)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT (guild_id) DO UPDATE SET
+                    forum_id = EXCLUDED.forum_id,
+                    thread_dino = COALESCE(EXCLUDED.thread_dino, forum_log_config.thread_dino),
+                    thread_gfi = COALESCE(EXCLUDED.thread_gfi, forum_log_config.thread_gfi),
+                    thread_player = COALESCE(EXCLUDED.thread_player, forum_log_config.thread_player),
+                    thread_gcm = COALESCE(EXCLUDED.thread_gcm, forum_log_config.thread_gcm)
+            """, (guild_id, forum_id, thread_dino, thread_gfi, thread_player, thread_gcm))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_unposted_forum_logs(guild_id: int, limit: int = 50):
+    """Return categorized log entries not yet posted to the forum."""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, log_type, sub_type, user_id, user_name, player_name, command, details, created_at, log_category
+                FROM bot_logs
+                WHERE guild_id = %s AND log_category IS NOT NULL AND posted_forum = FALSE
+                ORDER BY id ASC
+                LIMIT %s
+            """, (guild_id, limit))
+            return [
+                {"id": r[0], "log_type": r[1], "sub_type": r[2], "user_id": r[3], "user_name": r[4],
+                 "player_name": r[5], "command": r[6], "details": r[7] if isinstance(r[7], dict) else json.loads(r[7]) if r[7] else None, "created_at": r[8], "log_category": r[9]}
+                for r in cur.fetchall()
+            ]
+    finally:
+        conn.close()
+
+
+def mark_log_posted(log_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE bot_logs SET posted_forum = TRUE WHERE id = %s", (log_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_unposted_shop_logs(guild_id: int, limit: int = 50):
+    """Return shop log entries (pending/delivered/cancelled) not yet posted to the shop forum."""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, log_type, sub_type, user_id, user_name, player_name, command, details, created_at
+                FROM bot_logs
+                WHERE guild_id = %s
+                  AND log_type = 'leaderboard'
+                  AND sub_type IN ('purchase_pending', 'purchase_delivered', 'purchase_cancelled')
+                  AND posted_shop_forum = FALSE
+                ORDER BY id ASC
+                LIMIT %s
+            """, (guild_id, limit))
+            return [
+                {"id": r[0], "log_type": r[1], "sub_type": r[2], "user_id": r[3], "user_name": r[4],
+                 "player_name": r[5], "command": r[6], "details": r[7] if isinstance(r[7], dict) else json.loads(r[7]) if r[7] else None, "created_at": r[8]}
+                for r in cur.fetchall()
+            ]
+    finally:
+        conn.close()
+
+
+def mark_shop_log_posted(log_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE bot_logs SET posted_shop_forum = TRUE WHERE id = %s", (log_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_shop_forum_config(guild_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT forum_id, thread_done, thread_pending
+                FROM shop_forum_config WHERE guild_id = %s
+            """, (guild_id,))
+            row = cur.fetchone()
+            if not row:
+                return None
+            return {"forum_id": row[0], "thread_done": row[1], "thread_pending": row[2]}
+    finally:
+        conn.close()
+
+
+def set_shop_forum_config(guild_id: int, forum_id: int, thread_done: int = None, thread_pending: int = None):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO shop_forum_config (guild_id, forum_id, thread_done, thread_pending)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (guild_id) DO UPDATE SET
+                    forum_id = EXCLUDED.forum_id,
+                    thread_done = COALESCE(EXCLUDED.thread_done, shop_forum_config.thread_done),
+                    thread_pending = COALESCE(EXCLUDED.thread_pending, shop_forum_config.thread_pending)
+            """, (guild_id, forum_id, thread_done, thread_pending))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_category_rules(guild_id: int) -> dict:
+    """Return per-guild custom keyword rules for log-category detection."""
+    raw = get_setting(guild_id, "category_rules", None)
+    if not raw:
+        return {}
+    if isinstance(raw, dict):
+        return raw
+    try:
+        return json.loads(raw)
+    except Exception:
+        return {}
+
+
+def set_category_rules(guild_id: int, rules: dict):
+    update_setting(guild_id, "category_rules", json.dumps(rules))

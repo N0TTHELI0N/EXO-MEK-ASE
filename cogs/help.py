@@ -7,13 +7,14 @@ import guild_settings
 
 # ── Category definitions ────────────────────────────────────
 
-CATEGORY_ORDER = ["general", "server", "moderation", "shop", "whitelist", "tribelog", "leaderboard", "automod", "admin", "other"]
+CATEGORY_ORDER = ["general", "server", "moderation", "shop", "custom", "whitelist", "tribelog", "leaderboard", "automod", "admin", "other"]
 
 CATEGORY_LABELS = {
     "general": {"ar": "عامة", "en": "General"},
     "server": {"ar": "السيرفر", "en": "Server"},
     "moderation": {"ar": "الإشراف", "en": "Moderation"},
     "shop": {"ar": "المتجر", "en": "Shop"},
+    "custom": {"ar": "الأوامر المخصصة", "en": "Custom Commands"},
     "whitelist": {"ar": "الوايت ليست", "en": "Whitelist"},
     "tribelog": {"ar": "سجلات القبائل", "en": "Tribe Log"},
     "leaderboard": {"ar": "لوحة المتصدرين", "en": "Leaderboard"},
@@ -24,6 +25,7 @@ CATEGORY_LABELS = {
 
 COMMAND_CATEGORIES = {
     "shop": ["add-shop-dino", "remove-shop-dino", "list-dinos", "buy-dino", "balance", "add-points", "remove-points", "set-min-level", "pending-purchases", "spawn-pending", "cancel-pending", "set-shop-channels"],
+    "custom": ["custom", "custom-list", "custom-add", "custom-remove", "ark-command", "setup-forum-logs", "setup-shop-forum"],
     "whitelist": ["whitelist", "linkpsn", "unlinkpsn", "wl-status", "wl-list", "set-wl-path", "set-restart-time"],
     "moderation": ["ban", "kick", "mute", "unmute", "warn", "warnings", "clear-warnings", "banplayer", "unbanplayer", "wipe-player"],
     "tribelog": ["tribe-log", "enable-tribe-log", "disable-tribe-log", "set-tribe-log-channel", "set-tribe-log-config", "set-tribe-log-source"],

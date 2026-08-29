@@ -27,6 +27,7 @@ ALL_COMMANDS = [
     "punishment-history", "set-warning-threshold", "set-warning-punishment",
     "set-warning-tempban-duration", "set-warning-default-expiry", "set-punishment-log",
     "add-tribe-member", "server-status", "server-restart", "server-stop",
+    "custom", "custom-list", "custom-add", "custom-remove", "ark-command", "setup-forum-logs", "setup-shop-forum",
 ]
 
 

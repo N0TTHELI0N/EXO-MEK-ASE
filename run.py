@@ -27,6 +27,7 @@ def run_bot():
     EXTENSIONS = [
         "cogs.admin",
         "cogs.shop",
+        "cogs.custom_commands",
         "cogs.whitelist",
         "cogs.tribelog",
         "cogs.leaderboard",

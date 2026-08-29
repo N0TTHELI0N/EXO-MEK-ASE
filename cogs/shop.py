@@ -139,7 +139,7 @@ class Shop(commands.Cog):
             return await send_or_update(interaction, bot_i18n.t(guild_id, "purchase_spawn_failed", purchase_id=purchase_id), ephemeral=True)
 
         shop_db.mark_purchase_done(guild_id, purchase_id, interaction.user.id)
-        guild_settings.log_action(guild_id, "leaderboard", interaction.user.id, str(interaction.user), purchase["dino_name"], sub_type="purchase_delivered", details={"level": purchase["level"], "purchase_id": purchase_id})
+        guild_settings.log_action(guild_id, "leaderboard", interaction.user.id, str(interaction.user), purchase["dino_name"], sub_type="purchase_delivered", details={"level": purchase["level"], "purchase_id": purchase_id, "command": cmd})
 
         msg_text = bot_i18n.t(guild_id, "purchase_delivered", dino=purchase["dino_name"], level=purchase["level"], purchase_id=purchase_id)
         await self._resolve_pending_message(guild_id, purchase, ok=True)

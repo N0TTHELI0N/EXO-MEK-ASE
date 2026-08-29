@@ -102,6 +102,7 @@ async def on_command_error(ctx: commands.Context, error):
 EXTENSIONS = [
     "cogs.admin",
     "cogs.shop",
+    "cogs.custom_commands",
     "cogs.whitelist",
     "cogs.tribelog",
     "cogs.leaderboard",

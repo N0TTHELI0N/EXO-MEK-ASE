@@ -88,6 +88,38 @@ STRINGS = {
         "ar": "**{buyer}** - {dino} Lvl {level} ({price} نقطة)\nتم التسليم بواسطة: {delivered_by}",
         "en": "**{buyer}** - {dino} Lvl {level} ({price} pts)\nDelivered by: {delivered_by}",
     },
+    "custom_not_found": {
+        "ar": "الأمر المخصص `{name}` غير موجود.",
+        "en": "Custom command `{name}` not found.",
+    },
+    "custom_ran": {
+        "ar": "تم تنفيذ:\n```{command}```",
+        "en": "Executed:\n```{command}```",
+    },
+    "custom_empty": {
+        "ar": "لا توجد أوامر مخصصة بعد.",
+        "en": "No custom commands yet.",
+    },
+    "runner_disabled": {
+        "ar": "مشغل الأوامر معطّل. فعّله من لوحة التحكم.",
+        "en": "The command runner is disabled. Enable it from the dashboard.",
+    },
+    "forum_topic": {
+        "ar": "سجل أوامر السيرفر - مصنف في ٤ أقسام",
+        "en": "Server command log - categorized into 4 sections",
+    },
+    "forum_thread_intro": {
+        "ar": "قسم **{label}** - تُعرض هنا الأوامر المسجلة.",
+        "en": "**{label}** section - logged commands appear here.",
+    },
+    "shop_forum_topic": {
+        "ar": "سجل متجر الديناصورات - التسليمات المكتملة والمعلقة",
+        "en": "Dino shop log - completed and pending deliveries",
+    },
+    "shop_forum_thread_intro": {
+        "ar": "قسم **{label}** - تظهر هنا حركة المتجر.",
+        "en": "**{label}** section - shop activity appears here.",
+    },
     "points_added": {
         "ar": "تم إضافة **{amount}** نقطة. الرصيد الجديد: **{balance}**.",
         "en": "**{amount}** points added. New balance: **{balance}**.",
