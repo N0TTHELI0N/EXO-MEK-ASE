@@ -48,23 +48,6 @@ class Automod(commands.Cog):
         custom_words = guild_settings.get_automod_words(guild_id)
         return list(set(DEFAULT_PROFANITY_LIST + custom_words))
 
-    async def _send_rcon(self, guild_id: int, command: str) -> str | None:
-        """Send RCON command using guild-specific or default config."""
-        host = guild_settings.get_setting(guild_id, "rcon_host") or config.RCON_HOST
-        port = guild_settings.get_setting(guild_id, "rcon_port") or config.RCON_PORT
-        password = guild_settings.get_setting(guild_id, "rcon_password") or config.RCON_PASSWORD
-
-        if not host:
-            return None
-
-        try:
-            from rcon import Client
-            with Client(host, port=port, passwd=password) as client:
-                return client.cmd(command)
-        except Exception as e:
-            print(f"[Automod] RCON error: {type(e).__name__}")
-            return None
-
     def _get_log_channel(self, guild_id: int) -> int | None:
         return guild_settings.get_setting(guild_id, "automod_log_channel_id") or config.AUTOMOD_LOG_CHANNEL_ID
 

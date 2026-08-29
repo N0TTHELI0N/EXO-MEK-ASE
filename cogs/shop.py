@@ -4,7 +4,7 @@ from discord import app_commands
 import bot_i18n
 import guild_settings
 import shop_db
-import config
+import nitrado
 from security import sanitize_rcon_name
 
 
@@ -18,20 +18,7 @@ class Shop(commands.Cog):
         self.bot = bot
 
     async def _send_rcon(self, guild_id: int, command: str) -> str | None:
-        host = guild_settings.get_setting(guild_id, "rcon_host") or config.RCON_HOST
-        port = guild_settings.get_setting(guild_id, "rcon_port") or config.RCON_PORT
-        password = guild_settings.get_setting(guild_id, "rcon_password") or config.RCON_PASSWORD
-
-        if not host:
-            return None
-
-        try:
-            from rcon import Client
-            with Client(host, port=port, passwd=password) as client:
-                return client.cmd(command)
-        except Exception as e:
-            print(f"[Shop] RCON error: {type(e).__name__}")
-            return None
+        return nitrado.send_rcon(guild_id, command)
 
     # ── /add-shop-dino ───────────────────────────────────────
     @app_commands.command(name="add-shop-dino", description="Add a dinosaur to the shop (Admin only)")
@@ -97,7 +84,7 @@ class Shop(commands.Cog):
         # Deduct points
         shop_db.remove_points(interaction.guild_id, member_name, price)
 
-        # Spawn via RCON
+        # Spawn via Nitrado command
         bp = match[1]
         safe_name = sanitize_rcon_name(interaction.user.display_name)
         cmd = f'GiveItemToPlayer "{safe_name}" "{bp}" {level} 0 false'

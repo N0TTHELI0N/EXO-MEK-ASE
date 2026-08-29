@@ -104,15 +104,18 @@ class NitradoClient:
         result = self._request("POST", f"/services/{self.service_id}/gameserver/start")
         return bool(result)
 
-    def send_rcon(self, command: str) -> str:
-        """Send an RCON command via Nitrado API."""
-        payload = {"command": command}
+    def send_command(self, command: str) -> str:
+        """Execute a server command via the Nitrado API (replaces direct RCON)."""
         data = self._request(
             "POST",
-            f"/services/{self.service_id}/gameserver/rcon",
-            json=payload,
+            f"/services/{self.service_id}/gameserver/command",
+            json={"command": command},
         )
-        return data.get("response", "")
+        if isinstance(data, dict):
+            data = data.get("data", data)
+        if isinstance(data, dict):
+            return data.get("response", "")
+        return ""
 
     def update_settings(self, settings: dict) -> bool:
         """Update server settings (game.ini, gameusersettings.ini via Nitrado)."""
@@ -227,6 +230,18 @@ def get_client(guild_id: int) -> NitradoClient | None:
     if not token or not service_id:
         return None
     return NitradoClient(token, service_id)
+
+
+def send_rcon(guild_id: int, command: str) -> str | None:
+    """Send a server command via the Nitrado API. Returns response or None."""
+    client = get_client(guild_id)
+    if not client:
+        return None
+    try:
+        return client.send_command(command)
+    except Exception as e:
+        print(f"[Nitrado] send_command error (guild {guild_id}): {type(e).__name__}")
+        return None
 
 
 def get_server_info(guild_id: int) -> dict:

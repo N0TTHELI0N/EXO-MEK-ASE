@@ -4,7 +4,7 @@ Advanced admin bot for ARK: Survival Evolved servers hosted on Nitrado.
 
 ## Features
 
-- **Server Management** - RCON commands, server status, restart/stop
+- **Server Management** - Nitrado API commands, server status, restart/stop
 - **Moderation** - Ban, tempban, warn, wipe players/tribes
 - **Shop System** - Buy dinos with points, manage shop
 - **Whitelist** - PSN linking, auto-restart with whitelist update

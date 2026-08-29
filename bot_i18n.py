@@ -22,7 +22,7 @@ STRINGS = {
     },
     "rcon_failed": {
         "ar": "تعذر الاتصال بسيرفر الآرك. تواصل مع الإدمن.",
-        "en": "Could not connect to the ARK server (RCON). Contact an admin.",
+        "en": "Could not connect to the ARK server. Contact an admin.",
     },
     "nitrado_not_configured": {
         "ar": "Nitrado غير مُعد. استخدم `/set-nitrado-token`.",

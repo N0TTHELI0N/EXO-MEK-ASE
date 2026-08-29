@@ -469,27 +469,6 @@ def section_overview(guild_id):
     )
 
 
-@app.route("/dashboard/<int:guild_id>/rcon", methods=["GET", "POST"])
-@login_required
-@guild_admin_required
-@validate_csrf
-def section_rcon(guild_id):
-    if request.method == "POST":
-        guild_settings.update_setting(guild_id, "rcon_host", request.form.get("rcon_host", ""))
-        guild_settings.update_setting(guild_id, "rcon_port", request.form.get("rcon_port", "27015"))
-        rcon_password = request.form.get("rcon_password", "")
-        if rcon_password:
-            guild_settings.update_setting(guild_id, "rcon_password", rcon_password)
-        return redirect(url_for("section_rcon", guild_id=guild_id))
-    return render_template(
-        "sections/rcon.html",
-        user=get_current_user(),
-        guild_id=guild_id,
-        active_section="rcon",
-        settings=guild_settings.get_settings(guild_id),
-    )
-
-
 @app.route("/dashboard/<int:guild_id>/nitrado", methods=["GET", "POST"])
 @login_required
 @guild_admin_required
@@ -933,7 +912,7 @@ def section_settings(guild_id):
 
 ALL_COMMANDS_LIST = [
     "activate", "help", "top-servers",
-    "set-rcon", "set-rcon-defaults", "set-nitrado-token",
+    "set-nitrado-token",
     "set-log-channel", "set-license", "ban-user", "view-guilds", "force-sync-guild",
     "set-command-permission", "remove-command-permission", "view-command-permissions", "clear-command-permissions",
     "shop-add", "shop-remove", "shop-list", "shop-edit",

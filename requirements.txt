@@ -1,10 +1,8 @@
 discord.py==2.4.0
 python-dotenv==1.0.1
 psycopg2-binary==2.9.9
-paramiko==3.4.0
 aiohttp==3.10.5
 flask==3.0.3
-rcon==2.3.0
 gunicorn==22.0.0
 requests==2.32.3
 google-generativeai==0.8.0

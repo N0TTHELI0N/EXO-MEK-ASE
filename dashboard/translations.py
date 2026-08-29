@@ -15,8 +15,6 @@ TRANSLATIONS = {
     "home_features_title": {"ar": "ميزات قوية", "en": "Powerful Features"},
     "home_features_sub": {"ar": "كل ما تحتاجه لإدارة سيرفر ARK من الديسكورد", "en": "Everything you need to manage your ARK server from Discord"},
 
-    "f_rcon": {"ar": "إدارة RCON", "en": "RCON Management"},
-    "f_rcon_desc": {"ar": "وصول كامل لـ RCON لإرسال الأوامر والاستعلام عن حالة السيرفر في الوقت الفعلي", "en": "Full RCON access to send commands and query server status in real time"},
     "f_nitrado_backup": {"ar": "نسخ احتياطي Nitrado", "en": "Nitrado Backups"},
     "f_nitrado_backup_desc": {"ar": "نسخ احتياطية واستعادة سحابية عبر واجهة Nitrado API", "en": "Cloud backups and restores via the Nitrado API"},
     "f_shop": {"ar": "نظام المتجر", "en": "Shop System"},
@@ -44,7 +42,6 @@ TRANSLATIONS = {
     "servers_invite": {"ar": "دعوة البوت للسيرفر", "en": "Invite Bot to Server"},
 
     "dash_overview": {"ar": "نظرة عامة", "en": "Overview"},
-    "dash_rcon": {"ar": "إعدادات RCON", "en": "RCON Settings"},
     "dash_nitrado": {"ar": "Nitrado API", "en": "Nitrado API"},
     "dash_license": {"ar": "الترخيص", "en": "License"},
     "dash_shop": {"ar": "المتجر", "en": "Shop"},
@@ -91,8 +88,6 @@ TRANSLATIONS = {
     "overview_license_active": {"ar": "الترخيص نشط", "en": "License Active"},
     "overview_license_expired": {"ar": "الترخيص منتهي", "en": "License Expired"},
 
-    "rcon_title": {"ar": "إعدادات RCON", "en": "RCON Configuration"},
-    "rcon_desc": {"ar": "إعداد اتصال RCON لسيرفرك للأوامر عن بُعد.", "en": "Configure your server's RCON connection for remote commands."},
     "nitrado_title": {"ar": "إعدادات Nitrado", "en": "Nitrado Configuration"},
     "nitrado_desc": {"ar": "اربط سيرفر Nitrado للإدارة عبر واجهة API.", "en": "Connect your Nitrado server for API-based management."},
     "points_title": {"ar": "إدارة النقاط", "en": "Points Management"},
@@ -104,17 +99,12 @@ TRANSLATIONS = {
     "leaderboard_title": {"ar": "لوحة الترتيب", "en": "Leaderboard"},
     "leaderboard_desc": {"ar": "عرض لوحة ترتيب اللاعبين محدّثة تلقائيًا", "en": "Auto-updating player leaderboard display"},
 
-    "host": {"ar": "المضيف", "en": "Host"},
-    "port": {"ar": "المنفذ", "en": "Port"},
-    "password": {"ar": "كلمة المرور", "en": "Password"},
     "username": {"ar": "اسم المستخدم", "en": "Username"},
     "save": {"ar": "حفظ", "en": "Save"},
     "cancel": {"ar": "إلغاء", "en": "Cancel"},
-    "test_connection": {"ar": "اختبار الاتصال", "en": "Test Connection"},
     "api_token": {"ar": "رمز API", "en": "API Token"},
     "user_id": {"ar": "معرّف المستخدم", "en": "User ID"},
     "service_id": {"ar": "معرّف الخدمة", "en": "Service ID"},
-    "pwd_configured_keep": {"ar": "✓ كلمة المرور مُعدّة. اتركها فارغة للإبقاء عليها.", "en": "✓ Password configured. Leave blank to keep current."},
     "token_configured_keep": {"ar": "✓ الرمز مُعدّ. اتركه فارغًا للإبقاء عليه.", "en": "✓ Token configured. Leave blank to keep current."},
 
     "points_search": {"ar": "بحث عن عضو", "en": "Search Member"},

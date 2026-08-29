@@ -5,8 +5,7 @@ from discord import app_commands
 from datetime import datetime, timezone, date
 import guild_settings
 import bot_i18n
-import config
-from nitrado import get_client
+import nitrado
 
 
 # ── DB helpers ──────────────────────────────────────────────
@@ -117,7 +116,7 @@ def _update_whitelist_file(guild_id: int) -> bool:
     players = _get_linked_players(guild_id)
     active_psns = [p[1] for p in players if p[2] == "active" or p[2] == "pending"]
 
-    client = get_client(guild_id)
+    client = nitrado.get_client(guild_id)
     if not client:
         return False
 
@@ -127,23 +126,6 @@ def _update_whitelist_file(guild_id: int) -> bool:
     except Exception as e:
         print(f"[Whitelist] Nitrado error: {type(e).__name__}")
         return False
-
-
-async def _send_rcon(guild_id: int, command: str) -> str | None:
-    host = guild_settings.get_setting(guild_id, "rcon_host") or config.RCON_HOST
-    port = guild_settings.get_setting(guild_id, "rcon_port") or config.RCON_PORT
-    password = guild_settings.get_setting(guild_id, "rcon_password") or config.RCON_PASSWORD
-
-    if not host:
-        return None
-
-    try:
-        from rcon import Client
-        with Client(host, port=port, passwd=password) as client:
-            return client.cmd(command)
-    except Exception as e:
-        print(f"[Whitelist] RCON error: {type(e).__name__}")
-        return None
 
 
 # ── Cog ─────────────────────────────────────────────────────
@@ -183,8 +165,10 @@ class Whitelist(commands.Cog):
                     finally:
                         conn.close()
 
-                    # Restart via RCON
-                    await _send_rcon(gid, "DoExit")
+                    # Restart via Nitrado API
+                    r_client = nitrado.get_client(gid)
+                    if r_client:
+                        r_client.restart_server()
                     _mark_ran_today(gid)
                     guild_settings.log_action(gid, "whitelist", None, "System", None, sub_type="restart", details={"status": "success"})
 

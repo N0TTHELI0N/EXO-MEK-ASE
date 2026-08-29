@@ -7,6 +7,7 @@ import aiohttp
 import guild_settings
 import bot_i18n
 import config
+import nitrado
 from security import sanitize_rcon_name, sanitize_rcon_input
 
 
@@ -19,18 +20,7 @@ def get_conn():
 
 
 async def _send_rcon(guild_id: int, command: str) -> str | None:
-    host = guild_settings.get_setting(guild_id, "rcon_host") or config.RCON_HOST
-    port = guild_settings.get_setting(guild_id, "rcon_port") or config.RCON_PORT
-    password = guild_settings.get_setting(guild_id, "rcon_password") or config.RCON_PASSWORD
-    if not host:
-        return None
-    try:
-        from rcon import Client
-        with Client(host, port=port, passwd=password) as client:
-            return client.cmd(command)
-    except Exception as e:
-        print(f"[Moderation] RCON error: {type(e).__name__}")
-        return None
+    return nitrado.send_rcon(guild_id, command)
 
 
 def _get_nitrado_headers(guild_id: int):
@@ -227,7 +217,7 @@ class Moderation(commands.Cog):
             if interaction.message and interaction.message.attachments:
                 await _save_evidence(interaction, punishment_id)
             _log(interaction.guild_id, "punishment", "ban", interaction.user, p_name, details={"reason": reason, "scope": scope_val})
-            results.append(f"🔨 **{p_name}** banned." if result else f"❌ Failed to ban **{p_name}** (RCON error)")
+            results.append(f"🔨 **{p_name}** banned." if result else f"❌ Failed to ban **{p_name}** (command error)")
 
         await interaction.followup.send("\n".join(results))
 
@@ -431,18 +421,24 @@ class Moderation(commands.Cog):
         if not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
 
-        result = await _send_rcon(interaction.guild_id, "DoExit")
+        client = nitrado.get_client(interaction.guild_id)
+        if not client:
+            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "nitrado_not_configured"), ephemeral=True)
+        result = client.restart_server()
         _log(interaction.guild_id, "server", "restart", interaction.user, None)
-        await interaction.response.send_message("🔄 Server restart triggered." if result else "❌ Failed to send restart command.")
+        await interaction.response.send_message("🔄 Server restart triggered." if result else "❌ Failed to trigger restart.")
 
     @app_commands.command(name="server-stop", description="Stop the ARK server")
     async def server_stop(self, interaction: discord.Interaction):
         if not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
 
-        result = await _send_rcon(interaction.guild_id, "DoExit")
+        client = nitrado.get_client(interaction.guild_id)
+        if not client:
+            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "nitrado_not_configured"), ephemeral=True)
+        result = client.stop_server()
         _log(interaction.guild_id, "server", "stop", interaction.user, None)
-        await interaction.response.send_message("⏹️ Server stop triggered." if result else "❌ Failed to send stop command.")
+        await interaction.response.send_message("⏹️ Server stop triggered." if result else "❌ Failed to trigger stop.")
 
     # ============================================================
     #  INTERNAL HELPERS

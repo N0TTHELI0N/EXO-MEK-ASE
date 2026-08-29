@@ -11,7 +11,7 @@ import shop_db
 
 ALL_COMMANDS = [
     "activate", "help", "top-servers",
-    "set-rcon", "set-rcon-defaults", "set-nitrado-token",
+    "set-nitrado-token",
     "set-log-channel", "set-license", "set-language", "ban-user", "view-guilds", "force-sync-guild",
     "set-command-permission", "remove-command-permission", "view-command-permissions", "clear-command-permissions",
     "shop-add", "shop-remove", "shop-list", "shop-edit",
@@ -58,33 +58,6 @@ def is_tribe_owner_or_admin():
 class Admin(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-
-    # ── /set-rcon ────────────────────────────────────────────
-    @app_commands.command(name="set-rcon", description="Set RCON connection for this server (Admin only)")
-    @app_commands.describe(
-        host="Server IP or hostname",
-        port="RCON port (default 25760)",
-        password="RCON password"
-    )
-    async def set_rcon(self, interaction: discord.Interaction, host: str, port: int = 25760, password: str = ""):
-        if not interaction.user.guild_permissions.administrator:
-            return await interaction.response.send_message("❌ Admin only.", ephemeral=True)
-
-        guild_settings.update_setting(interaction.guild_id, "rcon_host", host)
-        guild_settings.update_setting(interaction.guild_id, "rcon_port", port)
-        guild_settings.update_setting(interaction.guild_id, "rcon_password", password)
-        await interaction.response.send_message(f"✅ RCON configured:\n`{host}:{port}`", ephemeral=True)
-
-    # ── /set-rcon-defaults ───────────────────────────────────
-    @app_commands.command(name="set-rcon-defaults", description="Reset RCON to use bot-level defaults (Admin only)")
-    async def set_rcon_defaults(self, interaction: discord.Interaction):
-        if not interaction.user.guild_permissions.administrator:
-            return await interaction.response.send_message("❌ Admin only.", ephemeral=True)
-
-        guild_settings.update_setting(interaction.guild_id, "rcon_host", "")
-        guild_settings.update_setting(interaction.guild_id, "rcon_port", 0)
-        guild_settings.update_setting(interaction.guild_id, "rcon_password", "")
-        await interaction.response.send_message("✅ RCON reset to defaults.", ephemeral=True)
 
     # ── /set-nitrado-token ───────────────────────────────────
     @app_commands.command(name="set-nitrado-token", description="Set Nitrado API token for this server (Admin only)")

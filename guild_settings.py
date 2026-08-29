@@ -18,7 +18,7 @@ _fernet = Fernet(_ENCRYPTION_KEY.encode()) if _ENCRYPTION_KEY else None
 # Secret used to sign license keys. If not set, falls back to ENCRYPTION_KEY.
 _LICENSE_SIGN_KEY = (os.getenv("LICENSE_SIGN_KEY", "") or _ENCRYPTION_KEY).encode()
 
-ENCRYPTED_FIELDS = {"rcon_password", "nitrado_api_token"}
+ENCRYPTED_FIELDS = {"nitrado_api_token"}
 
 
 def _encrypt(value: str) -> str:

@@ -29,10 +29,5 @@ NITRADO_API_TOKEN = os.getenv("NITRADO_API_TOKEN", "")
 NITRADO_USER_ID = os.getenv("NITRADO_USER_ID", "")
 NITRADO_SERVICE_ID = os.getenv("NITRADO_SERVICE_ID", "")
 
-# ---------- RCON defaults (used only when guild_settings doesn't override) ----------
-RCON_HOST = os.getenv("RCON_HOST", "")
-RCON_PORT = int(os.getenv("RCON_PORT", "25760"))
-RCON_PASSWORD = os.getenv("RCON_PASSWORD", "")
-
 # ---------- Bot Owner ----------
 BOT_OWNER_ID = int(os.getenv("BOT_OWNER_ID", "852876663617572884"))
