@@ -19,7 +19,7 @@
         <p class="text-xs text-gray-400 truncate">{{ embed.title or t('embeds_no_title') }}</p>
       </div>
     </div>
-    <p class="text-xs text-gray-500 line-clamp-2">{{ embed.description[:80] }}{% if embed.description and embed.description|length > 80 %}...{% endif %}</p>
+    <p class="text-xs text-gray-500 line-clamp-2">{{ (embed.description or '')[:80] }}{% if embed.description and embed.description|length > 80 %}...{% endif %}</p>
   </button>
   {% endfor %}
 </div>

@@ -434,11 +434,18 @@ def get_embed_templates(guild_id: int) -> list:
         conn.close()
 
 
+_EMBED_FIELDS = ["title", "description", "color", "image_url", "thumbnail_url", "footer_text", "author_name"]
+
+
 def get_all_embed_templates(guild_id: int) -> dict:
     templates = {}
     for key, default in DEFAULT_EMBEDS.items():
         custom = get_setting(guild_id, f"embed_{key}", {})
-        merged = {**default, **custom}
+        if not isinstance(custom, dict):
+            custom = {}
+        merged = {f: "" for f in _EMBED_FIELDS}
+        merged.update(default)
+        merged.update({k: (v or "") for k, v in custom.items() if k in _EMBED_FIELDS})
         templates[key] = merged
     return templates
 
