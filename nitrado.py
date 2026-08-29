@@ -193,33 +193,81 @@ class NitradoClient:
             return ""
         return self._get_binary(url, token)
 
-    def list_file_entries(self, directory: str) -> list[dict]:
-        """List file/dir entries (name, size, type, path) in a directory.
-        Tries path-format variants (leading/trailing slash) since Nitrado
-        entry paths are absolute server paths. Raises only if all variants fail."""
-        candidates = []
-        base = (directory or "").strip()
-        candidates.append(base)
-        if base and not base.startswith("/"):
-            candidates.append("/" + base)
-        if base and not base.endswith("/"):
-            candidates.append(base + "/")
-        if not base:
-            candidates = ["", "/"]
+    def base_roots(self) -> list[str]:
+        """Candidate server-root prefixes used to resolve relative paths."""
+        roots = [""]
+        info = {}
+        try:
+            info = self._request("GET", f"/services/{self.service_id}/gameservers")
+            if not isinstance(info, dict):
+                info = {}
+        except Exception:
+            info = {}
+        fs = info.get("folder_short") or info.get("folder") or info.get("game") or ""
+        uname = info.get("username") or ""
+        if fs:
+            roots.append(fs)
+            if uname:
+                roots.append("/games/{0}/{1}".format(uname, fs))
+            else:
+                roots.append("/games/xxx/" + fs)
+        if uname:
+            roots.append("/games/{0}/ftproot".format(uname))
+        if not fs:
+            for g in ("arkps4", "arkxb", "arkse", "arksa"):
+                roots.append(g)
+        return [r for r in roots if r]
 
-        last_entries = []
-        last_err = None
-        for cand in dict.fromkeys(candidates):
+    def list_file_entries(self, directory: str) -> list[dict]:
+        """List file/dir entries in a directory.
+
+        Nitrado entry paths are absolute server paths. The gameserver root may be
+        prefixed (e.g. '<folder_short>/' or '/games/<user>/ftproot/'), so when the
+        direct path resolves empty we retry each candidate base root. Raises only if
+        every variant fails hard."""
+        base = (directory or "").strip().lstrip("/")
+
+        def variant(dir_val):
             try:
-                last_entries = self._fs_list(cand)
-            except Exception as e:
-                last_err = e
-                continue
-            if last_entries:
-                return last_entries
-        if last_entries is None:
-            raise RuntimeError(str(last_err) if last_err else "unknown error")
-        return last_entries
+                return self._fs_list(dir_val)
+            except Exception:
+                return None
+
+        # Direct path with common slash forms
+        direct_forms = [base, "/" + base] if base else []
+        for f in direct_forms:
+            e = variant(f)
+            if e:
+                return e
+
+        # Relative path joined with each candidate base root; also list the root
+        # itself when no subpath was given.
+        roots = self.base_roots()
+        for root in roots:
+            forms = []
+            if base:
+                forms.append(root + "/" + base)
+                forms.append(root.rstrip("/") + "/" + base)
+            else:
+                forms.append(root)
+            for f in forms:
+                e = variant(f)
+                if e:
+                    return e
+
+        # Last resort: try each candidate root listing to surface any result.
+        last = None
+        for root in roots:
+            for f in ([root, root + "/"] if not base else [root + "/" + base]):
+                e = variant(f)
+                if e is not None:
+                    last = e
+                    break
+            if last:
+                break
+        if last is None:
+            raise RuntimeError("nitrado file list returned no readable directory")
+        return last
 
     def _fs_list(self, directory: str) -> list[dict]:
         url = f"{NITRADO_BASE_URL}{self.fs_base()}/list"
