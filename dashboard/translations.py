@@ -226,6 +226,7 @@ TRANSLATIONS = {
     "save_load_failed": {"ar": "تعذر تصفح المجلد:", "en": "Could not browse folder:"},
     "save_empty": {"ar": "أدخل مسار مجلد الحفظ واضغط تصفح لعرض الملفات.", "en": "Enter the save folder path and press Browse to list its files."},
     "save_empty_browsed": {"ar": "لا توجد ملفات في هذا المسار، أو المسار غير صحيح:", "en": "No files found at this path, or the path is invalid:"},
+    "save_open_dir": {"ar": "فتح", "en": "Open"},
 
     "lb_display": {"ar": "عرض لوحة الترتيب", "en": "Leaderboard Display"},
     "lb_display_desc": {"ar": "تفعيل أو تعطيل لوحة الترتيب المحدثة تلقائيًا", "en": "Enable or disable the auto-updating leaderboard"},

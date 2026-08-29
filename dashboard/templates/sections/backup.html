@@ -193,7 +193,7 @@
         {% for f in save_files %}
         <tr class="hover:bg-gray-800">
           <td class="px-5 py-3.5 text-gray-200 font-medium">
-            {% if f.is_dir %}<span class="text-amber-300">📁 {{ f.name }}</span>
+            {% if f.is_dir %}<a href="/dashboard/{{ guild_id }}/backup?savedir={{ f.path | urlencode }}" class="text-amber-300 hover:text-amber-200 transition-colors">📁 {{ f.name }}</a>
             {% else %}<span class="text-gray-200">{{ f.name }}</span>{% endif %}
           </td>
           <td class="px-5 py-3.5 text-gray-400">{{ f.size_s }}</td>
@@ -204,7 +204,10 @@
               {{ t('backup_download') }}
             </a>
             {% else %}
-            <span class="text-xs text-gray-600">—</span>
+            <a href="/dashboard/{{ guild_id }}/backup?savedir={{ f.path | urlencode }}"
+               class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-amber-200 text-xs font-medium rounded-lg transition-colors">
+              {{ t('save_open_dir') }}
+            </a>
             {% endif %}
           </td>
         </tr>
