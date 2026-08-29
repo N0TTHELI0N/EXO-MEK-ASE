@@ -5,66 +5,61 @@
   <p class="text-gray-400 mt-1">{{ t('backup_desc') }}</p>
 </div>
 
-<!-- Actions -->
+{% if notice %}
+<div class="mb-6 px-5 py-4 rounded-lg border {{ 'bg-green-500/10 border-green-500/40 text-green-300' if notice in ['backup_created','backup_deleted','cloud_created','cloud_restored','cloud_deleted'] else 'bg-red-500/10 border-red-500/40 text-red-300' }}">
+  {% if notice == 'owner' %}{{ t('wipe_owner_only') }}
+  {% elif notice == 'backup_created' %}{{ t('backup_created_ok') }}
+  {% elif notice == 'backup_deleted' %}{{ t('backup_deleted_ok') }}
+  {% elif notice == 'cloud_created' %}{{ t('cloud_created_ok') }}
+  {% elif notice == 'cloud_restored' %}{{ t('cloud_restored_ok') }}
+  {% elif notice == 'cloud_deleted' %}{{ t('cloud_deleted_ok') }}
+  {% else %}{{ t('backup_failed') }}{% endif %}
+</div>
+{% endif %}
+
+<!-- Local file backups -->
 <div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6 mb-6">
-  <div class="flex flex-col sm:flex-row gap-4">
-    <form method="POST" class="flex-1">
-      <input type="hidden" name="action" value="create">
+  <div class="flex flex-col sm:flex-row sm:items-center gap-4 mb-4">
+    <div class="flex-1">
+      <h3 class="text-lg font-bold text-white flex items-center gap-2">
+        <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        {{ t('backup_local_title') }}
+      </h3>
+      <p class="text-sm text-gray-400 mt-1">{{ t('backup_local_desc') }}</p>
+    </div>
+    <form method="POST">
+      <input type="hidden" name="action" value="local_create">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white font-medium rounded-lg transition-colors">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
         {{ t('backup_create') }}
       </button>
     </form>
-    <form method="POST" enctype="multipart/form-data" class="flex-1">
-      <input type="hidden" name="action" value="upload">
-      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-      <div class="flex items-center gap-3">
-        <input type="file" name="backup_file" accept=".zip,.tar.gz,.bak"
-               class="flex-1 text-sm text-gray-400 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-gray-700 file:text-gray-200 hover:file:bg-gray-600 file:cursor-pointer file:transition-colors">
-        <button type="submit" class="px-4 py-2.5 bg-gray-700 hover:bg-gray-600 text-gray-200 font-medium rounded-lg transition-colors whitespace-nowrap">
-          {{ t('backup_upload') }}
-        </button>
-      </div>
-    </form>
   </div>
-</div>
 
-<!-- Backups Table -->
-<div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl shadow-lg overflow-hidden">
-  <div class="overflow-x-auto">
+  {% if local_backups %}
+  <div class="overflow-x-auto rounded-xl border border-gray-700/50">
     <table class="w-full text-sm text-left">
       <thead class="text-xs text-gray-400 uppercase bg-gray-800 border-b border-gray-700">
         <tr>
-          <th class="px-6 py-3">{{ t('backup_name') }}</th>
-          <th class="px-6 py-3">{{ t('backup_date') }}</th>
-          <th class="px-6 py-3">{{ t('backup_created_by') }}</th>
-          <th class="px-6 py-3 text-right">{{ t('backup_actions') }}</th>
+          <th class="px-5 py-3">{{ t('backup_name') }}</th>
+          <th class="px-5 py-3">{{ t('backup_date') }}</th>
+          <th class="px-5 py-3 text-right">{{ t('backup_actions') }}</th>
         </tr>
       </thead>
       <tbody class="divide-y divide-gray-700">
-        {% for backup in backups %}
+        {% for backup in local_backups %}
         <tr class="hover:bg-gray-800">
-          <td class="px-6 py-4 text-gray-200 font-medium">{{ backup.name }}</td>
-          <td class="px-6 py-4 text-gray-400">{{ backup.date }}</td>
-          <td class="px-6 py-4 text-gray-400">{{ backup.created_by }}</td>
-          <td class="px-6 py-4 text-right">
+          <td class="px-5 py-3.5 text-gray-200 font-medium">{{ backup.name }}</td>
+          <td class="px-5 py-3.5 text-gray-400">{{ backup.date }}</td>
+          <td class="px-5 py-3.5 text-right">
             <div class="flex items-center justify-end gap-2">
-              <a href="/dashboard/{{ guild_id }}/backup/download/{{ backup.id }}"
+              <a href="/api/guild/{{ guild_id }}/backup/download/{{ backup.id }}"
                  class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-200 text-xs font-medium rounded-lg transition-colors">
                 {{ t('backup_download') }}
               </a>
               <form method="POST" class="inline">
-                <input type="hidden" name="action" value="restore">
-                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="backup_id" value="{{ backup.id }}">
-                <button type="submit" onclick="return confirm('{{ t('backup_restore_confirm') }}')"
-                        class="px-3 py-1.5 bg-yellow-600/20 hover:bg-yellow-600/40 text-yellow-300 text-xs font-medium rounded-lg transition-colors">
-                  {{ t('backup_restore') }}
-                </button>
-              </form>
-              <form method="POST" class="inline">
-                <input type="hidden" name="action" value="delete">
+                <input type="hidden" name="action" value="local_delete">
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="backup_id" value="{{ backup.id }}">
                 <button type="submit" onclick="return confirm('{{ t('backup_delete_confirm') }}')"
@@ -76,13 +71,133 @@
           </td>
         </tr>
         {% endfor %}
-        {% if not backups %}
-        <tr>
-          <td colspan="4" class="px-6 py-12 text-center text-gray-500">{{ t('backup_none') }}</td>
-        </tr>
-        {% endif %}
       </tbody>
     </table>
   </div>
+  {% else %}
+  <p class="text-sm text-gray-500">{{ t('backup_none') }}</p>
+  {% endif %}
 </div>
+
+<!-- Nitrado cloud backups -->
+<div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6">
+  <div class="flex flex-col sm:flex-row sm:items-center gap-4 mb-4">
+    <div class="flex-1">
+      <h3 class="text-lg font-bold text-white flex items-center gap-2">
+        <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/></svg>
+        {{ t('backup_cloud_title') }}
+      </h3>
+      <p class="text-sm text-gray-400 mt-1">{{ t('backup_cloud_desc') }}</p>
+    </div>
+    <div class="flex items-center gap-3">
+      {% if cloud_configured %}
+      <span class="inline-flex items-center gap-1.5 text-xs font-medium text-green-300 bg-green-500/10 border border-green-500/30 rounded-lg px-3 py-1.5">{{ t('tribe_forum_configured') }}</span>
+      {% else %}
+      <span class="inline-flex items-center gap-1.5 text-xs font-medium text-yellow-300 bg-yellow-500/10 border border-yellow-500/30 rounded-lg px-3 py-1.5">{{ t('backup_cloud_not_conf') }}</span>
+      {% endif %}
+      {% if is_owner %}
+      <form method="POST">
+        <input type="hidden" name="action" value="cloud_create">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white font-medium rounded-lg transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          {{ t('backup_create') }}
+        </button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if not cloud_configured %}
+  <p class="text-sm text-gray-500">{{ t('backup_cloud_not_configured') }}</p>
+  {% elif cloud_error %}
+  <p class="text-sm text-red-400">{{ t('backup_failed') }} <code class="text-xs">{{ cloud_error }}</code></p>
+  {% elif cloud_backups %}
+  <div class="overflow-x-auto rounded-xl border border-gray-700/50">
+    <table class="w-full text-sm text-left">
+      <thead class="text-xs text-gray-400 uppercase bg-gray-800 border-b border-gray-700">
+        <tr>
+          <th class="px-5 py-3">{{ t('backup_name') }}</th>
+          <th class="px-5 py-3">{{ t('backup_date') }}</th>
+          <th class="px-5 py-3">{{ t('backup_cloud_size') }}</th>
+          <th class="px-5 py-3 text-right">{{ t('backup_actions') }}</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-700">
+        {% for backup in cloud_backups %}
+        <tr class="hover:bg-gray-800">
+          <td class="px-5 py-3.5 text-gray-200 font-medium">{{ backup.name }}</td>
+          <td class="px-5 py-3.5 text-gray-400">{{ backup.date }}</td>
+          <td class="px-5 py-3.5 text-gray-400">{{ backup.size_s }}</td>
+          <td class="px-5 py-3.5 text-right">
+            {% if is_owner %}
+            <div class="flex items-center justify-end gap-2">
+              <button type="button" onclick="openWipe('cloud_restore', '{{ backup.name }}')"
+                      class="px-3 py-1.5 bg-yellow-600/20 hover:bg-yellow-600/40 text-yellow-300 text-xs font-medium rounded-lg transition-colors">
+                {{ t('backup_restore') }}
+              </button>
+              <button type="button" onclick="openWipe('cloud_delete', '{{ backup.name }}')"
+                      class="px-3 py-1.5 bg-red-600/20 hover:bg-red-600/40 text-red-300 text-xs font-medium rounded-lg transition-colors">
+                {{ t('backup_delete') }}
+              </button>
+            </div>
+            {% else %}
+            <span class="text-xs text-gray-500">{{ t('backup_owner_only') }}</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-sm text-gray-500">{{ t('backup_none') }}</p>
+  {% endif %}
+</div>
+
+<!-- Wipe confirmation modal -->
+{% if is_owner %}
+<div id="wipe-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/60 p-4">
+  <div class="bg-gray-800 border border-red-500/40 rounded-2xl max-w-md w-full p-6">
+    <h3 class="text-lg font-bold text-white mb-2">{{ t('backup_confirm_title') }}</h3>
+    <p class="text-sm text-gray-400 mb-4">{{ t('backup_confirm_desc') }}</p>
+    <form method="POST" id="wipe-form">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" id="wipe-action" value="">
+      <input type="hidden" name="backup_name" id="wipe-bname" value="">
+      <input type="text" id="wipe-input" autocomplete="off" placeholder="{{ t('wipe_type') }}"
+             class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none mb-4">
+      <div class="flex gap-3 justify-end">
+        <button type="button" onclick="closeWipe()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg">{{ t('server_cancel') }}</button>
+        <button type="submit" id="wipe-submit" disabled class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg transition-opacity opacity-50 cursor-not-allowed">{{ t('wipe_confirm_btn') }}</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openWipe(action, name) {
+  document.getElementById('wipe-action').value = action;
+  document.getElementById('wipe-bname').value = name || '';
+  document.getElementById('wipe-input').value = '';
+  document.getElementById('wipe-submit').disabled = true;
+  document.getElementById('wipe-modal').classList.remove('hidden');
+  document.getElementById('wipe-modal').classList.add('flex');
+  document.getElementById('wipe-input').focus();
+}
+function closeWipe() {
+  document.getElementById('wipe-modal').classList.add('hidden');
+  document.getElementById('wipe-modal').classList.remove('flex');
+}
+document.addEventListener('input', function(e) {
+  if (e.target && e.target.id === 'wipe-input') {
+    var ok = e.target.value.trim().toUpperCase() === 'WIPE';
+    var btn = document.getElementById('wipe-submit');
+    btn.disabled = !ok;
+    btn.classList.toggle('opacity-50', !ok);
+    btn.classList.toggle('cursor-not-allowed', !ok);
+  }
+});
+</script>
+{% endif %}
 {% endblock %}

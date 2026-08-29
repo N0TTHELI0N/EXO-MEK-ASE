@@ -1,6 +1,10 @@
 import os
+import io
 import json
 import secrets
+import shutil
+import tempfile
+import zipfile
 import requests
 from uuid import uuid4
 from datetime import datetime, timedelta, timezone
@@ -912,25 +916,223 @@ def section_embeds(guild_id):
 @login_required
 @guild_admin_required
 @validate_csrf
-def section_backup(guild_id):
-    if request.method == "POST":
-        return redirect(url_for("section_backup", guild_id=guild_id))
+def _create_local_backup(guild_id, created_by):
+    """Dump the bot's public DB tables to a zip under ./backups and record it."""
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    name = f"local_backup_{guild_id}_{ts}"
+    base = os.path.abspath("./backups")
+    os.makedirs(base, exist_ok=True)
+    out_path = os.path.join(base, f"{name}.zip")
+
+    conn = guild_settings.get_conn()
+    tmpdir = tempfile.mkdtemp()
+    tables = []
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name"
+            )
+            tables = [r[0] for r in cur.fetchall()]
+        for tbl in tables:
+            fpath = os.path.join(tmpdir, f"{tbl}.csv")
+            with open(fpath, "w", newline="", encoding="utf-8") as f, conn.cursor() as cur:
+                cur.copy_expert(f'COPY public."{tbl}" TO STDOUT WITH (FORMAT csv, HEADER)', f)
+        with zipfile.ZipFile(out_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            for tbl in tables:
+                zf.write(os.path.join(tmpdir, f"{tbl}.csv"), f"db/{tbl}.csv")
+            zf.writestr(
+                "manifest.json",
+                json.dumps(
+                    {
+                        "guild_id": guild_id,
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                        "table_count": len(tables),
+                    },
+                    ensure_ascii=False,
+                ),
+            )
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
     conn = guild_settings.get_conn()
     try:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT id, name, created_at, created_by FROM backup_records WHERE guild_id = %s ORDER BY created_at DESC",
+                "INSERT INTO backup_records (guild_id, name, created_by, file_path) VALUES (%s, %s, %s, %s)",
+                (guild_id, name, created_by, out_path),
+            )
+        conn.commit()
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+    return name
+
+
+def _select_backup_record(guild_id, backup_id):
+    conn = guild_settings.get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, name, file_path FROM backup_records WHERE guild_id = %s AND id = %s",
+                (guild_id, backup_id),
+            )
+            row = cur.fetchone()
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+    return row
+
+
+def _delete_backup_record(guild_id, backup_id):
+    conn = guild_settings.get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT file_path FROM backup_records WHERE guild_id = %s AND id = %s",
+                (guild_id, backup_id),
+            )
+            row = cur.fetchone()
+            if row:
+                cur.execute(
+                    "DELETE FROM backup_records WHERE guild_id = %s AND id = %s",
+                    (guild_id, backup_id),
+                )
+        conn.commit()
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+    if row and row[0]:
+        try:
+            if os.path.isfile(row[0]):
+                os.remove(row[0])
+        except Exception:
+            pass
+
+
+def section_backup(guild_id):
+    user = get_current_user() or {}
+    is_owner = int(user.get("id", 0)) == BOT_OWNER_ID
+
+    if request.method == "POST":
+        action = request.form.get("action")
+        notice = "wiped"
+        if action == "local_create":
+            try:
+                _create_local_backup(guild_id, user.get("id"))
+                notice = "backup_created"
+            except Exception as e:
+                notice = "backup_failed"
+        elif action == "local_delete":
+            _delete_backup_record(guild_id, request.form.get("backup_id", type=int))
+            notice = "backup_deleted"
+        elif action == "cloud_create":
+            if not is_owner:
+                return redirect(url_for("section_backup", guild_id=guild_id) + "?notice=owner")
+            client = nitrado_client_for(guild_id)
+            if client and client.backup_create("game"):
+                notice = "cloud_created"
+            else:
+                notice = "cloud_failed"
+        elif action == "cloud_restore":
+            if not is_owner:
+                return redirect(url_for("section_backup", guild_id=guild_id) + "?notice=owner")
+            client = nitrado_client_for(guild_id)
+            name = request.form.get("backup_name")
+            if client and name and client.backup_restore(name):
+                notice = "cloud_restored"
+            else:
+                notice = "cloud_failed"
+        elif action == "cloud_delete":
+            if not is_owner:
+                return redirect(url_for("section_backup", guild_id=guild_id) + "?notice=owner")
+            client = nitrado_client_for(guild_id)
+            name = request.form.get("backup_name")
+            if client and name:
+                client.backup_delete(name)
+                notice = "cloud_deleted"
+            else:
+                notice = "cloud_failed"
+        return redirect(url_for("section_backup", guild_id=guild_id) + "?notice=" + notice)
+
+    conn = guild_settings.get_conn()
+    local = []
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, name, created_at, created_by, file_path FROM backup_records WHERE guild_id = %s ORDER BY created_at DESC",
                 (guild_id,),
             )
-            backups = cur.fetchall()
+            for r in cur.fetchall():
+                local.append(
+                    {
+                        "id": r[0],
+                        "name": r[1],
+                        "created_at": r[2],
+                        "created_by": r[3],
+                        "file_path": r[4],
+                        "date": r[2].strftime("%Y-%m-%d %H:%M") if r[2] else "",
+                    }
+                )
     finally:
-        conn.close()
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+    client = nitrado_client_for(guild_id)
+    cloud = []
+    cloud_configured = client is not None
+    cloud_error = None
+    if client:
+        try:
+            for b in client.backup_list() or []:
+                if isinstance(b, dict):
+                    raw_size = b.get("size") or b.get("size_kb") or 0
+                    try:
+                        raw_size = int(raw_size)
+                    except Exception:
+                        raw_size = 0
+                    if raw_size and raw_size < 1000:
+                        size_s = f"{raw_size} KB"
+                    elif raw_size:
+                        size_s = f"{raw_size/1024:.1f} MB"
+                    else:
+                        size_s = ""
+                    cloud.append(
+                        {
+                            "name": b.get("name") or b.get("backup") or b.get("id") or str(b),
+                            "created_at": b.get("created_at") or b.get("date") or b.get("timestamp") or None,
+                            "date": str(b.get("created_at") or b.get("date") or b.get("timestamp") or ""),
+                            "size": raw_size,
+                            "size_s": size_s,
+                        }
+                    )
+                else:
+                    cloud.append({"name": str(b), "created_at": None, "date": "", "size": 0, "size_s": ""})
+        except Exception as e:
+            cloud_error = str(e)
+
     return render_template(
         "sections/backup.html",
-        user=get_current_user(),
+        user=user,
         guild_id=guild_id,
         active_section="backup",
-        backups=backups,
+        local_backups=local,
+        cloud_backups=cloud,
+        cloud_configured=cloud_configured,
+        cloud_error=cloud_error,
+        is_owner=is_owner,
+        notice=request.args.get("notice", ""),
     )
 
 
