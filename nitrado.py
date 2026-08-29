@@ -6,7 +6,7 @@ import requests
 import guild_settings
 
 
-NITRADO_BASE_URL = "https://api.nitrado.com"
+NITRADO_BASE_URL = "https://api.nitrado.net"
 
 
 class NitradoClient:
@@ -67,11 +67,11 @@ class NitradoClient:
 
     def get_server_status(self) -> dict:
         """Get current server status (online/offline, player count, etc.)"""
-        return self._request("GET", f"/services/{self.service_id}/gameserver")
+        return self._request("GET", f"/services/{self.service_id}/gameservers")
 
     def get_player_list(self) -> list[dict]:
         """Get list of currently connected players."""
-        data = self._request("GET", f"/services/{self.service_id}/gameserver")
+        data = self._request("GET", f"/services/{self.service_id}/gameservers/games/players")
         players = data.get("players", [])
         return [
             {
@@ -84,31 +84,31 @@ class NitradoClient:
 
     def get_logs(self, lines: int = 200) -> str:
         """Get the last N lines of the server log."""
-        data = self._request("GET", f"/services/{self.service_id}/gameserver/logs")
-        log_content = data.get("content", "")
+        data = self._request("GET", f"/services/{self.service_id}/gameservers/games/arkse/latest_log")
+        log_content = data.get("content", "") if isinstance(data, dict) else ""
         log_lines = log_content.split("\n")
         return "\n".join(log_lines[-lines:])
 
     def restart_server(self) -> bool:
         """Restart the ARK server."""
-        result = self._request("POST", f"/services/{self.service_id}/gameserver/restart")
+        result = self._request("POST", f"/services/{self.service_id}/gameservers/restart")
         return bool(result)
 
     def stop_server(self) -> bool:
         """Stop the ARK server."""
-        result = self._request("POST", f"/services/{self.service_id}/gameserver/stop")
+        result = self._request("POST", f"/services/{self.service_id}/gameservers/stop")
         return bool(result)
 
     def start_server(self) -> bool:
         """Start the ARK server."""
-        result = self._request("POST", f"/services/{self.service_id}/gameserver/start")
+        result = self._request("POST", f"/services/{self.service_id}/gameservers/games/start")
         return bool(result)
 
     def send_command(self, command: str) -> str:
         """Execute a server command via the Nitrado API (replaces direct RCON)."""
         data = self._request(
             "POST",
-            f"/services/{self.service_id}/gameserver/command",
+            f"/services/{self.service_id}/gameservers/app_server/command",
             json={"command": command},
         )
         if isinstance(data, dict):
@@ -121,7 +121,7 @@ class NitradoClient:
         """Update server settings (game.ini, gameusersettings.ini via Nitrado)."""
         data = self._request(
             "POST",
-            f"/services/{self.service_id}/gameserver/settings",
+            f"/services/{self.service_id}/gameservers/settings",
             json=settings,
         )
         return bool(data)
@@ -201,7 +201,7 @@ class NitradoClient:
 
     def backup_list(self) -> list[dict]:
         """List available cloud backups."""
-        data = self._request("GET", f"/services/{self.service_id}/backups")
+        data = self._request("GET", f"/services/{self.service_id}/gameservers/backups")
         if isinstance(data, dict):
             backups = data.get("backups", [])
         else:
@@ -212,7 +212,7 @@ class NitradoClient:
         """Create a cloud backup ('game' or another supported type)."""
         result = self._request(
             "POST",
-            f"/services/{self.service_id}/backups",
+            f"/services/{self.service_id}/gameservers/backups",
             json={"type": backup_type},
         )
         status = result.get("status") if isinstance(result, dict) else None
@@ -222,7 +222,7 @@ class NitradoClient:
         """Restore a cloud backup to the server."""
         result = self._request(
             "POST",
-            f"/services/{self.service_id}/backups/extract",
+            f"/services/{self.service_id}/gameservers/backups/extract",
             json={"name": name, "paths": paths or []},
         )
         return bool(result)
@@ -231,7 +231,7 @@ class NitradoClient:
         """Delete a cloud backup."""
         result = self._request(
             "DELETE",
-            f"/services/{self.service_id}/backups",
+            f"/services/{self.service_id}/gameservers/backups",
             params={"prefix": name},
         )
         return True

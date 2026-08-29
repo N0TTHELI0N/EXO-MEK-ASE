@@ -188,6 +188,8 @@ TRANSLATIONS = {
     "server_uptime": {"ar": "وقت التشغيل", "en": "Uptime"},
     "server_restart": {"ar": "إعادة تشغيل", "en": "Restart"},
     "server_stop": {"ar": "إيقاف", "en": "Stop"},
+    "server_start": {"ar": "تشغيل", "en": "Start"},
+    "server_start_confirm": {"ar": "تشغيل السيرفر؟", "en": "Start the server?"},
     "server_restart_confirm": {"ar": "إعادة تشغيل السيرفر؟", "en": "Restart the server?"},
     "server_stop_confirm": {"ar": "إيقاف السيرفر؟ سيتم فصل جميع اللاعبين.", "en": "Stop the server? This will disconnect all players."},
     "server_connected": {"ar": "اللاعبون المتصلون", "en": "Connected Players"},

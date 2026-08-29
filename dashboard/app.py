@@ -973,6 +973,25 @@ def section_server_control(guild_id):
             if results:
                 notice = " | ".join(results)
                 notice_type = "ok" if all("Applied" in r for r in results) else "error"
+        elif action in ("start", "stop", "restart"):
+            try:
+                client = nitrado.get_client(guild_id)
+                if not client:
+                    notice = "Nitrado not configured"
+                elif action == "start":
+                    client.start_server()
+                    notice = "Start requested"
+                    notice_type = "ok"
+                elif action == "stop":
+                    client.stop_server()
+                    notice = "Stop requested"
+                    notice_type = "ok"
+                else:
+                    client.restart_server()
+                    notice = "Restart requested"
+                    notice_type = "ok"
+            except Exception as e:
+                notice = "Failed: " + type(e).__name__
         return redirect(url_for("section_server_control", guild_id=guild_id, notice=notice, notice_type=notice_type))
     notice = request.args.get("notice", "")
     notice_type = request.args.get("notice_type", "ok")
@@ -985,11 +1004,16 @@ def section_server_control(guild_id):
     if isinstance(raw, dict):
         info = raw.get("data", raw)
         if isinstance(info, dict):
+            source = info
             nested = info.get("gameserver")
             if isinstance(nested, dict):
-                merged = dict(info)
-                merged.update(nested)
-                info = merged
+                source = dict(info)
+                source.update(nested)
+                info = source
+            q = info.get("query") or info.get("query_info")
+            if isinstance(q, dict):
+                info = dict(info)
+                info.update({k: v for k, v in q.items() if v not in (None, "", {})})
 
     def _pick(*keys, default=""):
         for k in keys:
@@ -1006,26 +1030,25 @@ def section_server_control(guild_id):
     except Exception:
         players_list = []
 
-    server_name = str(_pick("server_name", "name", "display_name", "hostname", "session_name") or "")
-    if not server_name:
-        try:
-            server_name = nitrado.server_name(guild_id)
-        except Exception:
-            server_name = ""
     server_status = {
-        "online": bool(str(info.get("status", "")).lower() in ("online", "running") or info.get("is_running")),
+        "online": bool(str(info.get("status", "")).lower() in ("online", "running", "started") or info.get("is_running")),
         "map": _pick("map", "map_name", "current_map", default="Unknown"),
-        "players": _pick("player_count", "players_current", "players", default=len(players_list)),
-        "max_players": _pick("slots", "max_players", "maxplayers", default=70),
-        "ping": _pick("ping", default="-"),
+        "players": _pick("player_count", "players_current", "player_current", "players", default=len(players_list)),
+        "max_players": _pick("slots", "max_players", "maxplayers", "player_max", default=70),
+        "ping": _pick("ping", "query_ping", default="-"),
         "uptime": _pick("uptime", default="-"),
-        "server_name": server_name,
+        "server_name": _pick("server_name", "name", "display_name", "hostname", "session_name", default=""),
         "day_night_cycle": _pick("day_night_cycle", default=1),
         "taming_speed": _pick("taming_speed", default=1),
         "harvest_amount": _pick("harvest_amount", default=1),
         "xp_multiplier": _pick("xp_multiplier", default=1),
         "players_list": players_list,
     }
+    if not server_status["server_name"]:
+        try:
+            server_status["server_name"] = nitrado.server_name(guild_id)
+        except Exception:
+            pass
     return render_template(
         "sections/server_control.html",
         user=get_current_user(),

@@ -52,6 +52,15 @@
   <!-- Action Buttons -->
   <div class="flex gap-3 mt-6">
     <form method="POST" class="inline">
+      <input type="hidden" name="action" value="start">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" onclick="return confirm('{{ t('server_start_confirm') }}')"
+              class="px-5 py-2.5 bg-green-600/20 hover:bg-green-600/40 text-green-300 font-medium rounded-lg transition-colors inline-flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12l-8 5V7l8 5z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        {{ t('server_start') }}
+      </button>
+    </form>
+    <form method="POST" class="inline">
       <input type="hidden" name="action" value="restart">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <button type="submit" onclick="return confirm('{{ t('server_restart_confirm') }}')"
