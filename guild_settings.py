@@ -209,6 +209,18 @@ def init_db():
             cur.execute("ALTER TABLE bot_logs ADD COLUMN IF NOT EXISTS posted_forum BOOLEAN DEFAULT FALSE")
             cur.execute("ALTER TABLE bot_logs ADD COLUMN IF NOT EXISTS posted_shop_forum BOOLEAN DEFAULT FALSE")
             cur.execute("""
+                CREATE TABLE IF NOT EXISTS player_whitelist (
+                    id          SERIAL PRIMARY KEY,
+                    guild_id    BIGINT NOT NULL,
+                    player_name TEXT NOT NULL,
+                    player_id   TEXT,
+                    reason      TEXT,
+                    issued_by   BIGINT NOT NULL,
+                    created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    expires_at  TIMESTAMP WITH TIME ZONE
+                )
+            """)
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS pending_actions (
                     id          SERIAL PRIMARY KEY,
                     guild_id    BIGINT NOT NULL,
@@ -844,6 +856,49 @@ def get_evidence(punishment_id: int):
                 (punishment_id,),
             )
             return cur.fetchall()
+    finally:
+        conn.close()
+
+
+# ============================================================
+#  PLAYER WHITELIST (dashboard)
+# ============================================================
+
+def add_whitelist(guild_id: int, player_name: str, player_id: str = "", reason: str = "", issued_by: int = 0, expires_at=None):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO player_whitelist (guild_id, player_name, player_id, reason, issued_by, expires_at)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING id
+            """, (guild_id, player_name, player_id or None, reason or None, issued_by, expires_at))
+            return cur.fetchone()[0]
+    finally:
+        conn.close()
+
+
+def get_whitelists(guild_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, player_name, player_id, reason, issued_by, created_at, expires_at
+                FROM player_whitelist
+                WHERE guild_id = %s
+                ORDER BY created_at DESC
+            """, (guild_id,))
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def remove_whitelist(entry_id: int, guild_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM player_whitelist WHERE id = %s AND guild_id = %s", (entry_id, guild_id))
+            return cur.rowcount > 0
     finally:
         conn.close()
 

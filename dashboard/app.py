@@ -2,7 +2,9 @@ import os
 import json
 import secrets
 import requests
-from flask import Flask, redirect, request, session, render_template, jsonify, url_for, send_file
+from uuid import uuid4
+from datetime import datetime, timedelta, timezone
+from flask import Flask, redirect, request, session, render_template, jsonify, url_for, send_file, send_from_directory
 from functools import wraps
 import sys
 sys.path.insert(0, os.path.dirname(__file__))
@@ -956,6 +958,23 @@ def section_server_control(guild_id):
         action = request.form.get("action", "")
         notice = ""
         notice_type = "error"
+        user_id = int((get_current_user() or {}).get("id", 0) or 0)
+
+        def _save_evidence_image(punishment_id, fimg):
+            if not fimg or not fimg.filename:
+                return
+            try:
+                safe_ext = os.path.splitext(fimg.filename)[1].lower()[:10]
+                if safe_ext not in (".png", ".jpg", ".jpeg", ".gif", ".webp"):
+                    safe_ext = ".png"
+                fname = f"{uuid4().hex}{safe_ext}"
+                ev_dir = os.path.join("evidence", str(guild_id), str(punishment_id))
+                os.makedirs(ev_dir, exist_ok=True)
+                fimg.save(os.path.join(ev_dir, fname))
+                guild_settings.add_evidence(punishment_id, guild_id, fname, fimg.filename, 0, user_id)
+            except Exception:
+                pass
+
         if action == "change_passwords":
             admin_pw = request.form.get("password_admin", "")
             server_pw = request.form.get("password_server", "")
@@ -992,6 +1011,58 @@ def section_server_control(guild_id):
                     notice_type = "ok"
             except Exception as e:
                 notice = "Failed: " + type(e).__name__
+        elif action == "ban_player":
+            pname = request.form.get("player_name", "").strip()
+            reason = request.form.get("reason", "").strip() or "No reason"
+            duration_h = request.form.get("duration_hours", "").strip()
+            fimg = request.files.get("evidence_image")
+            if pname:
+                rmsg = nitrado.ban_player(guild_id, pname) if nitrado.get_client(guild_id) else "Nitrado not configured"
+                expires = None
+                ptype = "ban"
+                if duration_h:
+                    try:
+                        hours = float(duration_h)
+                        if hours > 0:
+                            expires = datetime.now(timezone.utc) + timedelta(hours=hours)
+                            ptype = "tempban"
+                    except Exception:
+                        expires = None
+                pid = guild_settings.add_punishment(guild_id, pname, ptype, reason, user_id, player_id=request.form.get("player_id", ""))
+                _save_evidence_image(pid, fimg)
+                notice = f"{pname}: {rmsg}"
+                notice_type = "ok" if "Banned" in rmsg else "error"
+        elif action == "unban_player":
+            pname = request.form.get("player_name", "").strip()
+            if pname:
+                rmsg = nitrado.unban_player(guild_id, pname) if nitrado.get_client(guild_id) else "Nitrado not configured"
+                notice = f"{pname}: {rmsg}"
+                notice_type = "ok" if "Unbanned" in rmsg else "error"
+        elif action == "whitelist_player":
+            pname = request.form.get("player_name", "").strip()
+            reason = request.form.get("reason", "").strip()
+            duration_h = request.form.get("duration_hours", "").strip()
+            if pname:
+                rmsg = nitrado.whitelist_player(guild_id, pname) if nitrado.get_client(guild_id) else "Nitrado not configured"
+                expires = None
+                if duration_h:
+                    try:
+                        hours = float(duration_h)
+                        if hours > 0:
+                            expires = datetime.now(timezone.utc) + timedelta(hours=hours)
+                    except Exception:
+                        expires = None
+                guild_settings.add_whitelist(guild_id, pname, request.form.get("player_id", ""), reason, user_id, expires)
+                notice = f"{pname}: {rmsg}"
+                notice_type = "ok" if "Whitelisted" in rmsg else "error"
+        elif action == "remove_whitelist":
+            entry_id = request.form.get("entry_id", "")
+            try:
+                if guild_settings.remove_whitelist(int(entry_id), guild_id):
+                    notice = "Whitelist entry removed"
+                    notice_type = "ok"
+            except Exception:
+                notice = "Failed to remove entry"
         return redirect(url_for("section_server_control", guild_id=guild_id, notice=notice, notice_type=notice_type))
     notice = request.args.get("notice", "")
     notice_type = request.args.get("notice_type", "ok")
@@ -1049,15 +1120,67 @@ def section_server_control(guild_id):
             server_status["server_name"] = nitrado.server_name(guild_id)
         except Exception:
             pass
+
+    banned_players = []
+    try:
+        for row in guild_settings.get_punishments(guild_id, limit=500, offset=0):
+            ptype, pname, preason = row[4], row[1], row[5]
+            if ptype not in ("ban", "tempban"):
+                continue
+            pid = row[0]
+            evidence = []
+            for ev in guild_settings.get_evidence(pid):
+                evidence.append({"filename": ev[1], "original_name": ev[2]})
+            banned_players.append({
+                "punishment_id": pid,
+                "player_name": pname,
+                "player_id": row[2] or "",
+                "type": ptype,
+                "reason": preason,
+                "issued_at": row[8],
+                "expires_at": row[9],
+                "executed": row[10],
+                "evidence": evidence,
+            })
+    except Exception:
+        banned_players = []
+
+    whitelisted_players = []
+    try:
+        for row in guild_settings.get_whitelists(guild_id):
+            whitelisted_players.append({
+                "id": row[0],
+                "player_name": row[1],
+                "player_id": row[2] or "",
+                "reason": row[3] or "",
+                "created_at": row[5],
+                "expires_at": row[6],
+            })
+    except Exception:
+        whitelisted_players = []
+
     return render_template(
         "sections/server_control.html",
         user=get_current_user(),
         guild_id=guild_id,
         active_section="server-control",
         server_status=server_status,
+        banned_players=banned_players,
+        whitelisted_players=whitelisted_players,
         notice=notice,
         notice_type=notice_type,
     )
+
+
+@app.route("/dashboard/<int:guild_id>/evidence/<path:filename>")
+@login_required
+@guild_admin_required
+def serve_evidence(guild_id, filename):
+    base = os.path.abspath(os.path.join("evidence", str(guild_id)))
+    fpath = os.path.abspath(os.path.join(base, filename))
+    if not fpath.startswith(base) or not os.path.isfile(fpath):
+        return "Not found", 404
+    return send_file(fpath)
 
 
 @app.route("/dashboard/<int:guild_id>/logs", methods=["GET", "POST"])

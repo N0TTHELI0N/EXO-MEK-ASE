@@ -325,3 +325,43 @@ def server_name(guild_id: int) -> str:
     except Exception:
         return ""
 
+
+def ban_player(guild_id: int, name: str) -> str:
+    """Ban a player by name via ARK RCON. Returns a status message."""
+    client = get_client(guild_id)
+    if not client:
+        return "Nitrado not configured"
+    try:
+        client.send_command(f"Ban {name}")
+        return "Banned"
+    except Exception as e:
+        return "Failed: " + type(e).__name__
+
+
+def unban_player(guild_id: int, name: str) -> str:
+    """Unban a player by name via ARK RCON. Returns a status message."""
+    client = get_client(guild_id)
+    if not client:
+        return "Nitrado not configured"
+    try:
+        client.send_command(f"Unban {name}")
+        return "Unbanned"
+    except Exception as e:
+        return "Failed: " + type(e).__name__
+
+
+def whitelist_player(guild_id: int, name: str) -> str:
+    """Add a player to the Nitrado whitelist. Best-effort; returns a status message."""
+    client = get_client(guild_id)
+    if not client:
+        return "Nitrado not configured"
+    try:
+        data = client._request(
+            "POST",
+            f"/services/{client.service_id}/gameservers/games/whitelist",
+            json={"add": name},
+        )
+        return "Whitelisted" if data else "Failed"
+    except Exception as e:
+        return "Failed: " + type(e).__name__
+
