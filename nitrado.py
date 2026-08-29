@@ -194,13 +194,16 @@ class NitradoClient:
         return self._get_binary(url, token)
 
     def list_file_entries(self, directory: str) -> list[dict]:
-        """List file/dir entries (name, size, type, path) in a directory."""
-        data = self._request(
-            "GET",
-            f"{self.fs_base()}/list",
-            params={"dir": directory},
-        )
-        entries = data.get("entries", []) if isinstance(data, dict) else []
+        """List file/dir entries (name, size, type, path) in a directory.
+        Raises on HTTP failure so callers can surface the error."""
+        url = f"{NITRADO_BASE_URL}{self.fs_base()}/list"
+        resp = requests.get(url, params={"dir": directory}, headers=self.headers, timeout=30)
+        if resp.status_code != 200:
+            raise RuntimeError(f"Nitrado list error: HTTP {resp.status_code}")
+        data = resp.json().get("data", {})
+        if not isinstance(data, dict):
+            raise RuntimeError("Nitrado list returned an unexpected response")
+        entries = data.get("entries", [])
         out = []
         for e in entries:
             if not isinstance(e, dict):

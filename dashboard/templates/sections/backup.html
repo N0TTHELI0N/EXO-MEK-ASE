@@ -213,7 +213,11 @@
     </table>
   </div>
   {% else %}
+  {% if save_browsed %}
+  <p class="text-sm text-amber-400">{{ t('save_empty_browsed') }} <code class="text-xs">{{ save_dir }}</code></p>
+  {% else %}
   <p class="text-sm text-gray-500">{{ t('save_empty') }}</p>
+  {% endif %}
   {% endif %}
 </div>
 

@@ -1063,10 +1063,11 @@ def section_backup(guild_id):
             else:
                 notice = "cloud_failed"
         elif action == "save_browse":
-            save_dir = (request.form.get("save_dir") or "").strip()
+            save_dir = (request.form.get("save_dir") or "").strip().replace("\\", "/")
             if save_dir:
                 guild_settings.update_setting(guild_id, "save_dir", save_dir)
-            return redirect(url_for("section_backup", guild_id=guild_id) + "?savedir=" + (save_dir or "ShooterGame/Saved/SavedArks"))
+            import urllib.parse as _u
+            return redirect(url_for("section_backup", guild_id=guild_id) + "?savedir=" + _u.quote(save_dir or "ShooterGame/Saved/SavedArks"))
         return redirect(url_for("section_backup", guild_id=guild_id) + "?notice=" + notice)
 
     conn = guild_settings.get_conn()
@@ -1127,8 +1128,9 @@ def section_backup(guild_id):
         except Exception as e:
             cloud_error = str(e)
 
-    # Save-file browser (opt-in via ?savedir=)
+    # Save-file browser (only lists after explicit Browse via ?savedir=)
     save_dir = request.args.get("savedir") or ""
+    save_browsed = bool(request.args.get("savedir"))
     if save_dir:
         save_dir = save_dir.replace("\\", "/")
     if not save_dir:
@@ -1136,9 +1138,8 @@ def section_backup(guild_id):
         save_dir = str(save_dir)
     save_files = []
     save_error = None
-    if client:
+    if save_browsed and client:
         try:
-            import urllib.parse
             entries = client.list_file_entries(save_dir) or []
             for e in entries:
                 name = e.get("name") or ""
@@ -1161,6 +1162,9 @@ def section_backup(guild_id):
             save_files.sort(key=lambda f: (not f["is_dir"], f["name"].lower()))
         except Exception as e:
             save_error = str(e)
+    elif save_browsed and not client:
+        save_error = "Nitrado is not configured."
+        save_browsed = False
 
     return render_template(
         "sections/backup.html",
@@ -1174,6 +1178,7 @@ def section_backup(guild_id):
         is_owner=is_owner,
         notice=request.args.get("notice", ""),
         save_dir=save_dir,
+        save_browsed=save_browsed,
         save_files=save_files,
         save_error=save_error,
     )
