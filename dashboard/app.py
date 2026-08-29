@@ -1068,6 +1068,20 @@ def section_backup(guild_id):
                 guild_settings.update_setting(guild_id, "save_dir", save_dir)
             import urllib.parse as _u
             return redirect(url_for("section_backup", guild_id=guild_id) + "?savedir=" + _u.quote(save_dir or "ShooterGame/Saved/SavedArks"))
+        elif action == "save_upload":
+            client = nitrado_client_for(guild_id)
+            save_dir = (request.form.get("save_dir") or "").strip().replace("\\", "/") or "ShooterGame/Saved/SavedArks"
+            f = request.files.get("file")
+            if not client:
+                notice = "save_upload_failed"
+            elif not f or not f.filename:
+                notice = "save_upload_failed"
+            else:
+                name = os.path.basename(f.filename.replace("\\", "/"))
+                ok = client.upload_file_bytes(save_dir, name, f.read())
+                notice = "save_uploaded" if ok else "save_upload_failed"
+            import urllib.parse as _u
+            return redirect(url_for("section_backup", guild_id=guild_id) + "?savedir=" + _u.quote(save_dir) + "&notice=" + notice)
         return redirect(url_for("section_backup", guild_id=guild_id) + "?notice=" + notice)
 
     conn = guild_settings.get_conn()
@@ -1109,16 +1123,19 @@ def section_backup(guild_id):
                     except Exception:
                         raw_size = 0
                     if raw_size and raw_size < 1000:
-                        size_s = f"{raw_size} KB"
-                    elif raw_size:
-                        size_s = f"{raw_size/1024:.1f} MB"
+                        size_s = f"{raw_size} B"
+                    elif raw_size < 1024 * 1024:
+                        size_s = f"{raw_size/1024:.1f} KB"
+                    elif raw_size < 1024 * 1024 * 1024:
+                        size_s = f"{raw_size/1024/1024:.1f} MB"
                     else:
-                        size_s = ""
+                        size_s = f"{raw_size/1024/1024/1024:.2f} GB"
+                    created = b.get("createdAt") or b.get("created_at") or b.get("date") or b.get("timestamp") or ""
                     cloud.append(
                         {
                             "name": b.get("name") or b.get("backup") or b.get("id") or str(b),
-                            "created_at": b.get("created_at") or b.get("date") or b.get("timestamp") or None,
-                            "date": str(b.get("created_at") or b.get("date") or b.get("timestamp") or ""),
+                            "created_at": created,
+                            "date": str(created),
                             "size": raw_size,
                             "size_s": size_s,
                         }

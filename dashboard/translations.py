@@ -227,6 +227,9 @@ TRANSLATIONS = {
     "save_empty": {"ar": "أدخل مسار مجلد الحفظ واضغط تصفح لعرض الملفات.", "en": "Enter the save folder path and press Browse to list its files."},
     "save_empty_browsed": {"ar": "لا توجد ملفات في هذا المسار، أو المسار غير صحيح:", "en": "No files found at this path, or the path is invalid:"},
     "save_open_dir": {"ar": "فتح", "en": "Open"},
+    "save_upload": {"ar": "رفع ملف", "en": "Upload File"},
+    "save_uploaded": {"ar": "تم رفع الملف بنجاح إلى مجلد الحفظ.", "en": "File uploaded successfully to the save folder."},
+    "save_upload_failed": {"ar": "فشل رفع الملف. تحقق من المسار والمجلد وتأكد من إعداد Nitrado.", "en": "Failed to upload the file. Check the path and folder, and confirm Nitrado is configured."},
 
     "lb_display": {"ar": "عرض لوحة الترتيب", "en": "Leaderboard Display"},
     "lb_display_desc": {"ar": "تفعيل أو تعطيل لوحة الترتيب المحدثة تلقائيًا", "en": "Enable or disable the auto-updating leaderboard"},

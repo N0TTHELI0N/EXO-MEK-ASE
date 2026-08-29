@@ -228,6 +228,23 @@ class NitradoClient:
             return b""
         return self._get_bytes(url, token)
 
+    def upload_file_bytes(self, path: str, filename: str, data: bytes) -> bool:
+        """Upload a binary file to `path` on the server using multipart form-data."""
+        url = f"{NITRADO_BASE_URL}{self.fs_base()}/upload"
+        try:
+            resp = requests.post(
+                url,
+                params={"path": path},
+                files={"file": (filename, data)},
+                headers=self.headers,
+                timeout=180,
+            )
+            resp.raise_for_status()
+            return True
+        except requests.RequestException as e:
+            print(f"Nitrado binary upload error: {type(e).__name__}")
+            return False
+
     def delete_file(self, file: str) -> bool:
         """Delete a file on the server."""
         result = self._request(

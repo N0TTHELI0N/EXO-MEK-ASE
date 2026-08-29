@@ -13,6 +13,8 @@
   {% elif notice == 'cloud_created' %}{{ t('cloud_created_ok') }}
   {% elif notice == 'cloud_restored' %}{{ t('cloud_restored_ok') }}
   {% elif notice == 'cloud_deleted' %}{{ t('cloud_deleted_ok') }}
+  {% elif notice == 'save_uploaded' %}{{ t('save_uploaded') }}
+  {% elif notice == 'save_upload_failed' %}{{ t('save_upload_failed') }}
   {% else %}{{ t('backup_failed') }}{% endif %}
 </div>
 {% endif %}
@@ -176,6 +178,18 @@
       </button>
     </form>
   </div>
+
+  <form method="POST" enctype="multipart/form-data" class="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
+    <input type="hidden" name="action" value="save_upload">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="save_dir" value="{{ save_dir }}">
+    <input type="file" name="file" class="flex-1 text-sm text-gray-300 file:mr-3 file:px-4 file:py-2 file:rounded-lg file:border-0 file:bg-gray-700 file:text-white file:text-sm file:font-medium hover:file:bg-gray-600">
+    <button type="submit"
+            class="inline-flex items-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white text-sm font-medium rounded-lg transition-colors whitespace-nowrap">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+      {{ t('save_upload') }}
+    </button>
+  </form>
 
   {% if save_error %}
   <p class="text-sm text-red-400">{{ t('save_load_failed') }} <code class="text-xs">{{ save_error }}</code></p>
