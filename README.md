@@ -10,7 +10,7 @@ Advanced admin bot for ARK: Survival Evolved servers hosted on Nitrado.
 - **Whitelist** - PSN linking, auto-restart with whitelist update
 - **Tribe Log** - Monitor tribe activity via file or Nitrado API
 - **Leaderboard** - Tribe points and rankings
-- **Server Backup** - Create, restore, download backups via SFTP
+- **Server Backup** - Create, restore backups via Nitrado Cloud Backup API
 - **AutoMod** - Profanity filter, spam detection, custom words
 - **Dashboard** - Web panel for all settings
 

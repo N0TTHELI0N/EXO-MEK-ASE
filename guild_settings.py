@@ -18,7 +18,7 @@ _fernet = Fernet(_ENCRYPTION_KEY.encode()) if _ENCRYPTION_KEY else None
 # Secret used to sign license keys. If not set, falls back to ENCRYPTION_KEY.
 _LICENSE_SIGN_KEY = (os.getenv("LICENSE_SIGN_KEY", "") or _ENCRYPTION_KEY).encode()
 
-ENCRYPTED_FIELDS = {"rcon_password", "sftp_password", "nitrado_api_token"}
+ENCRYPTED_FIELDS = {"rcon_password", "nitrado_api_token"}
 
 
 def _encrypt(value: str) -> str:
@@ -339,6 +339,15 @@ def get_all_settings(guild_id: int = None) -> dict:
 def get_settings_by_prefix(prefix: str) -> dict:
     all_settings = get_all_settings()
     return {gid: s for gid, s in all_settings.items() if prefix in s}
+
+
+def get_nitrado_config(guild_id: int) -> dict:
+    """Return the Nitrado API config (token/service/user) for a guild."""
+    return {
+        "api_token": get_setting(guild_id, "nitrado_api_token", ""),
+        "service_id": get_setting(guild_id, "nitrado_service_id", ""),
+        "user_id": get_setting(guild_id, "nitrado_user_id", ""),
+    }
 
 
 # Dashboard aliases

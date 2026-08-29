@@ -11,7 +11,7 @@ import shop_db
 
 ALL_COMMANDS = [
     "activate", "help", "top-servers",
-    "set-rcon", "set-rcon-defaults", "set-nitrado-token", "set-sftp-credentials",
+    "set-rcon", "set-rcon-defaults", "set-nitrado-token",
     "set-log-channel", "set-license", "set-language", "ban-user", "view-guilds", "force-sync-guild",
     "set-command-permission", "remove-command-permission", "view-command-permissions", "clear-command-permissions",
     "shop-add", "shop-remove", "shop-list", "shop-edit",
@@ -103,24 +103,6 @@ class Admin(commands.Cog):
         if service_id:
             guild_settings.update_setting(interaction.guild_id, "nitrado_service_id", service_id)
         await interaction.response.send_message("✅ Nitrado token saved.", ephemeral=True)
-
-    # ── /set-sftp-credentials ────────────────────────────────
-    @app_commands.command(name="set-sftp-credentials", description="Set SFTP credentials for backups and whitelist (Admin only)")
-    @app_commands.describe(
-        host="SFTP host",
-        port="SFTP port (default 22)",
-        username="SFTP username",
-        password="SFTP password"
-    )
-    async def set_sftp_credentials(self, interaction: discord.Interaction, host: str, port: int = 22, username: str = "", password: str = ""):
-        if not interaction.user.guild_permissions.administrator:
-            return await interaction.response.send_message("❌ Admin only.", ephemeral=True)
-
-        guild_settings.update_setting(interaction.guild_id, "sftp_host", host)
-        guild_settings.update_setting(interaction.guild_id, "sftp_port", port)
-        guild_settings.update_setting(interaction.guild_id, "sftp_username", username)
-        guild_settings.update_setting(interaction.guild_id, "sftp_password", password)
-        await interaction.response.send_message("✅ SFTP credentials saved.", ephemeral=True)
 
     # ── /set-log-channel ─────────────────────────────────────
     @app_commands.command(name="set-log-channel", description="Set the log channel for bot activity (Admin only)")

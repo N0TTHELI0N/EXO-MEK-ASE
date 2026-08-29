@@ -490,29 +490,6 @@ def section_rcon(guild_id):
     )
 
 
-@app.route("/dashboard/<int:guild_id>/sftp", methods=["GET", "POST"])
-@login_required
-@guild_admin_required
-@validate_csrf
-def section_sftp(guild_id):
-    if request.method == "POST":
-        guild_settings.update_setting(guild_id, "sftp_host", request.form.get("sftp_host", ""))
-        guild_settings.update_setting(guild_id, "sftp_port", request.form.get("sftp_port", "22"))
-        guild_settings.update_setting(guild_id, "sftp_username", request.form.get("sftp_username", ""))
-        sftp_password = request.form.get("sftp_password", "")
-        if sftp_password:
-            guild_settings.update_setting(guild_id, "sftp_password", sftp_password)
-        guild_settings.update_setting(guild_id, "save_dir", request.form.get("save_dir", "/ARK/ShooterGame/Saved"))
-        return redirect(url_for("section_sftp", guild_id=guild_id))
-    return render_template(
-        "sections/sftp.html",
-        user=get_current_user(),
-        guild_id=guild_id,
-        active_section="sftp",
-        settings=guild_settings.get_settings(guild_id),
-    )
-
-
 @app.route("/dashboard/<int:guild_id>/nitrado", methods=["GET", "POST"])
 @login_required
 @guild_admin_required
@@ -956,7 +933,7 @@ def section_settings(guild_id):
 
 ALL_COMMANDS_LIST = [
     "activate", "help", "top-servers",
-    "set-rcon", "set-rcon-defaults", "set-nitrado-token", "set-sftp-credentials",
+    "set-rcon", "set-rcon-defaults", "set-nitrado-token",
     "set-log-channel", "set-license", "ban-user", "view-guilds", "force-sync-guild",
     "set-command-permission", "remove-command-permission", "view-command-permissions", "clear-command-permissions",
     "shop-add", "shop-remove", "shop-list", "shop-edit",
@@ -964,7 +941,7 @@ ALL_COMMANDS_LIST = [
     "whitelist-add", "whitelist-remove", "whitelist-restart", "whitelist-link", "whitelist-unlink",
     "tribelog-config", "tribelog-test",
     "automod-config", "automod-list", "automod-remove",
-    "backup-create", "backup-list", "backup-restore", "backup-download",
+    "backup-create", "backup-list", "backup-restore",
     "leaderboard-config", "leaderboard-set-channel", "leaderboard-toggle", "leaderboard-force", "leaderboard-sync",
     "warn", "tempwarn", "warnings", "clear-warnings", "remove-warning",
     "punish-ban", "punish-tempban", "punish-wipe",
@@ -1140,7 +1117,7 @@ def api_backup_create(guild_id):
         return jsonify({"error": "rate limit exceeded"}), 429
     data = request.get_json(force=True) if request.data else {}
     name = data.get("name", "")
-    return jsonify({"ok": False, "error": "Backup creation must be performed via the bot or SFTP."})
+    return jsonify({"ok": False,         "error": "Backup creation must be performed via the bot Nitrado API."})
 
 
 @app.route("/api/guild/<int:guild_id>/backup/download/<int:backup_id>")
@@ -1169,7 +1146,7 @@ def api_backup_download(guild_id, backup_id):
 @guild_admin_required
 @validate_csrf
 def api_backup_restore(guild_id, backup_id):
-    return jsonify({"ok": False, "error": "Restore must be performed via the bot or SFTP."})
+    return jsonify({"ok": False,         "error": "Restore must be performed via the bot Nitrado API."})
 
 
 @app.route("/api/guild/<int:guild_id>/server/restart", methods=["POST"])

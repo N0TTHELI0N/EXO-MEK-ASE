@@ -3,10 +3,10 @@ import discord
 from discord.ext import commands, tasks
 from discord import app_commands
 from datetime import datetime, timezone, date
-import paramiko
 import guild_settings
 import bot_i18n
 import config
+from nitrado import get_client
 
 
 # ── DB helpers ──────────────────────────────────────────────
@@ -109,36 +109,23 @@ def _get_player(guild_id: int, discord_id: int):
 
 
 def _update_whitelist_file(guild_id: int) -> bool:
-    """Write all active linked PSN IDs to the whitelist file via SFTP."""
-    wl_path = guild_settings.get_setting(guild_id, "whitelist_path", "")
-    if not wl_path:
+    """Write all active linked PSN IDs to the whitelist file via the Nitrado FileServer API."""
+    wl_dir = guild_settings.get_setting(guild_id, "whitelist_path", "")
+    if not wl_dir:
         return False
 
     players = _get_linked_players(guild_id)
     active_psns = [p[1] for p in players if p[2] == "active" or p[2] == "pending"]
 
-    host = guild_settings.get_setting(guild_id, "sftp_host")
-    port = guild_settings.get_setting(guild_id, "sftp_port", 22)
-    username = guild_settings.get_setting(guild_id, "sftp_username")
-    password = guild_settings.get_setting(guild_id, "sftp_password")
-
-    if not all([host, username, password]):
+    client = get_client(guild_id)
+    if not client:
         return False
 
     try:
-        transport = paramiko.Transport((host, int(port)))
-        transport.connect(username=username, password=password)
-        sftp = paramiko.SFTPClient.from_transport(transport)
-
         content = "\n".join(active_psns) + "\n" if active_psns else ""
-        with sftp.open(wl_path, "w") as f:
-            f.write(content)
-
-        sftp.close()
-        transport.close()
-        return True
+        return client.write_file(wl_dir, "Whitelist.txt", content)
     except Exception as e:
-        print(f"[Whitelist] SFTP error: {type(e).__name__}")
+        print(f"[Whitelist] Nitrado error: {type(e).__name__}")
         return False
 
 
@@ -212,14 +199,14 @@ class Whitelist(commands.Cog):
         await self.bot.wait_until_ready()
 
     # ── /set-whitelist-path ──────────────────────────────────
-    @app_commands.command(name="set-whitelist-path", description="Set the path to Whitelist.txt on the server (Admin only)")
-    @app_commands.describe(path="Full path to Whitelist.txt (e.g. /ARK/.../Whitelist.txt)")
+    @app_commands.command(name="set-whitelist-path", description="Set the directory for Whitelist.txt on the server (Admin only)")
+    @app_commands.describe(path="Server folder containing Whitelist.txt (e.g. /ShooterGame/Saved)")
     async def set_whitelist_path(self, interaction: discord.Interaction, path: str):
         if not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
 
         guild_settings.update_setting(interaction.guild_id, "whitelist_path", path)
-        await interaction.response.send_message(f"✅ Whitelist path set to:\n`{path}`", ephemeral=True)
+        await interaction.response.send_message(f"✅ Whitelist directory set to:\n`{path}`", ephemeral=True)
 
     # ── /set-restart-time ────────────────────────────────────
     @app_commands.command(name="set-restart-time", description="Set the daily restart time for whitelist activation (Admin only)")

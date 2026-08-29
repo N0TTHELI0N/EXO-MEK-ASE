@@ -24,9 +24,9 @@ STRINGS = {
         "ar": "تعذر الاتصال بسيرفر الآرك. تواصل مع الإدمن.",
         "en": "Could not connect to the ARK server (RCON). Contact an admin.",
     },
-    "sftp_not_configured": {
-        "ar": "SFTP غير مُعد.",
-        "en": "SFTP is not configured.",
+    "nitrado_not_configured": {
+        "ar": "Nitrado غير مُعد. استخدم `/set-nitrado-token`.",
+        "en": "Nitrado is not configured. Use `/set-nitrado-token`.",
     },
     "license_invalid": {
         "ar": "الرخصة غير صالحة أو منتهية.",

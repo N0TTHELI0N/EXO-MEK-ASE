@@ -28,7 +28,7 @@ COMMAND_CATEGORIES = {
     "moderation": ["ban", "kick", "mute", "unmute", "warn", "warnings", "clear-warnings", "banplayer", "unbanplayer", "wipe-player"],
     "tribelog": ["tribe-log", "enable-tribe-log", "disable-tribe-log", "set-tribe-log-channel", "set-tribe-log-config", "set-tribe-log-source"],
     "leaderboard": ["leaderboard", "setup-leaderboard", "leaderboard-preview", "set-tribe-owner", "add-tribe-points", "remove-tribe-points"],
-    "admin": ["set-rcon", "set-rcon-defaults", "set-nitrado-token", "set-sftp-credentials", "set-log-channel", "set-license", "set-language", "ban-user", "view-guilds", "force-sync-guild"],
+    "admin": ["set-rcon", "set-rcon-defaults", "set-nitrado-token", "set-log-channel", "set-license", "set-language", "ban-user", "view-guilds", "force-sync-guild"],
     "automod": ["automod-toggle", "automod-set-log-channel", "automod-set-log-path", "automod-add-word", "automod-remove-word", "automod-list-words", "automod-clear-words"],
     "server": ["backup-create", "backup-list", "backup-rollback", "backup-download"],
 }
