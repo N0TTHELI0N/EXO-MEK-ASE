@@ -201,8 +201,11 @@ class NitradoClient:
             info = self._request("GET", f"/services/{self.service_id}/gameservers")
             if not isinstance(info, dict):
                 info = {}
-        except Exception:
+        except Exception as e:
             info = {}
+            print(f"[nitrado-fs] gameservers info error: {type(e).__name__}: {e}")
+        print(f"[nitrado-fs] service info keys: {list(info.keys())[:40]}")
+        print(f"[nitrado-fs] relevant: folder_short={info.get('folder_short')!r} folder={info.get('folder')!r} game={info.get('game')!r} username={info.get('username')!r}")
         fs = info.get("folder_short") or info.get("folder") or info.get("game") or ""
         uname = info.get("username") or ""
         if fs:
@@ -214,34 +217,28 @@ class NitradoClient:
         if uname:
             roots.append("/games/{0}/ftproot".format(uname))
         if not fs:
-            for g in ("arkps4", "arkxb", "arkse", "arksa"):
+            for g in ("arkps4", "arkxb", "arkse", "arksa", "ark"):
                 roots.append(g)
-        return [r for r in roots if r]
+        roots = [r for r in roots if r]
+        print(f"[nitrado-fs] candidate roots: {roots}")
+        return roots
 
     def list_file_entries(self, directory: str) -> list[dict]:
-        """List file/dir entries in a directory.
-
-        Nitrado entry paths are absolute server paths. The gameserver root may be
-        prefixed (e.g. '<folder_short>/' or '/games/<user>/ftproot/'), so when the
-        direct path resolves empty we retry each candidate base root. Raises only if
-        every variant fails hard."""
         base = (directory or "").strip().lstrip("/")
 
         def variant(dir_val):
             try:
                 return self._fs_list(dir_val)
-            except Exception:
+            except Exception as e:
+                print(f"[nitrado-fs] list error dir={dir_val!r}: {type(e).__name__}: {e}")
                 return None
 
-        # Direct path with common slash forms
         direct_forms = [base, "/" + base] if base else []
         for f in direct_forms:
             e = variant(f)
             if e:
                 return e
 
-        # Relative path joined with each candidate base root; also list the root
-        # itself when no subpath was given.
         roots = self.base_roots()
         for root in roots:
             forms = []
@@ -255,7 +252,6 @@ class NitradoClient:
                 if e:
                     return e
 
-        # Last resort: try each candidate root listing to surface any result.
         last = None
         for root in roots:
             for f in ([root, root + "/"] if not base else [root + "/" + base]):
@@ -277,6 +273,7 @@ class NitradoClient:
         data = resp.json().get("data", {})
         if not isinstance(data, dict):
             raise RuntimeError("Nitrado list returned an unexpected response")
+        print(f"[nitrado-fs] _fs_list dir={directory!r} HTTP={resp.status_code} data_keys={list(data.keys())}")
         entries = data.get("entries", [])
         out = []
         for e in entries:
