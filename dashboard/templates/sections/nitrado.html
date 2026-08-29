@@ -12,12 +12,12 @@
 
     <div class="space-y-4">
       <div>
-        <label for="nitrado_token" class="block text-sm font-medium text-gray-300 mb-1">{{ t('api_token') }}</label>
-        <input type="password" id="nitrado_token" name="nitrado_token"
+        <label for="nitrado_api_token" class="block text-sm font-medium text-gray-300 mb-1">{{ t('api_token') }}</label>
+        <input type="password" id="nitrado_api_token" name="nitrado_api_token"
                value=""
-               placeholder="{% if settings.nitrado_token %}•••••••• (configured){% else %}Enter your Nitrado API token{% endif %}"
+               placeholder="{% if settings.nitrado_api_token %}•••••••• (configured){% else %}Enter your Nitrado API token{% endif %}"
                class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent">
-        {% if settings.nitrado_token %}
+        {% if settings.nitrado_api_token %}
         <p class="text-xs text-green-400 mt-1">{{ t('token_configured_keep') }}</p>
         {% endif %}
       </div>
@@ -26,8 +26,11 @@
         <label for="nitrado_service_id" class="block text-sm font-medium text-gray-300 mb-1">{{ t('service_id') }}</label>
         <input type="text" id="nitrado_service_id" name="nitrado_service_id"
                value="{{ settings.nitrado_service_id or '' }}"
-               placeholder="Enter your Nitrado Service ID"
+               placeholder="{% if settings.nitrado_service_id %}{{ settings.nitrado_service_id }}{% else %}Enter your Nitrado Service ID{% endif %}"
                class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent">
+        {% if settings.nitrado_service_id %}
+        <p class="text-xs text-green-400 mt-1">{{ t('service_id_configured') }}</p>
+        {% endif %}
       </div>
     </div>
 

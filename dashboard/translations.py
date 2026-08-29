@@ -107,6 +107,7 @@ TRANSLATIONS = {
     "user_id": {"ar": "معرّف المستخدم", "en": "User ID"},
     "service_id": {"ar": "معرّف الخدمة", "en": "Service ID"},
     "token_configured_keep": {"ar": "✓ الرمز مُعدّ. اتركه فارغًا للإبقاء عليه.", "en": "✓ Token configured. Leave blank to keep current."},
+    "service_id_configured": {"ar": "✓ معرّف الخدمة مُعدّ.", "en": "✓ Service ID configured."},
 
     "points_search": {"ar": "بحث عن عضو", "en": "Search Member"},
     "points_searching": {"ar": "جارٍ البحث...", "en": "Searching..."},
