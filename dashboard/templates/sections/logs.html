@@ -14,26 +14,26 @@
               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
         <option value="">{{ t('logs_all_types') }}</option>
         {% for lt in log_types %}
-        <option value="{{ lt }}" {% if request.GET.log_type == lt %}selected{% endif %}>{{ lt | title }}</option>
+        <option value="{{ lt }}" {% if log_type_filter == lt %}selected{% endif %}>{{ lt | title }}</option>
         {% endfor %}
       </select>
     </div>
     <div>
       <label for="date_from" class="block text-sm font-medium text-gray-300 mb-1">{{ t('logs_from') }}</label>
       <input type="date" id="date_from" name="date_from"
-             value="{{ request.GET.date_from or '' }}"
+             value="{{ request.args.get('date_from', '') }}"
              class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
     </div>
     <div>
       <label for="date_to" class="block text-sm font-medium text-gray-300 mb-1">{{ t('logs_to') }}</label>
       <input type="date" id="date_to" name="date_to"
-             value="{{ request.GET.date_to or '' }}"
+             value="{{ request.args.get('date_to', '') }}"
              class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
     </div>
     <div class="flex-1">
       <label for="search" class="block text-sm font-medium text-gray-300 mb-1">{{ t('logs_search') }}</label>
       <input type="text" id="search" name="search"
-             value="{{ request.GET.search or '' }}"
+             value="{{ request.args.get('search', '') }}"
              placeholder="{{ t('logs_search_ph') }}"
              class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
     </div>
@@ -62,21 +62,21 @@
       <tbody class="divide-y divide-gray-700">
         {% for entry in logs %}
         <tr class="hover:bg-gray-800">
-          <td class="px-4 py-3 text-gray-400 text-xs font-mono whitespace-nowrap">{{ entry.timestamp }}</td>
+          <td class="px-4 py-3 text-gray-400 text-xs font-mono whitespace-nowrap">{{ entry.created_at }}</td>
           <td class="px-4 py-3">
             <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full
-              {% if entry.type == 'warning' %}bg-yellow-900 text-yellow-300
-              {% elif entry.type == 'punishment' %}bg-red-900 text-red-300
-              {% elif entry.type == 'automod' %}bg-orange-900 text-orange-300
-              {% elif entry.type == 'backup' %}bg-blue-900 text-blue-300
-              {% elif entry.type == 'server' %}bg-green-900 text-green-300
+              {% if entry.log_type == 'warning' %}bg-yellow-900 text-yellow-300
+              {% elif entry.log_type == 'punishment' %}bg-red-900 text-red-300
+              {% elif entry.log_type == 'automod' %}bg-orange-900 text-orange-300
+              {% elif entry.log_type == 'backup' %}bg-blue-900 text-blue-300
+              {% elif entry.log_type == 'server' %}bg-green-900 text-green-300
               {% else %}bg-gray-700 text-gray-300{% endif %}">
-              {{ entry.type | title }}
+              {{ entry.log_type | title }}
             </span>
           </td>
-          <td class="px-4 py-3 text-gray-300">{{ entry.user or '—' }}</td>
-          <td class="px-4 py-3 text-gray-300">{{ entry.player or '—' }}</td>
-          <td class="px-4 py-3 text-gray-200 font-medium">{{ entry.action }}</td>
+          <td class="px-4 py-3 text-gray-300">{{ entry.user_name or '—' }}</td>
+          <td class="px-4 py-3 text-gray-300">{{ entry.player_name or '—' }}</td>
+          <td class="px-4 py-3 text-gray-200 font-medium">{{ entry.command or entry.sub_type or '' }}</td>
           <td class="px-4 py-3 text-gray-400 text-xs max-w-xs truncate">{{ entry.details or '' }}</td>
         </tr>
         {% endfor %}
@@ -97,7 +97,7 @@
   </p>
   <div class="flex items-center gap-2">
     {% if page > 1 %}
-    <a href="?page={{ page - 1 }}{% if request.GET.log_type %}&log_type={{ request.GET.log_type }}{% endif %}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}"
+    <a href="?page={{ page - 1 }}{% if request.args.get('log_type') %}&log_type={{ request.args.get('log_type') }}{% endif %}{% if request.args.get('search') %}&search={{ request.args.get('search') }}{% endif %}{% if request.args.get('date_from') %}&date_from={{ request.args.get('date_from') }}{% endif %}{% if request.args.get('date_to') %}&date_to={{ request.args.get('date_to') }}{% endif %}"
        class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium rounded-lg transition-colors">
       {{ t('logs_prev') }}
     </a>
@@ -107,7 +107,7 @@
     </span>
     {% endif %}
     {% if logs %}
-    <a href="?page={{ page + 1 }}{% if request.GET.log_type %}&log_type={{ request.GET.log_type }}{% endif %}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}"
+    <a href="?page={{ page + 1 }}{% if request.args.get('log_type') %}&log_type={{ request.args.get('log_type') }}{% endif %}{% if request.args.get('search') %}&search={{ request.args.get('search') }}{% endif %}{% if request.args.get('date_from') %}&date_from={{ request.args.get('date_from') }}{% endif %}{% if request.args.get('date_to') %}&date_to={{ request.args.get('date_to') }}{% endif %}"
        class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium rounded-lg transition-colors">
       {{ t('logs_next') }}
     </a>

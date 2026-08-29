@@ -877,7 +877,7 @@ def section_embeds(guild_id):
         user=get_current_user(),
         guild_id=guild_id,
         active_section="embeds",
-        embeds=guild_settings.get_all_embed_templates(guild_id),
+        embeds=guild_settings.get_all_embed_templates(guild_id) or {},
         embed_keys=list(guild_settings.DEFAULT_EMBEDS.keys()),
     )
 
@@ -914,23 +914,36 @@ def section_backup(guild_id):
 @validate_csrf
 def section_leaderboard(guild_id):
     if request.method == "POST":
-        action = request.form.get("action")
+        action = request.form.get("action") or "config"
         if action == "config":
+            enabled = request.form.get("enabled") in ("on", "1", "true")
+            channel_id = request.form.get("channel_id")
+            interval = request.form.get("update_interval") or request.form.get("interval", 5)
             guild_settings.update_setting(guild_id, "leaderboard_config", {
-                "enabled": request.form.get("enabled") == "on",
-                "channel_id": int(request.form["channel_id"]) if request.form.get("channel_id") else None,
-                "interval": int(request.form.get("interval", 5)),
+                "enabled": enabled,
+                "channel_id": int(channel_id) if channel_id else None,
+                "interval": int(interval),
             })
         return redirect(url_for("section_leaderboard", guild_id=guild_id))
-    config = shop_db.get_leaderboard_config(guild_id)
-    board = shop_db.get_leaderboard(guild_id, limit=25)
+    cfg = shop_db.get_leaderboard_config(guild_id) or {}
+    kv = guild_settings.get_setting(guild_id, "leaderboard_config", {}) or {}
+    settings = {
+        "enabled": bool(kv.get("enabled", False)),
+        "channel_id": cfg.get("channel_id") or kv.get("channel_id"),
+        "update_interval": cfg.get("interval") or kv.get("interval") or 5,
+    }
+    raw = shop_db.get_leaderboard(guild_id, limit=25)
+    leaderboard = [
+        {"player_name": tribe, "tribe_name": tribe, "level": points}
+        for tribe, points in raw
+    ]
     return render_template(
         "sections/leaderboard.html",
         user=get_current_user(),
         guild_id=guild_id,
         active_section="leaderboard",
-        config=config,
-        leaderboard=board,
+        settings=settings,
+        leaderboard=leaderboard,
     )
 
 
@@ -941,11 +954,39 @@ def section_leaderboard(guild_id):
 def section_server_control(guild_id):
     if request.method == "POST":
         return redirect(url_for("section_server_control", guild_id=guild_id))
+    info = {}
+    try:
+        raw = nitrado.get_server_info(guild_id) or {}
+        info = raw.get("data", raw) if isinstance(raw, dict) else {}
+    except Exception:
+        info = {}
+    players_list = []
+    try:
+        client = nitrado.get_client(guild_id)
+        if client:
+            players_list = client.get_player_list()
+    except Exception:
+        players_list = []
+    server_status = {
+        "online": bool(info.get("status") in ("online", "running") or info.get("is_running")),
+        "map": info.get("map") or info.get("map_name") or "Unknown",
+        "players": info.get("player_count") or info.get("players_current") or len(players_list),
+        "max_players": info.get("slots") or info.get("max_players") or 70,
+        "ping": info.get("ping") or "-",
+        "uptime": info.get("uptime") or "-",
+        "server_name": info.get("server_name") or info.get("name") or "",
+        "day_night_cycle": info.get("day_night_cycle") or 1,
+        "taming_speed": info.get("taming_speed") or 1,
+        "harvest_amount": info.get("harvest_amount") or 1,
+        "xp_multiplier": info.get("xp_multiplier") or 1,
+        "players_list": players_list,
+    }
     return render_template(
         "sections/server_control.html",
         user=get_current_user(),
         guild_id=guild_id,
         active_section="server-control",
+        server_status=server_status,
     )
 
 
@@ -960,6 +1001,7 @@ def section_logs(guild_id):
     log_type_filter = request.args.get("log_type", "")
     logs = guild_settings.get_logs(guild_id, log_type=log_type_filter or None, limit=per_page, offset=offset)
     total = guild_settings.get_log_count(guild_id, log_type=log_type_filter or None)
+    log_settings = {lt: True for lt in guild_settings.LOG_TYPES}
     return render_template(
         "sections/logs.html",
         user=get_current_user(),
@@ -971,6 +1013,8 @@ def section_logs(guild_id):
         page=page,
         total=total,
         per_page=per_page,
+        log_count=total,
+        log_settings=log_settings,
     )
 
 
