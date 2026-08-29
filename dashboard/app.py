@@ -418,6 +418,17 @@ def home():
     return render_template("home.html", user=get_current_user())
 
 
+@app.route("/setup")
+def setup():
+    invite = (
+        f"https://discord.com/oauth2/authorize?client_id={DISCORD_CLIENT_ID}"
+        f"&permissions=8&scope=bot"
+        if DISCORD_CLIENT_ID
+        else "#"
+    )
+    return render_template("setup.html", user=get_current_user(), invite_url=invite)
+
+
 @app.route("/dashboard")
 @login_required
 def dashboard():
