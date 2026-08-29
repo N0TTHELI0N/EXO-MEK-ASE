@@ -912,10 +912,6 @@ def section_embeds(guild_id):
     )
 
 
-@app.route("/dashboard/<int:guild_id>/backup", methods=["GET", "POST"])
-@login_required
-@guild_admin_required
-@validate_csrf
 def _create_local_backup(guild_id, created_by):
     """Dump the bot's public DB tables to a zip under ./backups and record it."""
     ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
@@ -1019,6 +1015,10 @@ def _delete_backup_record(guild_id, backup_id):
             pass
 
 
+@app.route("/dashboard/<int:guild_id>/backup", methods=["GET", "POST"])
+@login_required
+@guild_admin_required
+@validate_csrf
 def section_backup(guild_id):
     user = get_current_user() or {}
     is_owner = int(user.get("id", 0)) == BOT_OWNER_ID
