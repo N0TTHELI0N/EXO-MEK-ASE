@@ -38,6 +38,24 @@ def _t(key, lang=None):
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.secret_key = os.environ.get("DASHBOARD_SECRET", secrets.token_hex(32))
 
+# Official ARK: Survival Evolved maps -> PlayStation save folder names.
+# Save files (.ark) live under ShooterGame/Saved/SavedArks/<folder>/
+ARK_MAPS = [
+    {"name": "The Island", "folder": "TheIsland_P"},
+    {"name": "The Center", "folder": "TheCenter_P"},
+    {"name": "Scorched Earth", "folder": "ScorchedEarth_P"},
+    {"name": "Ragnarok", "folder": "Ragnarok_P"},
+    {"name": "Aberration", "folder": "Aberration_P"},
+    {"name": "Extinction", "folder": "Extinction_P"},
+    {"name": "Valguero", "folder": "Valguero_P"},
+    {"name": "Genesis Part 1", "folder": "Genesis_P"},
+    {"name": "Genesis Part 2", "folder": "Gen2_P"},
+    {"name": "Crystal Isles", "folder": "CrystalIsles_P"},
+    {"name": "Lost Island", "folder": "LostIsland_P"},
+    {"name": "Fjordur", "folder": "Fjordur_P"},
+]
+
+
 @app.before_request
 def _load_content_overrides():
     global _CONTENT_OVERRIDES
@@ -1082,6 +1100,13 @@ def section_backup(guild_id):
                 notice = "save_uploaded" if ok else "save_upload_failed"
             import urllib.parse as _u
             return redirect(url_for("section_backup", guild_id=guild_id) + "?savedir=" + _u.quote(save_dir) + "&notice=" + notice)
+        elif action == "save_map":
+            folder = (request.form.get("map_folder") or "").strip().replace("\\", "/")
+            save_dir = f"ShooterGame/Saved/SavedArks/{folder}" if folder else "ShooterGame/Saved/SavedArks"
+            if folder:
+                guild_settings.update_setting(guild_id, "save_dir", save_dir)
+            import urllib.parse as _u
+            return redirect(url_for("section_backup", guild_id=guild_id) + "?savedir=" + _u.quote(save_dir) + "&map=" + _u.quote(folder))
         return redirect(url_for("section_backup", guild_id=guild_id) + "?notice=" + notice)
 
     conn = guild_settings.get_conn()
@@ -1210,6 +1235,12 @@ def section_backup(guild_id):
         save_error = "Nitrado is not configured."
         save_browsed = False
 
+    current_map_folder = ""
+    for _m in ARK_MAPS:
+        if save_dir.rstrip("/").endswith("/" + _m["folder"]):
+            current_map_folder = _m["folder"]
+            break
+
     return render_template(
         "sections/backup.html",
         user=user,
@@ -1224,6 +1255,8 @@ def section_backup(guild_id):
         save_dir=save_dir,
         save_browsed=save_browsed,
         save_files=save_files,
+        ark_maps=ARK_MAPS,
+        current_map_folder=current_map_folder,
         save_error=save_error,
     )
 

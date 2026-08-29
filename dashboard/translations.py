@@ -230,6 +230,9 @@ TRANSLATIONS = {
     "save_upload": {"ar": "رفع ملف", "en": "Upload File"},
     "save_uploaded": {"ar": "تم رفع الملف بنجاح إلى مجلد الحفظ.", "en": "File uploaded successfully to the save folder."},
     "save_upload_failed": {"ar": "فشل رفع الملف. تحقق من المسار والمجلد وتأكد من إعداد Nitrado.", "en": "Failed to upload the file. Check the path and folder, and confirm Nitrado is configured."},
+    "save_pick_map": {"ar": "اختر الخريطة:", "en": "Select Map:"},
+    "save_map_choose": {"ar": "اختر خريطة", "en": "Choose a map"},
+    "save_load_map": {"ar": "تحميل ملفات الحفظ", "en": "Load Saves"},
 
     "lb_display": {"ar": "عرض لوحة الترتيب", "en": "Leaderboard Display"},
     "lb_display_desc": {"ar": "تفعيل أو تعطيل لوحة الترتيب المحدثة تلقائيًا", "en": "Enable or disable the auto-updating leaderboard"},

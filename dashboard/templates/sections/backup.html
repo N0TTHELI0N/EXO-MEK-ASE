@@ -179,6 +179,23 @@
     </form>
   </div>
 
+  <form method="POST" class="flex flex-col sm:flex-row sm:items-center gap-3 mb-3">
+    <input type="hidden" name="action" value="save_map">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <label class="text-sm text-gray-400 whitespace-nowrap">{{ t('save_pick_map') }}</label>
+    <select name="map_folder"
+            class="flex-1 sm:w-80 bg-gray-700 border border-gray-600 rounded-lg px-3 py-2.5 text-white focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none text-sm">
+      <option value="">-- {{ t('save_map_choose') }} --</option>
+      {% for m in ark_maps %}
+      <option value="{{ m.folder }}" {% if m.folder == current_map_folder %}selected{% endif %}>{{ m.name }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit"
+            class="px-4 py-2.5 bg-red-600 hover:bg-red-500 text-white text-sm font-medium rounded-lg transition-colors whitespace-nowrap">
+      {{ t('save_load_map') }}
+    </button>
+  </form>
+
   <form method="POST" enctype="multipart/form-data" class="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
     <input type="hidden" name="action" value="save_upload">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
