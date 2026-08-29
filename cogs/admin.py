@@ -64,16 +64,13 @@ class Admin(commands.Cog):
     @app_commands.command(name="set-nitrado-token", description="Set Nitrado API token for this server (Admin only)")
     @app_commands.describe(
         api_token="Nitrado API token",
-        user_id="Nitrado user ID",
         service_id="Nitrado service ID"
     )
-    async def set_nitrado_token(self, interaction: discord.Interaction, api_token: str, user_id: str = "", service_id: str = ""):
+    async def set_nitrado_token(self, interaction: discord.Interaction, api_token: str, service_id: str = ""):
         if not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message("❌ Admin only.", ephemeral=True)
 
         guild_settings.update_setting(interaction.guild_id, "nitrado_api_token", api_token)
-        if user_id:
-            guild_settings.update_setting(interaction.guild_id, "nitrado_user_id", user_id)
         if service_id:
             guild_settings.update_setting(interaction.guild_id, "nitrado_service_id", service_id)
         await interaction.response.send_message("✅ Nitrado token saved.", ephemeral=True)
