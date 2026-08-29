@@ -288,3 +288,40 @@ def change_server_password(guild_id: int, password: str) -> str:
     ok = client.update_game_setting("settings", "ServerPassword", password)
     return "Applied" if ok else "Failed"
 
+
+def get_ark_server_name(guild_id: int) -> str:
+    """Read the actual ARK server name from GameUserSettings.ini (SessionName)."""
+    client = get_client(guild_id)
+    if not client:
+        return ""
+    for path in [
+        "ShooterGame/Saved/Config/GameUserSettings.ini",
+        "ShooterGame/Saved/Config/LinuxServer/GameUserSettings.ini",
+    ]:
+        try:
+            content = client.read_file(path)
+            if content:
+                for line in content.splitlines():
+                    line = line.strip()
+                    if line.lower().startswith("sessionname="):
+                        name = line.split("=", 1)[1].strip()
+                        if name:
+                            return name
+                return ""
+        except Exception:
+            continue
+    return ""
+
+
+def server_name(guild_id: int) -> str:
+    """Best-effort ARK server name: GameUserSettings first, then API info."""
+    name = get_ark_server_name(guild_id)
+    if name:
+        return name
+    try:
+        info = get_server_info(guild_id) or {}
+        inner = info.get("gameserver", info) if isinstance(info, dict) else {}
+        return str(inner.get("name") or inner.get("server_name") or "") if isinstance(inner, dict) else ""
+    except Exception:
+        return ""
+

@@ -976,12 +976,28 @@ def section_server_control(guild_id):
         return redirect(url_for("section_server_control", guild_id=guild_id, notice=notice, notice_type=notice_type))
     notice = request.args.get("notice", "")
     notice_type = request.args.get("notice_type", "ok")
-    info = {}
+    raw = {}
     try:
         raw = nitrado.get_server_info(guild_id) or {}
-        info = raw.get("data", raw) if isinstance(raw, dict) else {}
     except Exception:
-        info = {}
+        raw = {}
+    info = {}
+    if isinstance(raw, dict):
+        info = raw.get("data", raw)
+        if isinstance(info, dict):
+            nested = info.get("gameserver")
+            if isinstance(nested, dict):
+                merged = dict(info)
+                merged.update(nested)
+                info = merged
+
+    def _pick(*keys, default=""):
+        for k in keys:
+            v = info.get(k)
+            if v not in (None, "", {}):
+                return v
+        return default
+
     players_list = []
     try:
         client = nitrado.get_client(guild_id)
@@ -989,18 +1005,25 @@ def section_server_control(guild_id):
             players_list = client.get_player_list()
     except Exception:
         players_list = []
+
+    server_name = str(_pick("server_name", "name", "display_name", "hostname", "session_name") or "")
+    if not server_name:
+        try:
+            server_name = nitrado.server_name(guild_id)
+        except Exception:
+            server_name = ""
     server_status = {
-        "online": bool(info.get("status") in ("online", "running") or info.get("is_running")),
-        "map": info.get("map") or info.get("map_name") or "Unknown",
-        "players": info.get("player_count") or info.get("players_current") or len(players_list),
-        "max_players": info.get("slots") or info.get("max_players") or 70,
-        "ping": info.get("ping") or "-",
-        "uptime": info.get("uptime") or "-",
-        "server_name": info.get("server_name") or info.get("name") or "",
-        "day_night_cycle": info.get("day_night_cycle") or 1,
-        "taming_speed": info.get("taming_speed") or 1,
-        "harvest_amount": info.get("harvest_amount") or 1,
-        "xp_multiplier": info.get("xp_multiplier") or 1,
+        "online": bool(str(info.get("status", "")).lower() in ("online", "running") or info.get("is_running")),
+        "map": _pick("map", "map_name", "current_map", default="Unknown"),
+        "players": _pick("player_count", "players_current", "players", default=len(players_list)),
+        "max_players": _pick("slots", "max_players", "maxplayers", default=70),
+        "ping": _pick("ping", default="-"),
+        "uptime": _pick("uptime", default="-"),
+        "server_name": server_name,
+        "day_night_cycle": _pick("day_night_cycle", default=1),
+        "taming_speed": _pick("taming_speed", default=1),
+        "harvest_amount": _pick("harvest_amount", default=1),
+        "xp_multiplier": _pick("xp_multiplier", default=1),
         "players_list": players_list,
     }
     return render_template(
