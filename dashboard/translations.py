@@ -233,6 +233,8 @@ TRANSLATIONS = {
     "save_load_failed": {"ar": "تعذر تصفح المجلد:", "en": "Could not browse folder:"},
     "save_empty": {"ar": "أدخل مسار مجلد الحفظ واضغط تصفح لعرض الملفات.", "en": "Enter the save folder path and press Browse to list its files."},
     "ftp_setup_hint": {"ar": "أدخل بيانات FTP في إعدادات Nitrado لتفعيل تصفح ورفع الملفات.", "en": "Enter your FTP details in the Nitrado settings to enable browsing and upload."},
+    "save_not_supported_title": {"ar": "غير مدعوم على خوادم PlayStation", "en": "Not available on PlayStation servers"},
+    "save_not_supported_desc": {"ar": "تصفح وتحميل ورفع ملفات الحفظ لا تعمل على خوادم PlayStation بسبب قيود Nitrado (لا توفّر واجهة ملفات لخدمات PlayStation).", "en": "Browse, download and upload of save files doesn't work on PlayStation servers due to Nitrado restrictions (it doesn't expose a file interface for PlayStation services)."},
     "save_empty_browsed": {"ar": "لا توجد ملفات في هذا المسار، أو المسار غير صحيح:", "en": "No files found at this path, or the path is invalid:"},
     "save_open_dir": {"ar": "فتح", "en": "Open"},
     "save_upload": {"ar": "رفع ملف", "en": "Upload File"},

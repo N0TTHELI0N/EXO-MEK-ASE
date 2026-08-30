@@ -208,11 +208,13 @@
     </button>
   </form>
 
-  {% if save_files %}
+  {% if save_not_supported %}
+  <div class="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4">
+    <p class="text-sm font-medium text-amber-300">{{ t('save_not_supported_title') }}</p>
+    <p class="text-sm text-amber-200/80 mt-1">{{ t('save_not_supported_desc') }}</p>
+  </div>
+  {% elif save_files %}
   {% if save_error %}<p class="text-sm text-amber-400 mb-3">{{ t('save_load_failed') }} <code class="text-xs">{{ save_error }}</code></p>{% endif %}
-  {% if not sftp_configured %}
-  <p class="text-sm text-amber-400 mb-3">⚠ <a href="/dashboard/{{ guild_id }}/nitrado" class="text-amber-300 underline">{{ t('ftp_setup_hint') }}</a></p>
-  {% endif %}
   <div class="overflow-x-auto rounded-xl border border-gray-700/50">
     <table class="w-full text-sm text-left">
       <thead class="text-xs text-gray-400 uppercase bg-gray-800 border-b border-gray-700">
@@ -236,11 +238,6 @@
                class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-200 text-xs font-medium rounded-lg transition-colors">
               {{ t('backup_download') }}
             </a>
-            {% else %}
-            <a href="/dashboard/{{ guild_id }}/backup?savedir={{ f.path | urlencode }}"
-               class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-amber-200 text-xs font-medium rounded-lg transition-colors">
-              {{ t('save_open_dir') }}
-            </a>
             {% endif %}
           </td>
         </tr>
@@ -251,8 +248,6 @@
   {% else %}
   {% if save_error %}
   <p class="text-sm text-red-400">{{ t('save_load_failed') }} <code class="text-xs">{{ save_error }}</code></p>
-  {% elif save_browsed %}
-  <p class="text-sm text-amber-400">{{ t('save_empty_browsed') }} <code class="text-xs">{{ save_dir }}</code></p>
   {% else %}
   <p class="text-sm text-gray-500">{{ t('save_empty') }}</p>
   {% endif %}

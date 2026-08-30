@@ -1094,23 +1094,8 @@ def section_backup(guild_id):
             import urllib.parse as _u
             return redirect(url_for("section_backup", guild_id=guild_id) + "?savedir=" + _u.quote(save_dir or "ShooterGame/Saved/SavedArks"))
         elif action == "save_upload":
-            sftp = sftp_client.make_sftp(guild_id)
             save_dir = (request.form.get("save_dir") or "").strip().replace("\\", "/") or "ShooterGame/Saved/SavedArks"
-            save_dir = save_dir.lstrip("/")
-            f = request.files.get("file")
-            if not (sftp or nitrado_client_for(guild_id)):
-                notice = "save_upload_failed"
-            elif not f or not f.filename:
-                notice = "save_upload_failed"
-            elif sftp:
-                name = os.path.basename(f.filename.replace("\\", "/"))
-                ok = sftp.upload(save_dir, name, f.read())
-                notice = "save_uploaded" if ok else "save_upload_failed"
-            else:
-                client = nitrado_client_for(guild_id)
-                name = os.path.basename(f.filename.replace("\\", "/"))
-                ok = client.upload_file_bytes(save_dir, name, f.read())
-                notice = "save_uploaded" if ok else "save_upload_failed"
+            notice = "save_upload_failed"
             import urllib.parse as _u
             return redirect(url_for("section_backup", guild_id=guild_id) + "?savedir=" + _u.quote(save_dir) + "&notice=" + notice)
         elif action == "save_map":
@@ -1183,8 +1168,9 @@ def section_backup(guild_id):
         except Exception as e:
             cloud_error = str(e)
 
-    # Save-file browser (SFTP when configured, else Nitrado file-server API)
-    sftp = sftp_client.make_sftp(guild_id)
+    # Save-file browser is not supported on PlayStation servers: Nitrado's
+    # file-server API does not expose game files for PlayStation services, and
+    # FTP access is restricted. Show a notice instead of attempting a browse.
     save_dir = request.args.get("savedir") or ""
     save_browsed = bool(request.args.get("savedir"))
     if save_dir:
@@ -1195,38 +1181,7 @@ def section_backup(guild_id):
         save_dir = str(save_dir).lstrip("/")
     save_files = []
     save_error = None
-    if save_browsed and sftp:
-        try:
-            save_files = sftp.list_entries(save_dir)
-        except Exception as e:
-            save_error = str(e)
-        if not save_files and not save_error:
-            try:
-                save_files = sftp.list_entries("")
-            except Exception as e:
-                save_error = str(e)
-                save_files = []
-            if save_files:
-                save_error = "folder is empty/invalid - showing server root; click a folder to navigate"
-    elif save_browsed and client:
-        try:
-            entries = client.list_file_entries(save_dir) or []
-            for e in entries:
-                name = e.get("name") or ""
-                is_dir = e.get("type") == "dir"
-                size = e.get("size") or 0
-                if size and size < 1000:
-                    size_s = f"{size} B"
-                elif size:
-                    size_s = f"{size/1024:.1f} KB"
-                else:
-                    size_s = ""
-                save_files.append({"name": name, "size_s": size_s, "is_dir": is_dir, "path": e.get("path") or save_dir})
-            save_files.sort(key=lambda f: (not f["is_dir"], f["name"].lower()))
-        except Exception as e:
-            save_error = str(e)
-    elif save_browsed and not (sftp or client):
-        save_error = "Nitrado is not configured."
+    save_not_supported = True
 
     current_map_folder = ""
     for _m in ARK_MAPS:
@@ -1251,7 +1206,7 @@ def section_backup(guild_id):
         ark_maps=ARK_MAPS,
         current_map_folder=current_map_folder,
         save_error=save_error,
-        sftp_configured=sftp is not None,
+        save_not_supported=save_not_supported,
     )
 
 
@@ -1259,27 +1214,7 @@ def section_backup(guild_id):
 @login_required
 @guild_admin_required
 def api_save_download(guild_id):
-    path = (request.args.get("path") or "").replace("\\", "/").lstrip("/")
-    if not path or ".." in path.split("/"):
-        return "Invalid path.", 400
-    sftp = sftp_client.make_sftp(guild_id)
-    if sftp:
-        try:
-            data = sftp.download(path)
-        except Exception as e:
-            return f"Download failed: {e}", 500
-        if not data:
-            return "File not found or empty.", 404
-        name = os.path.basename(path) or "save"
-        return send_file(io.BytesIO(data), as_attachment=True, download_name=name)
-    client = nitrado_client_for(guild_id)
-    if not client:
-        return "Nitrado not configured.", 400
-    data = client.download_file_bytes(path)
-    if not data:
-        return "File not found or empty.", 404
-    name = os.path.basename(path) or "save"
-    return send_file(io.BytesIO(data), as_attachment=True, download_name=name)
+    return "Save file downloads are not supported on PlayStation servers due to Nitrado restrictions.", 501
 
 
 @app.route("/dashboard/<int:guild_id>/leaderboard", methods=["GET", "POST"])
