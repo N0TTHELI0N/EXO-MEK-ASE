@@ -519,10 +519,6 @@ def section_nitrado(guild_id):
                 request.form.get("svc_name", ""),
                 request.form.get("svc_service_id", ""),
                 request.form.get("svc_api_token", ""),
-                request.form.get("svc_ftp_host", ""),
-                request.form.get("svc_ftp_port", "22"),
-                request.form.get("svc_ftp_user", ""),
-                request.form.get("svc_ftp_password", ""),
             )
         elif action == "select":
             try:
@@ -539,12 +535,6 @@ def section_nitrado(guild_id):
             if nitrado_token:
                 guild_settings.update_setting(guild_id, "nitrado_api_token", nitrado_token)
             guild_settings.update_setting(guild_id, "nitrado_service_id", request.form.get("nitrado_service_id", ""))
-            guild_settings.update_setting(guild_id, "ftp_host", (request.form.get("ftp_host", "") or "").strip())
-            guild_settings.update_setting(guild_id, "ftp_port", (request.form.get("ftp_port", "") or "22").strip())
-            guild_settings.update_setting(guild_id, "ftp_user", (request.form.get("ftp_user", "") or "").strip())
-            ftp_pass = request.form.get("ftp_password", "")
-            if ftp_pass:
-                guild_settings.update_setting(guild_id, "ftp_password", ftp_pass)
         return redirect(url_for("section_nitrado", guild_id=guild_id))
     services = guild_settings.list_nitrado_services(guild_id)
     return render_template(
