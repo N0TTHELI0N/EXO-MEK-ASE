@@ -118,6 +118,14 @@
           <p class="text-xs text-green-400 mt-1">{{ t('service_id_configured') }}</p>
           {% endif %}
         </div>
+        <div>
+          <label for="nitrado_display_name" class="block text-sm font-medium text-gray-300 mb-1">{{ t('nitrado_display_name') }}</label>
+          <input type="text" id="nitrado_display_name" name="nitrado_display_name"
+                 value="{{ settings.nitrado_display_name or '' }}"
+                 placeholder="{{ t('nitrado_display_name_ph_legacy') }}"
+                 class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500">
+          <p class="text-xs text-gray-500 mt-1">{{ t('nitrado_display_name_hint') }}</p>
+        </div>
       </div>
       <div class="mt-4">
         <button type="submit" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-medium transition-colors">{{ t('save') }}</button>

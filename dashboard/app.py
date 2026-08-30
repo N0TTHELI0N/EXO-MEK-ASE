@@ -544,6 +544,7 @@ def section_nitrado(guild_id):
             if nitrado_token:
                 guild_settings.update_setting(guild_id, "nitrado_api_token", nitrado_token)
             guild_settings.update_setting(guild_id, "nitrado_service_id", request.form.get("nitrado_service_id", ""))
+            guild_settings.update_setting(guild_id, "nitrado_display_name", request.form.get("nitrado_display_name", ""))
         return redirect(url_for("section_nitrado", guild_id=guild_id))
     services = guild_settings.list_nitrado_services(guild_id)
     return render_template(
@@ -1293,20 +1294,6 @@ def section_server_control(guild_id):
                 guild_settings.set_active_nitrado_service(guild_id, int(request.form.get("svc_id", "0")))
             except Exception:
                 pass
-            return redirect(url_for("section_server_control", guild_id=guild_id))
-        if action == "update_display_name":
-            svc = {}
-            try:
-                svc = guild_settings.get_active_nitrado_service(guild_id) or {}
-            except Exception:
-                svc = {}
-            if svc.get("id"):
-                guild_settings.update_nitrado_display_name(
-                    guild_id, svc["id"], request.form.get("display_name", "")
-                )
-            else:
-                # No service row yet (legacy config): also store a fallback name.
-                guild_settings.update_setting(guild_id, "nitrado_display_name", request.form.get("display_name", ""))
             return redirect(url_for("section_server_control", guild_id=guild_id))
         notice = ""
         notice_type = "error"
