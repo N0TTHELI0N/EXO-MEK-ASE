@@ -1430,9 +1430,20 @@ def section_server_control(guild_id):
         except Exception:
             return default
 
-    _map = _pick("map", "map_name", "current_map", default="")
+    def _fmt_map(raw):
+        raw = str(raw or "")
+        if not raw:
+            return ""
+        if "preinstalled," in raw or ("preinstalled" in raw and raw.count(",") >= 2):
+            parts = [p for p in raw.split(",") if p and p != "preinstalled"]
+            for p in parts:
+                if not p.isdigit():
+                    return p.strip()
+        return raw.strip()
+
+    _map = _fmt_map(_pick("map", "map_name", "current_map", default=""))
     if not _map:
-        _map = str(_sval("MapPlayerDedicatedServer", "MapName", "map", "Map", default=""))
+        _map = _fmt_map(_sval("MapPlayerDedicatedServer", "MapName", "map", "Map", default=""))
 
     _server_name = _pick("server_name", "name", "display_name", "hostname", "session_name", default="")
     if not _server_name:

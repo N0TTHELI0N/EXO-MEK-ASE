@@ -636,13 +636,13 @@ def get_server_passwords(guild_id: int) -> dict:
             if not isinstance(ref, dict):
                 return
             for k, v in ref.items():
-                key = str(k).lower()
+                key = str(k).lower().replace("-", "_")
                 if isinstance(v, dict):
                     _collect_pass(v, into)
                     continue
-                if not into["admin"] and key in ("adminpassword", "serveradminpassword") and v:
+                if not into["admin"] and key in ("adminpassword", "serveradminpassword", "admin_password", "current_admin_password") and v:
                     into["admin"] = str(v)
-                elif not into["server"] and key == "serverpassword" and v:
+                elif not into["server"] and key in ("serverpassword", "server_password") and v:
                     into["server"] = str(v)
 
         found = {"admin": "", "server": ""}
