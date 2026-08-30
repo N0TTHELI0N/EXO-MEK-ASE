@@ -119,9 +119,56 @@ class NitradoClient:
         return bool(result)
 
     def start_server(self) -> bool:
-        """Start the ARK server."""
-        result = self._request("POST", f"/services/{self.service_id}/gameservers/games/start")
+        """Start the ARK server (game-start endpoint requires the Folder Short id)."""
+        result = self._request(
+            "POST",
+            f"/services/{self.service_id}/gameservers/games/start",
+            params={"game": self._game_short()},
+        )
         return bool(result)
+
+    def _game_short(self) -> str:
+        """Resolve the game's Folder Short id (e.g. 'arkps4'/'arkxb') used by
+        the Nitrado game-start endpoint, fetched from the gameserver object."""
+        if getattr(self, "_game_short_cached", None):
+            return self._game_short_cached
+        short = ""
+        try:
+            info = self._request("GET", f"/services/{self.service_id}/gameservers")
+            inner = info.get("data", info) if isinstance(info, dict) else {}
+            gs = inner.get("gameserver", inner) if isinstance(inner, dict) else {}
+            for k in ("folder_short", "folder", "game", "game_short"):
+                if isinstance(gs, dict) and gs.get(k):
+                    short = str(gs[k])
+                    break
+            if not short and isinstance(info, dict):
+                for k in ("folder_short", "folder", "game", "game_short"):
+                    if info.get(k):
+                        short = str(info[k])
+                        break
+            if not short:
+                raw_game = (gs.get("game") if isinstance(gs, dict) else "") or ""
+                gl = str(raw_game).lower()
+                if "ps4" in gl or "ps5" in gl:
+                    short = "arkps4"
+                elif "ascended" in gl or "asa" in gl:
+                    short = "arksa"
+                elif "xbox" in gl:
+                    short = "arkxb"
+                elif "survival" in gl:
+                    short = "arkse"
+                else:
+                    short = "arkps4"
+            print(f"[nitrado] game short resolved: {short!r}", flush=True)
+        except Exception as e:
+            print(f"[nitrado] game short error: {type(e).__name__}: {e}", flush=True)
+            short = "arkps4"
+        self._game_short_cached = short
+        return short
+
+    def get_game_short(self) -> str:
+        """Public helper: get the resolved game Folder Short id."""
+        return self._game_short()
 
     def send_command(self, command: str) -> str:
         """Execute a server command via the Nitrado API (replaces direct RCON)."""

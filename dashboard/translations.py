@@ -316,7 +316,8 @@ TRANSLATIONS = {
     "server_password_new": {"ar": "جديد", "en": "New"},
     "server_save_passwords": {"ar": "حفظ كلمات المرور", "en": "Save Passwords"},
 
-    "players_tab_connected": {"ar": "المتصلون", "en": "Connected"},
+    "players_tab_total": {"ar": "إجمالي اللاعبين", "en": "Total Players"},
+    "players_tab_online": {"ar": "المتصلون", "en": "Online"},
     "players_tab_banned": {"ar": "المحظورون", "en": "Banned"},
     "players_tab_whitelisted": {"ar": "القائمة البيضاء", "en": "Whitelisted"},
     "top_players_tab": {"ar": "أفضل اللاعبين", "en": "Top Players"},
@@ -338,6 +339,8 @@ TRANSLATIONS = {
     "player_optional": {"ar": "اختياري", "en": "optional"},
     "players_no_banned": {"ar": "لا يوجد لاعبون محظورون", "en": "No banned players"},
     "players_no_whitelisted": {"ar": "لا يوجد لاعبون في القائمة البيضاء", "en": "No whitelisted players"},
+    "players_no_online": {"ar": "لا يوجد لاعبون متصلون حاليًا", "en": "No players currently online"},
+    "players_total_empty": {"ar": "لا يوجد لاعبون", "en": "No players"},
     "server_ban": {"ar": "حظر", "en": "Ban"},
     "server_unban": {"ar": "إلغاء الحظر", "en": "Unban"},
     "server_whitelist": {"ar": "إضافة للقائمة البيضاء", "en": "Whitelist"},

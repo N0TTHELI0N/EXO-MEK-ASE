@@ -209,13 +209,14 @@
 
   <!-- Tabs -->
   <div class="flex border-b border-gray-700">
-    <button type="button" data-tab="connected" class="tab-btn px-6 py-4 text-sm font-semibold border-b-2 border-red-500 text-white">{{ t('players_tab_connected') }} ({{ server_status.players_list|length }})</button>
+    <button type="button" data-tab="total" class="tab-btn px-6 py-4 text-sm font-semibold border-b-2 border-red-500 text-white">{{ t('players_tab_total') }} ({{ server_status.players_list|length }})</button>
+    <button type="button" data-tab="online" class="tab-btn px-6 py-4 text-sm font-semibold border-b-2 border-transparent text-gray-400 hover:text-white">{{ t('players_tab_online') }} ({{ server_status.online_players|length }})</button>
     <button type="button" data-tab="banned" class="tab-btn px-6 py-4 text-sm font-semibold border-b-2 border-transparent text-gray-400 hover:text-white">{{ t('players_tab_banned') }} ({{ banned_players|length }})</button>
     <button type="button" data-tab="whitelisted" class="tab-btn px-6 py-4 text-sm font-semibold border-b-2 border-transparent text-gray-400 hover:text-white">{{ t('players_tab_whitelisted') }} ({{ whitelisted_players|length }})</button>
   </div>
 
-  <!-- Connected tab -->
-  <div id="tab-connected" class="tab-panel">
+  <!-- Total players tab (historical roster) -->
+  <div id="tab-total" class="tab-panel">
     <div class="px-6 py-4 border-b border-gray-700 flex flex-wrap items-center gap-3">
       <input id="player-search" type="text"
              placeholder="{{ t('player_search_placeholder') }}"
@@ -258,7 +259,46 @@
             {% endfor %}
           {% else %}
             <tr>
-              <td colspan="5" class="px-6 py-8 text-center text-gray-500">{{ t('server_no_players') }}</td>
+              <td colspan="5" class="px-6 py-8 text-center text-gray-500">{{ t('players_total_empty') }}</td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Online players tab -->
+  <div id="tab-online" class="tab-panel hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm text-left">
+        <thead class="text-xs text-gray-400 uppercase border-b border-gray-700">
+          <tr>
+            <th class="px-6 py-3">{{ t('server_name') }}</th>
+            <th class="px-6 py-3">{{ t('player_id') }}</th>
+            <th class="px-6 py-3">{{ t('server_ping') }}</th>
+            <th class="px-6 py-3">{{ t('player_actions') }}</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-700">
+          {% if server_status.online_players %}
+            {% for player in server_status.online_players %}
+            <tr class="hover:bg-gray-800">
+              <td class="px-6 py-3 text-gray-200 font-medium">{{ player.name }}</td>
+              <td class="px-6 py-3 text-gray-400 font-mono text-xs">{{ player.steam_id or player.id or '—' }}</td>
+              <td class="px-6 py-3 text-gray-400">{{ player.ping or '—' }}</td>
+              <td class="px-6 py-3">
+                <div class="flex gap-2">
+                  <button type="button" onclick="setBanPlayer(this)" data-name="{{ player.name }}" data-id="{{ player.steam_id or player.id or '' }}"
+                          class="px-3 py-1.5 bg-red-600/20 hover:bg-red-600/40 text-red-300 text-xs font-medium rounded-lg">{{ t('server_ban') }}</button>
+                  <button type="button" onclick="setWhitelistPlayer(this)" data-name="{{ player.name }}" data-id="{{ player.steam_id or player.id or '' }}"
+                          class="px-3 py-1.5 bg-sky-600/20 hover:bg-sky-600/40 text-sky-300 text-xs font-medium rounded-lg">{{ t('server_whitelist') }}</button>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="4" class="px-6 py-8 text-center text-gray-500">{{ t('players_no_online') }}</td>
             </tr>
           {% endif %}
         </tbody>

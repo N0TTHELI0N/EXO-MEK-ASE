@@ -1451,10 +1451,11 @@ def section_server_control(guild_id):
         _p["playtime_display"] = _fmt_secs(_pt["seconds"]) if _pt else None
         _p["playtime_last_seen"] = _pt.get("last_seen") if _pt else None
 
+    online_players = [p for p in players_list if p.get("online")]
     server_status = {
         "online": bool(str(info.get("status", "")).lower() in ("online", "running", "started") or info.get("is_running")),
         "map": _pick("map", "map_name", "current_map", default="Unknown"),
-        "players": _pick("player_count", "players_current", "player_current", "players", default=len(players_list)),
+        "players": _pick("player_count", "players_current", "player_current", "players", default=len(online_players)),
         "max_players": _pick("slots", "max_players", "maxplayers", "player_max", default=70),
         "ping": _pick("ping", "query_ping", default="-"),
         "uptime": _pick("uptime", default="-"),
@@ -1464,6 +1465,7 @@ def section_server_control(guild_id):
         "harvest_amount": _pick("harvest_amount", default=1),
         "xp_multiplier": _pick("xp_multiplier", default=1),
         "players_list": players_list,
+        "online_players": online_players,
     }
     if not server_status["server_name"]:
         try:
