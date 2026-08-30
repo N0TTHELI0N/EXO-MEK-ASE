@@ -168,7 +168,7 @@ TRANSLATIONS = {
     "service_id": {"ar": "معرّف الخدمة", "en": "Service ID"},
     "token_configured_keep": {"ar": "✓ الرمز مُعدّ. اتركه فارغًا للإبقاء عليه.", "en": "✓ Token configured. Leave blank to keep current."},
     "service_id_configured": {"ar": "✓ معرّف الخدمة مُعدّ.", "en": "✓ Service ID configured."},
-    "nitrado_services_count": {"ar": "السيرفرات المُعدّة ({{count}})", "en": "Configured servers ({{count}})"},
+    "nitrado_services_count": {"ar": "السيرفرات المُعدّة", "en": "Configured servers"},
     "nitrado_services_desc": {"ar": "أضف عدة سيرفرات Nitrado ثم اختر السيرفر النشط الذي تريد إدارته من لوحات التحكم.", "en": "Add multiple Nitrado servers, then choose the active server you want to manage from the dashboard."},
     "nitrado_select_active": {"ar": "السيرفر النشط", "en": "Active server"},
     "nitrado_select_choose": {"ar": "إدارة هذا السيرفر", "en": "Manage this server"},
