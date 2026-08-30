@@ -629,6 +629,7 @@ def get_ark_server_name(guild_id: int) -> str:
     # Best-effort discovery of the INI anywhere in the tree.
     try:
         found = client.find_file_tree("", "GameUserSettings.ini")
+        print(f"[nitrado-fs] find_file_tree found={found!r}", flush=True)
         if found and found not in tried:
             tried.insert(0, found)
     except Exception as e:
