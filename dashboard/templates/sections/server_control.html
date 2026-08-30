@@ -332,6 +332,8 @@
           <tr>
             <th class="px-6 py-3">#</th>
             <th class="px-6 py-3">{{ t('server_name') }}</th>
+            <th class="px-6 py-3">{{ t('top_players_character') }}</th>
+            <th class="px-6 py-3">{{ t('top_players_tribe') }}</th>
             <th class="px-6 py-3">{{ t('top_players_time') }}</th>
             <th class="px-6 py-3">{{ t('top_players_last_seen') }}</th>
           </tr>
@@ -341,12 +343,14 @@
           <tr class="hover:bg-gray-800">
             <td class="px-6 py-3 text-gray-400 font-mono">{{ loop.index }}</td>
             <td class="px-6 py-3 text-gray-200 font-medium">{{ p.player_name }}</td>
+            <td class="px-6 py-3 text-gray-500 text-xs">{{ t('top_players_nitrado_unavailable') }}</td>
+            <td class="px-6 py-3 text-gray-500 text-xs">{{ t('top_players_nitrado_unavailable') }}</td>
             <td class="px-6 py-3 text-gray-300 font-semibold">{{ p.display }}</td>
             <td class="px-6 py-3 text-gray-400">{{ p.last_seen or '—' }}</td>
           </tr>
           {% else %}
           <tr>
-            <td colspan="4" class="px-6 py-8 text-center text-gray-500">{{ t('top_players_none') }}</td>
+            <td colspan="6" class="px-6 py-8 text-center text-gray-500">{{ t('top_players_none') }}</td>
           </tr>
           {% endfor %}
         </tbody>
