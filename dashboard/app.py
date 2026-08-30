@@ -1441,26 +1441,26 @@ def section_server_control(guild_id):
                     return p.strip()
         return raw.strip()
 
-    _map = _fmt_map(_pick("map", "map_name", "current_map", default=""))
+    _map = _fmt_map(_sval("MapPlayerDedicatedServer", "MapName", "map", "Map", default=""))
     if not _map:
-        _map = _fmt_map(_sval("MapPlayerDedicatedServer", "MapName", "map", "Map", default=""))
+        _map = _fmt_map(_pick("map", "map_name", "current_map", default=""))
 
-    _server_name = _pick("server_name", "name", "display_name", "hostname", "session_name", default="")
+    _server_name = str(_sval("SessionName", "ServerName", "server_name", "server-name", default=""))
     if not _server_name:
-        _server_name = str(_sval("SessionName", "ServerName", "server_name", default=""))
+        _server_name = _pick("server_name", "name", "display_name", "hostname", "session_name", default="")
 
-    _cond = _pick("day_night_cycle", default=None)
-    _taming = _pick("taming_speed", default=None)
-    _harvest = _pick("harvest_amount", default=None)
-    _xp = _pick("xp_multiplier", default=None)
+    _cond = _sval("DayCycleSpeedScale", "DayNightSpeedScale", default=None)
+    _taming = _sval("TamingSpeedMultiplier", "TamingSpeed", default=None)
+    _harvest = _sval("HarvestAmountMultiplier", "HarvestAmount", default=None)
+    _xp = _sval("XPMultiplier", "XPAmountMultiplier", default=None)
     if _cond is None:
-        _cond = _sval("DayCycleSpeedScale", "DayNightSpeedScale", default=None)
+        _cond = _pick("day_night_cycle", default=None)
     if _taming is None:
-        _taming = _sval("TamingSpeedMultiplier", "TamingSpeed", default=None)
+        _taming = _pick("taming_speed", default=None)
     if _harvest is None:
-        _harvest = _sval("HarvestAmountMultiplier", "HarvestAmount", default=None)
+        _harvest = _pick("harvest_amount", default=None)
     if _xp is None:
-        _xp = _sval("XPMultiplier", "XPAmountMultiplier", default=None)
+        _xp = _pick("xp_multiplier", default=None)
 
     players_list = []
     try:
@@ -1512,6 +1512,15 @@ def section_server_control(guild_id):
     _status_l = _status_raw.lower()
     _online = _status_l in ("online", "running", "started", "active") or bool(info.get("is_running"))
     _starting = _online or ("install" in _status_l or "start" in _status_l or "boot" in _status_l)
+    if not getattr(app, "_sc_diag_logged", False):
+        try:
+            print("[sc-settings] resolved map=%r name=%r cond=%r taming=%r harvest=%r xp=%r" % (
+                _map, _server_name, _cond, _taming, _harvest, _xp), flush=True)
+            print("[sc-settings] flat keys sample: %s" % [k for k in list(settings_flat.keys())[:40]], flush=True)
+            app._sc_diag_logged = True
+        except Exception:
+            pass
+
     server_status = {
         "online": _online,
         "status_text": _status_raw or ("On" if _online else "Off"),
