@@ -32,6 +32,46 @@
         <p class="text-xs text-green-400 mt-1">{{ t('service_id_configured') }}</p>
         {% endif %}
       </div>
+
+      <div class="border-t border-gray-700/50 pt-4">
+        <h3 class="text-sm font-bold text-white mb-1">{{ t('ftp_title') }}</h3>
+        <p class="text-xs text-gray-400 mb-3">{{ t('ftp_desc') }}</p>
+      </div>
+
+      <div>
+        <label for="ftp_host" class="block text-sm font-medium text-gray-300 mb-1">{{ t('ftp_host') }}</label>
+        <input type="text" id="ftp_host" name="ftp_host"
+               value="{{ settings.ftp_host or '' }}"
+               placeholder="e.g. server-12345.nitrado.net"
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent">
+      </div>
+
+      <div>
+        <label for="ftp_port" class="block text-sm font-medium text-gray-300 mb-1">{{ t('ftp_port') }}</label>
+        <input type="text" id="ftp_port" name="ftp_port"
+               value="{{ settings.ftp_port or '22' }}"
+               placeholder="22"
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent">
+      </div>
+
+      <div>
+        <label for="ftp_user" class="block text-sm font-medium text-gray-300 mb-1">{{ t('ftp_user') }}</label>
+        <input type="text" id="ftp_user" name="ftp_user"
+               value="{{ settings.ftp_user or '' }}"
+               placeholder="FTP username"
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent">
+      </div>
+
+      <div>
+        <label for="ftp_password" class="block text-sm font-medium text-gray-300 mb-1">{{ t('ftp_password') }}</label>
+        <input type="password" id="ftp_password" name="ftp_password"
+               value=""
+               placeholder="{% if settings.ftp_password %}•••••••• (configured){% else %}FTP password{% endif %}"
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent">
+        {% if settings.ftp_password %}
+        <p class="text-xs text-green-400 mt-1">{{ t('ftp_password_configured_keep') }}</p>
+        {% endif %}
+      </div>
     </div>
 
     <div class="mt-6">

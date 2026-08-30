@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import guild_settings
 import shop_db
 import nitrado
+import sftp_client
 from security import validate_path
 from translations import TRANSLATIONS, DASHBOARD_DEFAULT_LANG, DASHBOARD_LANGS
 
@@ -515,6 +516,12 @@ def section_nitrado(guild_id):
         if nitrado_token:
             guild_settings.update_setting(guild_id, "nitrado_api_token", nitrado_token)
         guild_settings.update_setting(guild_id, "nitrado_service_id", request.form.get("nitrado_service_id", ""))
+        guild_settings.update_setting(guild_id, "ftp_host", (request.form.get("ftp_host", "") or "").strip())
+        guild_settings.update_setting(guild_id, "ftp_port", (request.form.get("ftp_port", "") or "22").strip())
+        guild_settings.update_setting(guild_id, "ftp_user", (request.form.get("ftp_user", "") or "").strip())
+        ftp_pass = request.form.get("ftp_password", "")
+        if ftp_pass:
+            guild_settings.update_setting(guild_id, "ftp_password", ftp_pass)
         return redirect(url_for("section_nitrado", guild_id=guild_id))
     return render_template(
         "sections/nitrado.html",
@@ -1087,14 +1094,20 @@ def section_backup(guild_id):
             import urllib.parse as _u
             return redirect(url_for("section_backup", guild_id=guild_id) + "?savedir=" + _u.quote(save_dir or "ShooterGame/Saved/SavedArks"))
         elif action == "save_upload":
-            client = nitrado_client_for(guild_id)
+            sftp = sftp_client.make_sftp(guild_id)
             save_dir = (request.form.get("save_dir") or "").strip().replace("\\", "/") or "ShooterGame/Saved/SavedArks"
+            save_dir = save_dir.lstrip("/")
             f = request.files.get("file")
-            if not client:
+            if not (sftp or nitrado_client_for(guild_id)):
                 notice = "save_upload_failed"
             elif not f or not f.filename:
                 notice = "save_upload_failed"
+            elif sftp:
+                name = os.path.basename(f.filename.replace("\\", "/"))
+                ok = sftp.upload(save_dir, name, f.read())
+                notice = "save_uploaded" if ok else "save_upload_failed"
             else:
+                client = nitrado_client_for(guild_id)
                 name = os.path.basename(f.filename.replace("\\", "/"))
                 ok = client.upload_file_bytes(save_dir, name, f.read())
                 notice = "save_uploaded" if ok else "save_upload_failed"
@@ -1170,17 +1183,32 @@ def section_backup(guild_id):
         except Exception as e:
             cloud_error = str(e)
 
-    # Save-file browser (only lists after explicit Browse via ?savedir=)
+    # Save-file browser (SFTP when configured, else Nitrado file-server API)
+    sftp = sftp_client.make_sftp(guild_id)
     save_dir = request.args.get("savedir") or ""
     save_browsed = bool(request.args.get("savedir"))
     if save_dir:
         save_dir = save_dir.replace("\\", "/")
+        save_dir = save_dir.lstrip("/")
     if not save_dir:
         save_dir = guild_settings.get_setting(guild_id, "save_dir", "ShooterGame/Saved/SavedArks") or "ShooterGame/Saved/SavedArks"
-        save_dir = str(save_dir)
+        save_dir = str(save_dir).lstrip("/")
     save_files = []
     save_error = None
-    if save_browsed and client:
+    if save_browsed and sftp:
+        try:
+            save_files = sftp.list_entries(save_dir)
+        except Exception as e:
+            save_error = str(e)
+        if not save_files and not save_error:
+            try:
+                save_files = sftp.list_entries("")
+            except Exception as e:
+                save_error = str(e)
+                save_files = []
+            if save_files:
+                save_error = "folder is empty/invalid - showing server root; click a folder to navigate"
+    elif save_browsed and client:
         try:
             entries = client.list_file_entries(save_dir) or []
             for e in entries:
@@ -1193,65 +1221,12 @@ def section_backup(guild_id):
                     size_s = f"{size/1024:.1f} KB"
                 else:
                     size_s = ""
-                save_files.append(
-                    {
-                        "name": name,
-                        "size_s": size_s,
-                        "is_dir": is_dir,
-                        "path": e.get("path") or save_dir,
-                    }
-                )
+                save_files.append({"name": name, "size_s": size_s, "is_dir": is_dir, "path": e.get("path") or save_dir})
             save_files.sort(key=lambda f: (not f["is_dir"], f["name"].lower()))
-            # Fallback: if the chosen folder is empty, list the server root so the
-            # user can navigate through the actual folder tree instead of guessing.
-            if not save_files:
-                root_entries = client.list_file_entries("") or []
-                root_files = []
-                for e in root_entries:
-                    name = e.get("name") or ""
-                    is_dir = e.get("type") == "dir"
-                    size = e.get("size") or 0
-                    if size and size < 1000:
-                        size_s = f"{size} B"
-                    elif size:
-                        size_s = f"{size/1024:.1f} KB"
-                    else:
-                        size_s = ""
-                    root_files.append(
-                        {
-                            "name": name,
-                            "size_s": size_s,
-                            "is_dir": is_dir,
-                            "path": e.get("path") or "",
-                        }
-                    )
-                root_files.sort(key=lambda f: (not f["is_dir"], f["name"].lower()))
-                save_files = root_files
-                save_error = "folder is empty/invalid - showing server root; click a folder to navigate"
         except Exception as e:
             save_error = str(e)
-        if client and not save_files:
-            try:
-                client.download_file_bytes("ShooterGame/Saved/Config/GameUserSettings.ini")
-            except Exception as e:
-                print(f"[nitrado-fs] probe config error: {type(e).__name__}: {e}")
-            for probe_dir in ("/games/ni8462382_1/noftp", "/games/ni8462382_1/noftp/arkps"):
-                try:
-                    entries = client.list_file_entries(probe_dir) or []
-                    print(f"[nitrado-fs] probe list {probe_dir!r} count={len(entries)} names={[x.get('name') for x in entries]}")
-                except Exception as e:
-                    print(f"[nitrado-fs] probe list {probe_dir!r} error: {type(e).__name__}: {e}")
-            for _m in ARK_MAPS:
-                if save_dir.rstrip("/").endswith("/" + _m["folder"]):
-                    for base in ("/games/ni8462382_1/noftp/arkps", "/games/ni8462382_1/noftp"):
-                        try:
-                            client.download_file_bytes(f"{base}/ShooterGame/Saved/SavedArks/{_m['folder']}/{_m['folder']}.ark")
-                        except Exception as e:
-                            print(f"[nitrado-fs] probe ark error: {type(e).__name__}: {e}")
-                    break
-    elif save_browsed and not client:
+    elif save_browsed and not (sftp or client):
         save_error = "Nitrado is not configured."
-        save_browsed = False
 
     current_map_folder = ""
     for _m in ARK_MAPS:
@@ -1276,6 +1251,7 @@ def section_backup(guild_id):
         ark_maps=ARK_MAPS,
         current_map_folder=current_map_folder,
         save_error=save_error,
+        sftp_configured=sftp is not None,
     )
 
 
@@ -1283,9 +1259,19 @@ def section_backup(guild_id):
 @login_required
 @guild_admin_required
 def api_save_download(guild_id):
-    path = (request.args.get("path") or "").replace("\\", "/")
+    path = (request.args.get("path") or "").replace("\\", "/").lstrip("/")
     if not path or ".." in path.split("/"):
         return "Invalid path.", 400
+    sftp = sftp_client.make_sftp(guild_id)
+    if sftp:
+        try:
+            data = sftp.download(path)
+        except Exception as e:
+            return f"Download failed: {e}", 500
+        if not data:
+            return "File not found or empty.", 404
+        name = os.path.basename(path) or "save"
+        return send_file(io.BytesIO(data), as_attachment=True, download_name=name)
     client = nitrado_client_for(guild_id)
     if not client:
         return "Nitrado not configured.", 400

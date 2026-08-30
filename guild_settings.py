@@ -18,7 +18,7 @@ _fernet = Fernet(_ENCRYPTION_KEY.encode()) if _ENCRYPTION_KEY else None
 # Secret used to sign license keys. If not set, falls back to ENCRYPTION_KEY.
 _LICENSE_SIGN_KEY = (os.getenv("LICENSE_SIGN_KEY", "") or _ENCRYPTION_KEY).encode()
 
-ENCRYPTED_FIELDS = {"nitrado_api_token"}
+ENCRYPTED_FIELDS = {"nitrado_api_token", "ftp_password"}
 
 
 def _encrypt(value: str) -> str:
@@ -430,6 +430,10 @@ def get_nitrado_config(guild_id: int) -> dict:
         "api_token": get_setting(guild_id, "nitrado_api_token", ""),
         "service_id": get_setting(guild_id, "nitrado_service_id", ""),
         "user_id": get_setting(guild_id, "nitrado_user_id", ""),
+        "ftp_host": get_setting(guild_id, "ftp_host", ""),
+        "ftp_port": get_setting(guild_id, "ftp_port", "22"),
+        "ftp_user": get_setting(guild_id, "ftp_user", ""),
+        "ftp_password": get_setting(guild_id, "ftp_password", ""),
     }
 
 

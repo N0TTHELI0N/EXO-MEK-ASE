@@ -210,6 +210,9 @@
 
   {% if save_files %}
   {% if save_error %}<p class="text-sm text-amber-400 mb-3">{{ t('save_load_failed') }} <code class="text-xs">{{ save_error }}</code></p>{% endif %}
+  {% if not sftp_configured %}
+  <p class="text-sm text-amber-400 mb-3">⚠ <a href="/dashboard/{{ guild_id }}/nitrado" class="text-amber-300 underline">{{ t('ftp_setup_hint') }}</a></p>
+  {% endif %}
   <div class="overflow-x-auto rounded-xl border border-gray-700/50">
     <table class="w-full text-sm text-left">
       <thead class="text-xs text-gray-400 uppercase bg-gray-800 border-b border-gray-700">
