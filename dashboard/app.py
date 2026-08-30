@@ -1235,12 +1235,19 @@ def section_backup(guild_id):
                 client.download_file_bytes("ShooterGame/Saved/Config/GameUserSettings.ini")
             except Exception as e:
                 print(f"[nitrado-fs] probe config error: {type(e).__name__}: {e}")
+            for probe_dir in ("/games/ni8462382_1/noftp", "/games/ni8462382_1/noftp/arkps"):
+                try:
+                    entries = client.list_file_entries(probe_dir) or []
+                    print(f"[nitrado-fs] probe list {probe_dir!r} count={len(entries)} names={[x.get('name') for x in entries]}")
+                except Exception as e:
+                    print(f"[nitrado-fs] probe list {probe_dir!r} error: {type(e).__name__}: {e}")
             for _m in ARK_MAPS:
                 if save_dir.rstrip("/").endswith("/" + _m["folder"]):
-                    try:
-                        client.download_file_bytes(f"ShooterGame/Saved/SavedArks/{_m['folder']}/{_m['folder']}.ark")
-                    except Exception as e:
-                        print(f"[nitrado-fs] probe ark error: {type(e).__name__}: {e}")
+                    for base in ("/games/ni8462382_1/noftp/arkps", "/games/ni8462382_1/noftp"):
+                        try:
+                            client.download_file_bytes(f"{base}/ShooterGame/Saved/SavedArks/{_m['folder']}/{_m['folder']}.ark")
+                        except Exception as e:
+                            print(f"[nitrado-fs] probe ark error: {type(e).__name__}: {e}")
                     break
     elif save_browsed and not client:
         save_error = "Nitrado is not configured."

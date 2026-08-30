@@ -229,9 +229,11 @@ class NitradoClient:
             roots.append(fs)
             if uname:
                 roots.append("/games/{0}/{1}".format(uname, fs))
+                roots.append("/games/{0}/noftp/{1}".format(uname, fs))
             else:
                 roots.append("/games/xxx/" + fs)
         if uname:
+            roots.append("/games/{0}/noftp".format(uname))
             roots.append("/games/{0}/ftproot".format(uname))
         if not fs:
             for g in ("arkps4", "arkxb", "arkse", "arksa", "ark"):
