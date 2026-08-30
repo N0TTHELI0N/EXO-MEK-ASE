@@ -1227,7 +1227,6 @@ def section_backup(guild_id):
                     )
                 root_files.sort(key=lambda f: (not f["is_dir"], f["name"].lower()))
                 save_files = root_files
-                save_dir = ""
                 save_error = "folder is empty/invalid - showing server root; click a folder to navigate"
         except Exception as e:
             save_error = str(e)

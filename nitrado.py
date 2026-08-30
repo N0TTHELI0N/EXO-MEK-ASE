@@ -285,11 +285,17 @@ class NitradoClient:
         resp = requests.get(url, params={"dir": directory}, headers=self.headers, timeout=30)
         if resp.status_code != 200:
             raise RuntimeError(f"Nitrado list error: HTTP {resp.status_code}")
-        data = resp.json().get("data", {})
+        raw = resp.json()
+        data = raw.get("data", {})
         if not isinstance(data, dict):
+            raw_text = resp.text[:500]
+            print(f"[nitrado-fs] _fs_list dir={directory!r} HTTP={resp.status_code} raw_top={list(raw.keys())} data_not_dict raw={raw_text}")
             raise RuntimeError("Nitrado list returned an unexpected response")
-        print(f"[nitrado-fs] _fs_list dir={directory!r} HTTP={resp.status_code} data_keys={list(data.keys())}")
         entries = data.get("entries", [])
+        if not entries:
+            print(f"[nitrado-fs] _fs_list dir={directory!r} HTTP={resp.status_code} data_keys={list(data.keys())} entries=EMPTY raw_top={list(raw.keys())} raw_tail={resp.text[-250:]}")
+        else:
+            print(f"[nitrado-fs] _fs_list dir={directory!r} HTTP={resp.status_code} entries_count={len(entries)}")
         out = []
         for e in entries:
             if not isinstance(e, dict):
