@@ -1846,6 +1846,34 @@ def record_playtime(guild_id: int, players: list, seconds: int):
         conn.close()
 
 
+def get_playtime_map(guild_id: int) -> dict:
+    """Return playtime lookups keyed by player_id and player_name, plus raw rows.
+
+    shape: {"by_id": {...}, "by_name": {...}, "rows": [ ... ]}
+    """
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT player_id, player_name, seconds, last_seen
+                FROM player_playtime
+                WHERE guild_id = %s
+                ORDER BY seconds DESC
+            """, (guild_id,))
+            rows = cur.fetchall()
+        by_id = {}
+        by_name = {}
+        for pid, pname, seconds, last_seen in rows:
+            key_id = str(pid or "")
+            if key_id:
+                by_id[key_id] = {"seconds": seconds, "last_seen": last_seen}
+            if pname:
+                by_name[pname.lower()] = {"seconds": seconds, "last_seen": last_seen}
+        return {"by_id": by_id, "by_name": by_name, "rows": rows}
+    finally:
+        conn.close()
+
+
 def get_top_players(guild_id: int, limit: int = 20):
     """Return the top players by accumulated playtime (seconds)."""
     conn = get_conn()
