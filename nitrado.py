@@ -518,21 +518,43 @@ def get_server_passwords(guild_id: int) -> dict:
                 return s
         return ""
 
-    # 1) gameserver info exposes admin_password / server_password directly
+    # 1) gameserver info: admin/server passwords live under the "settings" object
+    #    (ARK [ServerSettings]) and sometimes "credentials".
     try:
         info = client.get_server_status()
         inner = info.get("data", info) if isinstance(info, dict) else {}
         gs = inner.get("gameserver", inner) if isinstance(inner, dict) else {}
+
+        def _collect_pass(ref, into):
+            if not isinstance(ref, dict):
+                return
+            for k, v in ref.items():
+                key = str(k).lower()
+                if isinstance(v, dict):
+                    _collect_pass(v, into)
+                    continue
+                if not into["admin"] and key in ("adminpassword", "serveradminpassword") and v:
+                    into["admin"] = str(v)
+                elif not into["server"] and key == "serverpassword" and v:
+                    into["server"] = str(v)
+
+        found = {"admin": "", "server": ""}
         if isinstance(gs, dict):
-            admin = _first(gs.get("admin_password"), gs.get("server_admin_password"))
-            server = _first(gs.get("server_password"))
+            for sect in ("settings", "credentials", "game_specific"):
+                _collect_pass(gs.get(sect), found)
             if not getattr(client, "_pw_diag_logged", False):
                 import json as _json
+                def _skim(v):
+                    if isinstance(v, dict):
+                        return {k: _skim(x) for k, x in list(v.items())[:40]}
+                    return f"{type(v).__name__}:{str(v)[:60]}"
                 print(f"[nitrado-pw] gameserver keys: {list(gs.keys())}", flush=True)
-                print(f"[nitrado-pw] admin={gs.get('admin_password')!r} server={gs.get('server_password')!r} all={_json.dumps({k:v for k,v in gs.items() if 'pass' in str(k).lower()}, default=str)}", flush=True)
+                for s in ("settings", "credentials", "game_specific"):
+                    if isinstance(gs.get(s), dict):
+                        print(f"[nitrado-pw] {s} skim: {_json.dumps(_skim(gs.get(s)), default=str)[:1200]}", flush=True)
                 client._pw_diag_logged = True
-            if admin or server:
-                return {"admin": str(admin or ""), "server": str(server or "")}
+            if found["admin"] or found["server"]:
+                return found
     except Exception:
         pass
 
