@@ -232,6 +232,14 @@ STRINGS = {
         "ar": "تم تغيير اللغة إلى **{lang_name}**.",
         "en": "Language set to **{lang_name}**.",
     },
+    "playtime_no_data": {
+        "ar": "لا توجد بيانات تتبع بعد. يبدأ تتبع وقت اللعب من لحظة تفعيل البوت على السيرفر.",
+        "en": "No tracking data yet. Playtime starts accumulating once the bot is live on the server.",
+    },
+    "playtime_tracking_note": {
+        "ar": "يتم تتبع الوقت من لحظة تفعيل البوت (لا يوجد سجل سابق من Nitrado).",
+        "en": "Tracked from when the bot went live (Nitrado provides no history).",
+    },
 }
 
 DEFAULT_LANGUAGE = "ar"

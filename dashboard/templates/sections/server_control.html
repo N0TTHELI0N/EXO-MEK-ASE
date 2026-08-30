@@ -186,6 +186,7 @@
     <button type="button" data-tab="connected" class="tab-btn px-6 py-4 text-sm font-semibold border-b-2 border-red-500 text-white">{{ t('players_tab_connected') }} ({{ server_status.players_list|length }})</button>
     <button type="button" data-tab="banned" class="tab-btn px-6 py-4 text-sm font-semibold border-b-2 border-transparent text-gray-400 hover:text-white">{{ t('players_tab_banned') }} ({{ banned_players|length }})</button>
     <button type="button" data-tab="whitelisted" class="tab-btn px-6 py-4 text-sm font-semibold border-b-2 border-transparent text-gray-400 hover:text-white">{{ t('players_tab_whitelisted') }} ({{ whitelisted_players|length }})</button>
+    <button type="button" data-tab="topplayers" class="tab-btn px-6 py-4 text-sm font-semibold border-b-2 border-transparent text-gray-400 hover:text-white">{{ t('top_players_tab') }} ({{ top_players|length }})</button>
   </div>
 
   <!-- Connected tab -->
@@ -316,6 +317,36 @@
           {% else %}
           <tr>
             <td colspan="5" class="px-6 py-8 text-center text-gray-500">{{ t('players_no_whitelisted') }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Top Players tab -->
+  <div id="tab-topplayers" class="tab-panel hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm text-left">
+        <thead class="text-xs text-gray-400 uppercase border-b border-gray-700">
+          <tr>
+            <th class="px-6 py-3">#</th>
+            <th class="px-6 py-3">{{ t('server_name') }}</th>
+            <th class="px-6 py-3">{{ t('top_players_time') }}</th>
+            <th class="px-6 py-3">{{ t('top_players_last_seen') }}</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-700">
+          {% for p in top_players %}
+          <tr class="hover:bg-gray-800">
+            <td class="px-6 py-3 text-gray-400 font-mono">{{ loop.index }}</td>
+            <td class="px-6 py-3 text-gray-200 font-medium">{{ p.player_name }}</td>
+            <td class="px-6 py-3 text-gray-300 font-semibold">{{ p.display }}</td>
+            <td class="px-6 py-3 text-gray-400">{{ p.last_seen or '—' }}</td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="4" class="px-6 py-8 text-center text-gray-500">{{ t('top_players_none') }}</td>
           </tr>
           {% endfor %}
         </tbody>

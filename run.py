@@ -36,6 +36,7 @@ def run_bot():
         "cogs.moderation",
         "cogs.topservers",
         "cogs.help",
+        "cogs.playtime",
     ]
 
     @bot.event

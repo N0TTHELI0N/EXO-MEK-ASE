@@ -1466,6 +1466,28 @@ def section_server_control(guild_id):
     except Exception:
         whitelisted_players = []
 
+    top_players = []
+    try:
+        _rows = guild_settings.get_top_players(guild_id, limit=20)
+        for _r in _rows:
+            _secs = int(_r.get("seconds") or 0)
+            _parts = []
+            _d, _rem = divmod(_secs, 86400)
+            _h, _rem = divmod(_rem, 3600)
+            _m, _s = divmod(_rem, 60)
+            if _d:
+                _parts.append(f"{_d}d")
+            if _h:
+                _parts.append(f"{_h}h")
+            if _m:
+                _parts.append(f"{_m}m")
+            if not _parts:
+                _parts.append(f"{_s}s")
+            _r["display"] = " ".join(_parts)
+            top_players.append(_r)
+    except Exception:
+        top_players = []
+
     return render_template(
         "sections/server_control.html",
         user=get_current_user(),
@@ -1474,6 +1496,7 @@ def section_server_control(guild_id):
         server_status=server_status,
         banned_players=banned_players,
         whitelisted_players=whitelisted_players,
+        top_players=top_players,
         notice=notice,
         notice_type=notice_type,
     )

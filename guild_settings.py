@@ -221,6 +221,16 @@ def init_db():
                 )
             """)
             cur.execute("""
+                CREATE TABLE IF NOT EXISTS player_playtime (
+                    guild_id    BIGINT NOT NULL,
+                    player_id   TEXT NOT NULL,
+                    player_name TEXT NOT NULL,
+                    seconds     BIGINT DEFAULT 0,
+                    last_seen   TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    PRIMARY KEY (guild_id, player_id)
+                )
+            """)
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS pending_actions (
                     id          SERIAL PRIMARY KEY,
                     guild_id    BIGINT NOT NULL,
@@ -1804,3 +1814,58 @@ def get_category_rules(guild_id: int) -> dict:
 
 def set_category_rules(guild_id: int, rules: dict):
     update_setting(guild_id, "category_rules", json.dumps(rules))
+
+
+# ============================================================
+#  PLAYER PLAYTIME TRACKING
+# ============================================================
+
+def record_playtime(guild_id: int, players: list, seconds: int):
+    """Accumulate `seconds` of playtime for each currently-online player."""
+    if not players or seconds <= 0:
+        return
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            for p in players:
+                if not isinstance(p, dict):
+                    continue
+                pid = str(p.get("id") or p.get("name") or "unknown")
+                pname = str(p.get("name") or "Unknown")
+                cur.execute("""
+                    INSERT INTO player_playtime (guild_id, player_id, player_name, seconds, last_seen)
+                    VALUES (%s, %s, %s, %s, NOW())
+                    ON CONFLICT (guild_id, player_id)
+                    DO UPDATE SET
+                        player_name = EXCLUDED.player_name,
+                        seconds = player_playtime.seconds + EXCLUDED.seconds,
+                        last_seen = NOW()
+                """, (guild_id, pid, pname, seconds))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_top_players(guild_id: int, limit: int = 20):
+    """Return the top players by accumulated playtime (seconds)."""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT player_id, player_name, seconds, last_seen
+                FROM player_playtime
+                WHERE guild_id = %s
+                ORDER BY seconds DESC
+                LIMIT %s
+            """, (guild_id, limit))
+            return [
+                {
+                    "player_id": r[0],
+                    "player_name": r[1],
+                    "seconds": r[2],
+                    "last_seen": r[3],
+                }
+                for r in cur.fetchall()
+            ]
+    finally:
+        conn.close()
