@@ -1486,6 +1486,16 @@ def section_server_control(guild_id):
         _server_name = str(_sval("SessionName", "ServerName", "server_name", "server-name", default=""))
     if not _server_name:
         _server_name = _pick("server_name", "name", "display_name", "hostname", "session_name", default="")
+    # Owner-picked display name applies ONLY to the Server Status card below.
+    _status_display_name = ""
+    try:
+        _svc = guild_settings.get_active_nitrado_service(guild_id)
+        if _svc:
+            _status_display_name = (_svc.get("display_name") or "").strip() or (_svc.get("name") or "").strip()
+    except Exception:
+        _status_display_name = ""
+    if _status_display_name:
+        _server_name = _status_display_name
 
     _cond = _sval("DayCycleSpeedScale", "DayNightSpeedScale", default=None)
     _taming = _sval("TamingSpeedMultiplier", "TamingSpeed", default=None)

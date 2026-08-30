@@ -752,18 +752,7 @@ def get_server_passwords(guild_id: int) -> dict:
 
 
 def server_name(guild_id: int) -> str:
-    """Best-effort ARK server name: display_name override, service name, then INI, then API info."""
-    try:
-        svc = guild_settings.get_active_nitrado_service(guild_id)
-        if svc:
-            dn = (svc.get("display_name") or "").strip()
-            if dn:
-                return dn
-            nm = (svc.get("name") or "").strip()
-            if nm:
-                return nm
-    except Exception:
-        pass
+    """Best-effort 'real' ARK server name: GameUserSettings.ini first, then API info."""
     name = get_ark_server_name(guild_id)
     if name:
         return name
