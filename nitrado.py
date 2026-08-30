@@ -145,6 +145,18 @@ class NitradoClient:
         )
         return bool(data)
 
+    def get_settings(self) -> dict:
+        """Read current server settings from Nitrado (GET settings)."""
+        data = self._request(
+            "GET",
+            f"/services/{self.service_id}/gameservers/settings",
+        )
+        if not isinstance(data, dict):
+            return {}
+        inner = data.get("settings", data)
+        return inner if isinstance(inner, dict) else {}
+
+
     def update_game_setting(self, category: str, key: str, value: str) -> bool:
         """Update a single game setting via the Nitrado gameservers/settings API.
 
@@ -489,13 +501,61 @@ def get_ark_server_name(guild_id: int) -> str:
 
 
 def get_server_passwords(guild_id: int) -> dict:
-    """Read the current admin and server (join) passwords from GameUserSettings.ini.
+    """Read the current admin and server (join) passwords.
+
+    Sources in order: gameserver info (admin_password/server_password),
+    Nitrado settings API, then GameUserSettings.ini via file server.
 
     Returns {"admin": str, "server": str}. Empty string means unset/not found.
     """
     client = get_client(guild_id)
     if not client:
         return {"admin": "", "server": ""}
+
+    def _first(*sources):
+        for s in sources:
+            if s:
+                return s
+        return ""
+
+    # 1) gameserver info exposes admin_password / server_password directly
+    try:
+        info = client.get_server_status()
+        inner = info.get("data", info) if isinstance(info, dict) else {}
+        gs = inner.get("gameserver", inner) if isinstance(inner, dict) else {}
+        if isinstance(gs, dict):
+            admin = _first(gs.get("admin_password"), gs.get("server_admin_password"))
+            server = _first(gs.get("server_password"))
+            if not getattr(client, "_pw_diag_logged", False):
+                import json as _json
+                print(f"[nitrado-pw] gameserver keys: {list(gs.keys())}", flush=True)
+                print(f"[nitrado-pw] admin={gs.get('admin_password')!r} server={gs.get('server_password')!r} all={_json.dumps({k:v for k,v in gs.items() if 'pass' in str(k).lower()}, default=str)}", flush=True)
+                client._pw_diag_logged = True
+            if admin or server:
+                return {"admin": str(admin or ""), "server": str(server or "")}
+    except Exception:
+        pass
+
+    # 2) Nitrado settings API
+    try:
+        settings = client.get_settings()
+        admin = ""
+        server = ""
+        for section in settings.values():
+            if not isinstance(section, dict):
+                continue
+            for k, v in section.items():
+                key = str(k).lower()
+                if not admin and key in ("adminpassword", "serveradminpassword"):
+                    admin = str(v or "")
+                elif not server and key == "serverpassword":
+                    server = str(v or "")
+        if admin or server:
+            return {"admin": admin, "server": server}
+    except Exception:
+        pass
+
+    # 3) GameUserSettings.ini via file server
     for path in [
         "ShooterGame/Saved/Config/GameUserSettings.ini",
         "ShooterGame/Saved/Config/LinuxServer/GameUserSettings.ini",
@@ -509,9 +569,7 @@ def get_server_passwords(guild_id: int) -> dict:
             for line in content.splitlines():
                 line = line.strip()
                 low = line.lower()
-                if not admin and low.startswith("adminpassword="):
-                    admin = line.split("=", 1)[1].strip().strip('"')
-                elif not admin and low.startswith("serveradminpassword="):
+                if not admin and (low.startswith("adminpassword=") or low.startswith("serveradminpassword=")):
                     admin = line.split("=", 1)[1].strip().strip('"')
                 if not server and low.startswith("serverpassword="):
                     server = line.split("=", 1)[1].strip().strip('"')
