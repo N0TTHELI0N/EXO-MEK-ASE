@@ -230,8 +230,9 @@ def guild_admin_required(f):
 
 
 def nitrado_client_for(guild_id):
-    token = guild_settings.get_setting(guild_id, "nitrado_api_token")
-    service_id = guild_settings.get_setting(guild_id, "nitrado_service_id")
+    cfg = guild_settings.get_nitrado_config(guild_id)
+    token = cfg.get("api_token")
+    service_id = cfg.get("service_id")
     if not token or not service_id:
         return None
     from nitrado import NitradoClient
@@ -511,23 +512,49 @@ def section_overview(guild_id):
 @validate_csrf
 def section_nitrado(guild_id):
     if request.method == "POST":
-        nitrado_token = request.form.get("nitrado_api_token", "")
-        if nitrado_token:
-            guild_settings.update_setting(guild_id, "nitrado_api_token", nitrado_token)
-        guild_settings.update_setting(guild_id, "nitrado_service_id", request.form.get("nitrado_service_id", ""))
-        guild_settings.update_setting(guild_id, "ftp_host", (request.form.get("ftp_host", "") or "").strip())
-        guild_settings.update_setting(guild_id, "ftp_port", (request.form.get("ftp_port", "") or "22").strip())
-        guild_settings.update_setting(guild_id, "ftp_user", (request.form.get("ftp_user", "") or "").strip())
-        ftp_pass = request.form.get("ftp_password", "")
-        if ftp_pass:
-            guild_settings.update_setting(guild_id, "ftp_password", ftp_pass)
+        action = request.form.get("service_action", "")
+        if action == "add":
+            guild_settings.add_nitrado_service(
+                guild_id,
+                request.form.get("svc_name", ""),
+                request.form.get("svc_service_id", ""),
+                request.form.get("svc_api_token", ""),
+                request.form.get("svc_ftp_host", ""),
+                request.form.get("svc_ftp_port", "22"),
+                request.form.get("svc_ftp_user", ""),
+                request.form.get("svc_ftp_password", ""),
+            )
+        elif action == "select":
+            try:
+                guild_settings.set_active_nitrado_service(guild_id, int(request.form.get("svc_id", "0")))
+            except Exception:
+                pass
+        elif action == "delete":
+            try:
+                guild_settings.delete_nitrado_service(guild_id, int(request.form.get("svc_id", "0")))
+            except Exception:
+                pass
+        elif action == "legacy":
+            nitrado_token = request.form.get("nitrado_api_token", "")
+            if nitrado_token:
+                guild_settings.update_setting(guild_id, "nitrado_api_token", nitrado_token)
+            guild_settings.update_setting(guild_id, "nitrado_service_id", request.form.get("nitrado_service_id", ""))
+            guild_settings.update_setting(guild_id, "ftp_host", (request.form.get("ftp_host", "") or "").strip())
+            guild_settings.update_setting(guild_id, "ftp_port", (request.form.get("ftp_port", "") or "22").strip())
+            guild_settings.update_setting(guild_id, "ftp_user", (request.form.get("ftp_user", "") or "").strip())
+            ftp_pass = request.form.get("ftp_password", "")
+            if ftp_pass:
+                guild_settings.update_setting(guild_id, "ftp_password", ftp_pass)
         return redirect(url_for("section_nitrado", guild_id=guild_id))
+    services = guild_settings.list_nitrado_services(guild_id)
     return render_template(
         "sections/nitrado.html",
         user=get_current_user(),
         guild_id=guild_id,
         active_section="nitrado",
         settings=guild_settings.get_settings(guild_id),
+        services=services,
+        services_count=len(services),
     )
 
 

@@ -333,6 +333,23 @@ def init_db():
                 )
             """)
             cur.execute("CREATE INDEX IF NOT EXISTS idx_tribe_events ON tribe_log_events(guild_id, tribe_name, created_at DESC)")
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS nitrado_services (
+                    id          SERIAL PRIMARY KEY,
+                    guild_id    BIGINT NOT NULL,
+                    name        TEXT NOT NULL,
+                    service_id  TEXT NOT NULL DEFAULT '',
+                    api_token   TEXT NOT NULL DEFAULT '',
+                    ftp_host    TEXT DEFAULT '',
+                    ftp_port    TEXT DEFAULT '22',
+                    ftp_user    TEXT DEFAULT '',
+                    ftp_password TEXT DEFAULT '',
+                    is_active   BOOLEAN DEFAULT FALSE,
+                    created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    UNIQUE (guild_id, name)
+                )
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_nitrado_services_guild ON nitrado_services(guild_id)")
         conn.commit()
     finally:
         conn.close()
@@ -435,7 +452,22 @@ def get_settings_by_prefix(prefix: str) -> dict:
 
 
 def get_nitrado_config(guild_id: int) -> dict:
-    """Return the Nitrado API config (token/service/user) for a guild."""
+    """Return the Nitrado API config (token/service/user) for a guild.
+
+    Prefers the currently-selected service from the nitrado_services table;
+    falls back to the legacy single-service settings.
+    """
+    svc = get_active_nitrado_service(guild_id)
+    if svc and svc.get("api_token"):
+        return {
+            "api_token": _decrypt(svc.get("api_token", "")),
+            "service_id": svc.get("service_id", ""),
+            "user_id": "",
+            "ftp_host": svc.get("ftp_host", ""),
+            "ftp_port": svc.get("ftp_port", "22"),
+            "ftp_user": svc.get("ftp_user", ""),
+            "ftp_password": _decrypt(svc.get("ftp_password", "")),
+        }
     return {
         "api_token": get_setting(guild_id, "nitrado_api_token", ""),
         "service_id": get_setting(guild_id, "nitrado_service_id", ""),
@@ -445,6 +477,127 @@ def get_nitrado_config(guild_id: int) -> dict:
         "ftp_user": get_setting(guild_id, "ftp_user", ""),
         "ftp_password": get_setting(guild_id, "ftp_password", ""),
     }
+
+
+def _svc_row_to_dict(row) -> dict:
+    if row is None:
+        return {}
+    cols = ["id", "guild_id", "name", "service_id", "api_token", "ftp_host",
+            "ftp_port", "ftp_user", "ftp_password", "is_active"]
+    return {c: row[i] for i, c in enumerate(cols)}
+
+
+def list_nitrado_services(guild_id: int) -> list[dict]:
+    """List all configured Nitrado services for a guild (newest first)."""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, guild_id, name, service_id, api_token, ftp_host, ftp_port, ftp_user, ftp_password, is_active "
+                "FROM nitrado_services WHERE guild_id = %s ORDER BY created_at ASC, id ASC",
+                (guild_id,),
+            )
+            out = []
+            for row in cur.fetchall():
+                d = _svc_row_to_dict(row)
+                d["has_token"] = bool(_decrypt(d.get("api_token", "")))
+                d["api_token"] = "••••••••" if d["has_token"] else ""
+                out.append(d)
+            return out
+    except Exception:
+        return []
+    finally:
+        conn.close()
+
+
+def get_active_nitrado_service(guild_id: int) -> dict:
+    """Return the currently-selected (active) Nitrado service, if any."""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, guild_id, name, service_id, api_token, ftp_host, ftp_port, ftp_user, ftp_password, is_active "
+                "FROM nitrado_services WHERE guild_id = %s AND is_active = TRUE LIMIT 1",
+                (guild_id,),
+            )
+            return _svc_row_to_dict(cur.fetchone())
+    except Exception:
+        return {}
+    finally:
+        conn.close()
+
+
+def add_nitrado_service(guild_id: int, name: str, service_id: str, api_token: str = "",
+                        ftp_host: str = "", ftp_port: str = "22", ftp_user: str = "",
+                        ftp_password: str = "") -> bool:
+    """Add a new Nitrado service (server) for a guild. First service becomes active."""
+    name = (name or "").strip() or f"Server-{service_id or '?'}"
+    service_id = (service_id or "").strip()
+    api_token = _encrypt(api_token or "")
+    ftp_password = _encrypt(ftp_password or "")
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM nitrado_services WHERE guild_id = %s", (guild_id,))
+            count = cur.fetchone()[0]
+            cur.execute(
+                "INSERT INTO nitrado_services (guild_id, name, service_id, api_token, ftp_host, ftp_port, ftp_user, ftp_password, is_active) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                "ON CONFLICT (guild_id, name) DO UPDATE SET service_id = EXCLUDED.service_id, "
+                "api_token = CASE WHEN EXCLUDED.api_token = '' THEN nitrado_services.api_token ELSE EXCLUDED.api_token END, "
+                "ftp_host = EXCLUDED.ftp_host, ftp_port = EXCLUDED.ftp_port, ftp_user = EXCLUDED.ftp_user, "
+                "ftp_password = CASE WHEN EXCLUDED.ftp_password = '' THEN nitrado_services.ftp_password ELSE EXCLUDED.ftp_password END",
+                (guild_id, name, service_id, api_token, ftp_host, ftp_port, ftp_user, ftp_password, count == 0),
+            )
+        conn.commit()
+        return True
+    except Exception:
+        conn.rollback()
+        return False
+    finally:
+        conn.close()
+
+
+def set_active_nitrado_service(guild_id: int, service_record_id: int) -> bool:
+    """Set which configured service is the active/selected one."""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE nitrado_services SET is_active = FALSE WHERE guild_id = %s", (guild_id,))
+            cur.execute(
+                "UPDATE nitrado_services SET is_active = TRUE WHERE guild_id = %s AND id = %s",
+                (guild_id, service_record_id),
+            )
+        conn.commit()
+        return True
+    except Exception:
+        conn.rollback()
+        return False
+    finally:
+        conn.close()
+
+
+def delete_nitrado_service(guild_id: int, service_record_id: int) -> bool:
+    """Remove a configured service. If the active one is deleted, activate another."""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM nitrado_services WHERE guild_id = %s AND id = %s",
+                (guild_id, service_record_id),
+            )
+            cur.execute(
+                "UPDATE nitrado_services SET is_active = TRUE WHERE guild_id = %s AND is_active = FALSE "
+                "AND NOT EXISTS (SELECT 1 FROM nitrado_services s2 WHERE s2.guild_id = nitrado_services.guild_id AND s2.is_active = TRUE)",
+                (guild_id,),
+            )
+        conn.commit()
+        return True
+    except Exception:
+        conn.rollback()
+        return False
+    finally:
+        conn.close()
 
 
 # Dashboard aliases

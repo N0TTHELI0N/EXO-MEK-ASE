@@ -24,9 +24,10 @@ async def _send_rcon(guild_id: int, command: str) -> str | None:
 
 
 def _get_nitrado_headers(guild_id: int):
-    token = guild_settings.get_setting(guild_id, "nitrado_api_token") or config.NITRADO_API_TOKEN
-    user_id = guild_settings.get_setting(guild_id, "nitrado_user_id") or config.NITRADO_USER_ID
-    service_id = guild_settings.get_setting(guild_id, "nitrado_service_id") or config.NITRADO_SERVICE_ID
+    cfg = guild_settings.get_nitrado_config(guild_id)
+    token = cfg.get("api_token") or config.NITRADO_API_TOKEN
+    user_id = cfg.get("user_id") or config.NITRADO_USER_ID
+    service_id = cfg.get("service_id") or config.NITRADO_SERVICE_ID
     if not token:
         return None, None
     return {"Authorization": f"Bearer {token}"}, service_id

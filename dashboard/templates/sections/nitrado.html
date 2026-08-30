@@ -5,81 +5,149 @@
   <p class="text-gray-400 mt-1">{{ t('nitrado_desc') }}</p>
 </div>
 
-<div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6 max-w-2xl">
-  <form method="POST" action="">
-    <input type="hidden" name="section" value="nitrado">
-    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+<div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6 max-w-3xl">
+  <!-- Services list -->
+  <div class="flex items-center justify-between mb-3">
+    <h3 class="text-lg font-semibold text-white">{{ t('nitrado_services_count', count=services_count) }}</h3>
+  </div>
+  <p class="text-xs text-gray-400 mb-4">{{ t('nitrado_services_desc') }}</p>
 
-    <div class="space-y-4">
-      <div>
-        <label for="nitrado_api_token" class="block text-sm font-medium text-gray-300 mb-1">{{ t('api_token') }}</label>
-        <input type="password" id="nitrado_api_token" name="nitrado_api_token"
-               value=""
-               placeholder="{% if settings.nitrado_api_token %}•••••••• (configured){% else %}Enter your Nitrado API token{% endif %}"
-               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent">
-        {% if settings.nitrado_api_token %}
-        <p class="text-xs text-green-400 mt-1">{{ t('token_configured_keep') }}</p>
+  {% if services %}
+  <div class="space-y-3 mb-6">
+    {% for svc in services %}
+    <div class="flex items-center justify-between gap-4 p-4 rounded-xl border {% if svc.is_active %}border-red-500/60 bg-red-500/5{% else %}border-gray-700 bg-gray-800/40{% endif %}">
+      <div class="min-w-0">
+        <div class="flex items-center gap-2">
+          <h4 class="font-semibold text-white truncate">{{ svc.name }}</h4>
+          {% if svc.is_active %}
+          <span class="text-[10px] font-bold uppercase bg-red-600 text-white px-2 py-0.5 rounded">{{ t('nitrado_active_badge') }}</span>
+          {% endif %}
+        </div>
+        <p class="text-xs text-gray-400 mt-0.5">Service ID: <span class="font-mono">{{ svc.service_id or '—' }}</span>{% if svc.has_token %} · {{ t('api_token') }}: {{ svc.api_token }}{% endif %}</p>
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        {% if not svc.is_active %}
+        <form method="POST" action="">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="service_action" value="select">
+          <input type="hidden" name="svc_id" value="{{ svc.id }}">
+          <button type="submit" class="px-3 py-1.5 text-xs bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors">
+            {{ t('nitrado_select_choose') }}
+          </button>
+        </form>
         {% endif %}
-      </div>
-
-      <div>
-        <label for="nitrado_service_id" class="block text-sm font-medium text-gray-300 mb-1">{{ t('service_id') }}</label>
-        <input type="text" id="nitrado_service_id" name="nitrado_service_id"
-               value="{{ settings.nitrado_service_id or '' }}"
-               placeholder="{% if settings.nitrado_service_id %}{{ settings.nitrado_service_id }}{% else %}Enter your Nitrado Service ID{% endif %}"
-               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent">
-        {% if settings.nitrado_service_id %}
-        <p class="text-xs text-green-400 mt-1">{{ t('service_id_configured') }}</p>
-        {% endif %}
-      </div>
-
-      <div class="border-t border-gray-700/50 pt-4">
-        <h3 class="text-sm font-bold text-white mb-1">{{ t('ftp_title') }}</h3>
-        <p class="text-xs text-gray-400 mb-3">{{ t('ftp_desc') }}</p>
-      </div>
-
-      <div>
-        <label for="ftp_host" class="block text-sm font-medium text-gray-300 mb-1">{{ t('ftp_host') }}</label>
-        <input type="text" id="ftp_host" name="ftp_host"
-               value="{{ settings.ftp_host or '' }}"
-               placeholder="e.g. server-12345.nitrado.net"
-               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent">
-      </div>
-
-      <div>
-        <label for="ftp_port" class="block text-sm font-medium text-gray-300 mb-1">{{ t('ftp_port') }}</label>
-        <input type="text" id="ftp_port" name="ftp_port"
-               value="{{ settings.ftp_port or '22' }}"
-               placeholder="22"
-               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent">
-      </div>
-
-      <div>
-        <label for="ftp_user" class="block text-sm font-medium text-gray-300 mb-1">{{ t('ftp_user') }}</label>
-        <input type="text" id="ftp_user" name="ftp_user"
-               value="{{ settings.ftp_user or '' }}"
-               placeholder="FTP username"
-               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent">
-      </div>
-
-      <div>
-        <label for="ftp_password" class="block text-sm font-medium text-gray-300 mb-1">{{ t('ftp_password') }}</label>
-        <input type="password" id="ftp_password" name="ftp_password"
-               value=""
-               placeholder="{% if settings.ftp_password %}•••••••• (configured){% else %}FTP password{% endif %}"
-               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent">
-        {% if settings.ftp_password %}
-        <p class="text-xs text-green-400 mt-1">{{ t('ftp_password_configured_keep') }}</p>
-        {% endif %}
+        <form method="POST" action="" onsubmit="return confirm('Delete server {{ svc.name }}?')">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="service_action" value="delete">
+          <input type="hidden" name="svc_id" value="{{ svc.id }}">
+          <button type="submit" class="px-3 py-1.5 text-xs bg-red-900/60 hover:bg-red-700 text-white rounded-lg transition-colors">
+            {{ t('nitrado_svc_delete') }}
+          </button>
+        </form>
       </div>
     </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="text-sm text-gray-400 mb-6">{{ t('nitrado_no_services') }}</div>
+  {% endif %}
 
-    <div class="mt-6">
-      <button type="submit"
-              class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-medium transition-colors">
-        {{ t('save') }}
-      </button>
-    </div>
-  </form>
+  <!-- Add new service -->
+  <div class="border-t border-gray-700/50 pt-4 mb-6">
+    <h3 class="text-sm font-bold text-white mb-1">{{ t('nitrado_add_service') }}</h3>
+    <form method="POST" action="" class="mt-3">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="service_action" value="add">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-sm font-medium text-gray-300 mb-1">{{ t('nitrado_svc_name') }}</label>
+          <input type="text" name="svc_name" placeholder="e.g. Ragnarok" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-300 mb-1">{{ t('service_id') }}</label>
+          <input type="text" name="svc_service_id" placeholder="e.g. 8462382" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500">
+        </div>
+        <div class="sm:col-span-2">
+          <label class="block text-sm font-medium text-gray-300 mb-1">{{ t('api_token') }}</label>
+          <input type="password" name="svc_api_token" placeholder="{{ t('api_token') }}" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-300 mb-1">{{ t('ftp_host') }}</label>
+          <input type="text" name="svc_ftp_host" placeholder="e.g. server-12345.nitrado.net" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-300 mb-1">{{ t('ftp_user') }}</label>
+          <input type="text" name="svc_ftp_user" placeholder="FTP username" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-300 mb-1">{{ t('ftp_port') }}</label>
+          <input type="text" name="svc_ftp_port" value="22" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-300 mb-1">{{ t('ftp_password') }}</label>
+          <input type="password" name="svc_ftp_password" placeholder="{{ t('ftp_password') }}" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500">
+        </div>
+      </div>
+      <div class="mt-4">
+        <button type="submit" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-medium transition-colors">
+          {{ t('save') }}
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Legacy single config -->
+  <details class="border-t border-gray-700/50 pt-4 mt-6">
+    <summary class="text-sm font-bold text-white cursor-pointer select-none">{{ t('nitrado_legacy_tab') }}</summary>
+    <form method="POST" action="" class="mt-3">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="service_action" value="legacy">
+      <div class="space-y-4">
+        <div>
+          <label for="nitrado_api_token" class="block text-sm font-medium text-gray-300 mb-1">{{ t('api_token') }}</label>
+          <input type="password" id="nitrado_api_token" name="nitrado_api_token"
+                 value=""
+                 placeholder="{% if settings.nitrado_api_token %}•••••••• (configured){% else %}Enter your Nitrado API token{% endif %}"
+                 class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500">
+          {% if settings.nitrado_api_token %}
+          <p class="text-xs text-green-400 mt-1">{{ t('token_configured_keep') }}</p>
+          {% endif %}
+        </div>
+        <div>
+          <label for="nitrado_service_id" class="block text-sm font-medium text-gray-300 mb-1">{{ t('service_id') }}</label>
+          <input type="text" id="nitrado_service_id" name="nitrado_service_id"
+                 value="{{ settings.nitrado_service_id or '' }}"
+                 placeholder="{% if settings.nitrado_service_id %}{{ settings.nitrado_service_id }}{% else %}Enter your Nitrado Service ID{% endif %}"
+                 class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500">
+          {% if settings.nitrado_service_id %}
+          <p class="text-xs text-green-400 mt-1">{{ t('service_id_configured') }}</p>
+          {% endif %}
+        </div>
+        <div>
+          <label for="ftp_host" class="block text-sm font-medium text-gray-300 mb-1">{{ t('ftp_host') }}</label>
+          <input type="text" id="ftp_host" name="ftp_host"
+                 value="{{ settings.ftp_host or '' }}" placeholder="e.g. server-12345.nitrado.net"
+                 class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500">
+        </div>
+        <div>
+          <label for="ftp_user" class="block text-sm font-medium text-gray-300 mb-1">{{ t('ftp_user') }}</label>
+          <input type="text" id="ftp_user" name="ftp_user" value="{{ settings.ftp_user or '' }}" placeholder="FTP username"
+                 class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500">
+        </div>
+        <div>
+          <label for="ftp_password" class="block text-sm font-medium text-gray-300 mb-1">{{ t('ftp_password') }}</label>
+          <input type="password" id="ftp_password" name="ftp_password" value=""
+                 placeholder="{% if settings.ftp_password %}•••••••• (configured){% else %}FTP password{% endif %}"
+                 class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500">
+          {% if settings.ftp_password %}
+          <p class="text-xs text-green-400 mt-1">{{ t('ftp_password_configured_keep') }}</p>
+          {% endif %}
+        </div>
+      </div>
+      <div class="mt-4">
+        <button type="submit" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-medium transition-colors">{{ t('save') }}</button>
+      </div>
+    </form>
+  </details>
 </div>
 {% endblock %}
