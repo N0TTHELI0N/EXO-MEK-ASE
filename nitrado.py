@@ -295,7 +295,8 @@ class NitradoClient:
         if not entries:
             print(f"[nitrado-fs] _fs_list dir={directory!r} HTTP={resp.status_code} data_keys={list(data.keys())} entries=EMPTY raw_top={list(raw.keys())} raw_tail={resp.text[-250:]}")
         else:
-            print(f"[nitrado-fs] _fs_list dir={directory!r} HTTP={resp.status_code} entries_count={len(entries)}")
+            names = [e.get("name") for e in entries if isinstance(e, dict)]
+            print(f"[nitrado-fs] _fs_list dir={directory!r} HTTP={resp.status_code} entries_count={len(entries)} names={names}")
         out = []
         for e in entries:
             if not isinstance(e, dict):
