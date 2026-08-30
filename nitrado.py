@@ -221,26 +221,36 @@ class NitradoClient:
                 inner = {}
             if not getattr(self, "_settings_diag_logged", False):
                 import json as _json
-                print(f"[nitrado-settings] TOP keys: {list(inner.keys())}", flush=True)
-                for _cname, _cval in list(inner.items())[:40]:
-                    if isinstance(_cval, dict):
-                        print(f"[nitrado-settings] cat {_cname}: {list(_cval.keys())[:120]}", flush=True)
+                try:
+                    print(f"[nitrado-settings] TOP keys: {list(inner.keys())}", flush=True)
+                    print(f"[nitrado-settings] FULL: {_json.dumps(inner, default=str)[:4000]}", flush=True)
+                except Exception:
+                    pass
                 self._settings_diag_logged = True
-            stack = [inner]
-            while stack:
-                _node = stack.pop()
+
+            def _is_meta(_v):
+                return isinstance(_v, dict) and set(_v.keys()) <= {"value", "current", "current_value", "type", "min", "max", "step", "default", "unit", "description", "readonly", "name", "options"}
+
+            def _walk(_node):
                 if not isinstance(_node, dict):
-                    continue
+                    return
                 for _k, _v in _node.items():
-                    if isinstance(_v, dict) or isinstance(_v, list):
-                        if isinstance(_v, list):
-                            for _item in _v:
-                                if isinstance(_item, dict):
-                                    stack.append(_item)
+                    if isinstance(_v, list):
+                        for _item in _v:
+                            if isinstance(_item, dict):
+                                _walk(_item)
+                        continue
+                    if isinstance(_v, dict):
+                        if _is_meta(_v):
+                            _scalar = _v.get("value", _v.get("current", _v.get("current_value")))
+                            if _scalar is not None:
+                                settings.setdefault(str(_k), _scalar)
                         else:
-                            stack.append(_v)
+                            _walk(_v)
                     else:
                         settings.setdefault(str(_k), _v)
+
+            _walk(inner)
         except Exception as e:
             print(f"[nitrado-settings] error: {type(e).__name__}: {e}", flush=True)
         return settings
