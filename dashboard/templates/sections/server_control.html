@@ -87,15 +87,29 @@
   <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
   <div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6 mb-6">
     <h3 class="text-lg font-semibold text-white mb-4">{{ t('server_passwords') }}</h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+      <div class="bg-gray-900/50 border border-gray-700/60 rounded-xl p-4">
+        <div class="text-sm font-medium text-gray-300 mb-1">{{ t('server_admin_password') }}</div>
+        <div class="text-gray-100 font-mono break-all" id="current-admin-pw">
+          {% if current_passwords.admin %}{{ current_passwords.admin }}{% else %}<span class="text-gray-500">—</span>{% endif %}
+        </div>
+      </div>
+      <div class="bg-gray-900/50 border border-gray-700/60 rounded-xl p-4">
+        <div class="text-sm font-medium text-gray-300 mb-1">{{ t('server_password') }}</div>
+        <div class="text-gray-100 font-mono break-all" id="current-server-pw">
+          {% if current_passwords.server %}{{ current_passwords.server }}{% else %}<span class="text-gray-500">—</span>{% endif %}
+        </div>
+      </div>
+    </div>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
       <div>
-        <label for="password_admin" class="block text-sm font-medium text-gray-300 mb-1">{{ t('server_admin_password') }}</label>
+        <label for="password_admin" class="block text-sm font-medium text-gray-300 mb-1">{{ t('server_admin_password') }} ({{ t('server_password_new') }})</label>
         <input type="password" id="password_admin" name="password_admin"
                placeholder="" autocomplete="new-password"
                class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
       </div>
       <div>
-        <label for="password_server" class="block text-sm font-medium text-gray-300 mb-1">{{ t('server_password') }}</label>
+        <label for="password_server" class="block text-sm font-medium text-gray-300 mb-1">{{ t('server_password') }} ({{ t('server_password_new') }})</label>
         <input type="password" id="password_server" name="password_server"
                placeholder="" autocomplete="new-password"
                class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">

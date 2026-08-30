@@ -488,6 +488,39 @@ def get_ark_server_name(guild_id: int) -> str:
     return ""
 
 
+def get_server_passwords(guild_id: int) -> dict:
+    """Read the current admin and server (join) passwords from GameUserSettings.ini.
+
+    Returns {"admin": str, "server": str}. Empty string means unset/not found.
+    """
+    client = get_client(guild_id)
+    if not client:
+        return {"admin": "", "server": ""}
+    for path in [
+        "ShooterGame/Saved/Config/GameUserSettings.ini",
+        "ShooterGame/Saved/Config/LinuxServer/GameUserSettings.ini",
+    ]:
+        try:
+            content = client.read_file(path)
+            if not content:
+                continue
+            admin = ""
+            server = ""
+            for line in content.splitlines():
+                line = line.strip()
+                low = line.lower()
+                if not admin and low.startswith("adminpassword="):
+                    admin = line.split("=", 1)[1].strip().strip('"')
+                elif not admin and low.startswith("serveradminpassword="):
+                    admin = line.split("=", 1)[1].strip().strip('"')
+                if not server and low.startswith("serverpassword="):
+                    server = line.split("=", 1)[1].strip().strip('"')
+            return {"admin": admin, "server": server}
+        except Exception:
+            continue
+    return {"admin": "", "server": ""}
+
+
 def server_name(guild_id: int) -> str:
     """Best-effort ARK server name: GameUserSettings first, then API info."""
     name = get_ark_server_name(guild_id)

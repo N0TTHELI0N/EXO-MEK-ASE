@@ -313,6 +313,7 @@ TRANSLATIONS = {
     "server_password": {"ar": "كلمة مرور السيرفر", "en": "Server Password"},
     "server_password_hint": {"ar": "اترك الحقل فارغًا إذا كنت لا تريد تغييره. كلمة مرور السيرفر تُطبَّق عبر إعدادات نايترادو وقد تتطلب إعادة تشغيل. كلمة مرور الأدمن تُطبَّق فورًا عبر أمر RCON.", "en": "Leave a field empty to keep it unchanged. The server password is applied via Nitrado settings (may need a restart). The admin password is applied immediately via RCON."},
     "server_password_confirm": {"ar": "تأكيد تغيير كلمات المرور؟", "en": "Apply password changes?"},
+    "server_password_new": {"ar": "جديد", "en": "New"},
     "server_save_passwords": {"ar": "حفظ كلمات المرور", "en": "Save Passwords"},
 
     "players_tab_connected": {"ar": "المتصلون", "en": "Connected"},

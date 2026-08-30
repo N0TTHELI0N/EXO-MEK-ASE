@@ -1509,6 +1509,12 @@ def section_server_control(guild_id):
     except Exception:
         whitelisted_players = []
 
+    current_passwords = {"admin": "", "server": ""}
+    try:
+        current_passwords = nitrado.get_server_passwords(guild_id)
+    except Exception:
+        current_passwords = {"admin": "", "server": ""}
+
     return render_template(
         "sections/server_control.html",
         user=get_current_user(),
@@ -1517,6 +1523,7 @@ def section_server_control(guild_id):
         server_status=server_status,
         banned_players=banned_players,
         whitelisted_players=whitelisted_players,
+        current_passwords=current_passwords,
         notice=notice,
         notice_type=notice_type,
     )
