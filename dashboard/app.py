@@ -16,7 +16,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import guild_settings
 import shop_db
 import nitrado
-import sftp_client
 from security import validate_path
 from translations import TRANSLATIONS, DASHBOARD_DEFAULT_LANG, DASHBOARD_LANGS
 
