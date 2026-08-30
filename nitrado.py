@@ -358,6 +358,40 @@ class NitradoClient:
         print(f"[nitrado-fs] candidate roots: {roots}")
         return roots
 
+    def find_file_tree(self, start: str, filename: str, max_depth: int = 5) -> str:
+        """Recursively search the server's file tree for a file by name.
+        Returns the full path (as used by download) or '' if not found."""
+        filename_l = filename.lower()
+
+        def _search(dir_val, depth):
+            try:
+                entries = self.list_file_entries(dir_val) or []
+            except Exception:
+                return None
+            dir_val = (dir_val or "").strip("/")
+            for e in entries:
+                name = e.get("name") or ""
+                if not name:
+                    continue
+                p = (dir_val + "/" + name) if dir_val else name
+                if e.get("type") == "dir" or not e.get("type"):
+                    if name.lower() == filename_l:
+                        return p
+                    if depth < max_depth:
+                        found = _search(p, depth + 1)
+                        if found:
+                            return found
+                elif name.lower() == filename_l:
+                    return p
+            return None
+
+        for root in self.base_roots():
+            r = (root or "").strip("/")
+            found = _search(r or None, 0)
+            if found:
+                return "/" + found.lstrip("/")
+        return ""
+
     def list_file_entries(self, directory: str) -> list[dict]:
         directory = (directory or "").strip()
         base = directory.lstrip("/")
@@ -588,10 +622,18 @@ def get_ark_server_name(guild_id: int) -> str:
     client = get_client(guild_id)
     if not client:
         return ""
-    for path in [
+    tried = [
         "ShooterGame/Saved/Config/GameUserSettings.ini",
         "ShooterGame/Saved/Config/LinuxServer/GameUserSettings.ini",
-    ]:
+    ]
+    # Best-effort discovery of the INI anywhere in the tree.
+    try:
+        found = client.find_file_tree("", "GameUserSettings.ini")
+        if found and found not in tried:
+            tried.insert(0, found)
+    except Exception as e:
+        print(f"[nitrado-fs] find_file_tree error: {type(e).__name__}: {e}", flush=True)
+    for path in tried:
         try:
             content = client.read_file(path)
             if content:

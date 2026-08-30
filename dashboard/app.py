@@ -1445,7 +1445,13 @@ def section_server_control(guild_id):
     if not _map:
         _map = _fmt_map(_pick("map", "map_name", "current_map", default=""))
 
-    _server_name = str(_sval("SessionName", "ServerName", "server_name", "server-name", default=""))
+    _server_name = ""
+    try:
+        _server_name = nitrado.server_name(guild_id)
+    except Exception:
+        _server_name = ""
+    if not _server_name:
+        _server_name = str(_sval("SessionName", "ServerName", "server_name", "server-name", default=""))
     if not _server_name:
         _server_name = _pick("server_name", "name", "display_name", "hostname", "session_name", default="")
 
@@ -1538,11 +1544,6 @@ def section_server_control(guild_id):
         "players_list": players_list,
         "online_players": online_players,
     }
-    if not server_status["server_name"]:
-        try:
-            server_status["server_name"] = nitrado.server_name(guild_id)
-        except Exception:
-            pass
 
     banned_players = []
     try:
