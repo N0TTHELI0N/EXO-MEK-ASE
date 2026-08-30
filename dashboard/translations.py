@@ -327,6 +327,8 @@ TRANSLATIONS = {
     "server_password_confirm": {"ar": "تأكيد تغيير كلمات المرور؟", "en": "Apply password changes?"},
     "server_password_new": {"ar": "جديد", "en": "New"},
     "server_save_passwords": {"ar": "حفظ كلمات المرور", "en": "Save Passwords"},
+    "server_select_label": {"ar": "السيرفر المُدار", "en": "Server to manage"},
+    "server_select_hint": {"ar": "اختر السيرفر الذي تريد إدارته من القائمة.", "en": "Choose which server you want to manage."},
 
     "players_tab_total": {"ar": "إجمالي اللاعبين", "en": "Total Players"},
     "players_tab_online": {"ar": "المتصلون", "en": "Online"},
@@ -382,6 +384,7 @@ TRANSLATIONS = {
     "logs_search_ph": {"ar": "ابحث في السجلات...", "en": "Search logs..."},
     "logs_filter": {"ar": "تصفية", "en": "Filter"},
     "logs_timestamp": {"ar": "الوقت", "en": "Timestamp"},
+    "logs_server": {"ar": "السيرفر", "en": "Server"},
     "logs_user": {"ar": "المستخدم", "en": "User"},
     "logs_player": {"ar": "اللاعب", "en": "Player"},
     "logs_action": {"ar": "الإجراء", "en": "Action"},

@@ -1279,6 +1279,12 @@ def section_leaderboard(guild_id):
 def section_server_control(guild_id):
     if request.method == "POST":
         action = request.form.get("action", "")
+        if action == "select_server":
+            try:
+                guild_settings.set_active_nitrado_service(guild_id, int(request.form.get("svc_id", "0")))
+            except Exception:
+                pass
+            return redirect(url_for("section_server_control", guild_id=guild_id))
         notice = ""
         notice_type = "error"
         user_id = int((get_current_user() or {}).get("id", 0) or 0)
@@ -1615,6 +1621,7 @@ def section_server_control(guild_id):
         banned_players=banned_players,
         whitelisted_players=whitelisted_players,
         current_passwords=current_passwords,
+        services=guild_settings.list_nitrado_services(guild_id),
         notice=notice,
         notice_type=notice_type,
     )

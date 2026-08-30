@@ -208,6 +208,7 @@ def init_db():
             cur.execute("ALTER TABLE bot_logs ADD COLUMN IF NOT EXISTS log_category TEXT")
             cur.execute("ALTER TABLE bot_logs ADD COLUMN IF NOT EXISTS posted_forum BOOLEAN DEFAULT FALSE")
             cur.execute("ALTER TABLE bot_logs ADD COLUMN IF NOT EXISTS posted_shop_forum BOOLEAN DEFAULT FALSE")
+            cur.execute("ALTER TABLE bot_logs ADD COLUMN IF NOT EXISTS server_name TEXT")
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS player_whitelist (
                     id          SERIAL PRIMARY KEY,
@@ -704,15 +705,19 @@ LOG_TYPES = ["chat", "admin_command", "punishment", "leaderboard", "whitelist", 
 
 
 def log_action(guild_id: int, log_type: str, user_id=None, user_name=None,
-               player_name=None, command=None, sub_type=None, details=None, log_category=None):
+               player_name=None, command=None, sub_type=None, details=None, log_category=None,
+               server_name=None):
+    if server_name is None:
+        svc = get_active_nitrado_service(guild_id)
+        server_name = svc.get("name", "") if svc else get_setting(guild_id, "nitrado_service_id", "")
     conn = get_conn()
     try:
         with conn.cursor() as cur:
             cur.execute("""
-                INSERT INTO bot_logs (guild_id, log_type, sub_type, user_id, user_name, player_name, command, details, log_category)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s)
+                INSERT INTO bot_logs (guild_id, log_type, sub_type, user_id, user_name, player_name, command, details, log_category, server_name)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s)
             """, (guild_id, log_type, sub_type, user_id, user_name, player_name, command,
-                  json.dumps(details) if details else None, log_category))
+                  json.dumps(details) if details else None, log_category, server_name))
         conn.commit()
     finally:
         conn.close()
@@ -722,7 +727,7 @@ def get_logs(guild_id: int, log_type=None, user_id=None, limit=50, offset=0):
     conn = get_conn()
     try:
         with conn.cursor() as cur:
-            query = "SELECT id, log_type, sub_type, user_id, user_name, player_name, command, details, created_at, log_category FROM bot_logs WHERE guild_id = %s"
+            query = "SELECT id, log_type, sub_type, user_id, user_name, player_name, command, details, created_at, log_category, server_name FROM bot_logs WHERE guild_id = %s"
             params = [guild_id]
             if log_type:
                 query += " AND log_type = %s"
@@ -735,7 +740,7 @@ def get_logs(guild_id: int, log_type=None, user_id=None, limit=50, offset=0):
             cur.execute(query, params)
             return [
                 {"id": r[0], "log_type": r[1], "sub_type": r[2], "user_id": r[3], "user_name": r[4],
-                 "player_name": r[5], "command": r[6], "details": r[7] if isinstance(r[7], dict) else json.loads(r[7]) if r[7] else None, "created_at": r[8], "log_category": r[9]}
+                 "player_name": r[5], "command": r[6], "details": r[7] if isinstance(r[7], dict) else json.loads(r[7]) if r[7] else None, "created_at": r[8], "log_category": r[9], "server_name": r[10]}
                 for r in cur.fetchall()
             ]
     finally:

@@ -11,6 +11,26 @@
 </div>
 {% endif %}
 
+{% if services %}
+<!-- Server selector -->
+<div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-4 mb-6">
+  <form method="POST" action="">
+    <input type="hidden" name="action" value="select_server">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <div class="flex flex-wrap items-center gap-3">
+      <label class="text-sm font-medium text-gray-300">{{ t('server_select_label') }}:</label>
+      <select name="svc_id" onchange="this.form.submit()"
+              class="bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-red-500">
+        {% for svc in services %}
+        <option value="{{ svc.id }}" {% if svc.is_active %}selected{% endif %}>{{ svc.name }}{% if svc.service_id %} ({{ svc.service_id }}){% endif %}{% if svc.is_active %} — {{ t('nitrado_active_badge') }}{% endif %}</option>
+        {% endfor %}
+      </select>
+      <span class="text-xs text-gray-400">{{ t('server_select_hint') }}</span>
+    </div>
+  </form>
+</div>
+{% endif %}
+
 <!-- Status Card -->
 <div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6 mb-6">
   <h3 class="text-lg font-semibold text-white mb-4">{{ t('server_status') }}</h3>
