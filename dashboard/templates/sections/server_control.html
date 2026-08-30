@@ -90,14 +90,26 @@
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
       <div class="bg-gray-900/50 border border-gray-700/60 rounded-xl p-4">
         <div class="text-sm font-medium text-gray-300 mb-1">{{ t('server_admin_password') }}</div>
-        <div class="text-gray-100 font-mono break-all" id="current-admin-pw">
-          {% if current_passwords.admin %}{{ current_passwords.admin }}{% else %}<span class="text-gray-500">—</span>{% endif %}
+        <div class="flex items-center gap-2">
+          <span class="text-gray-100 font-mono break-all" id="current-admin-pw" data-value="{{ current_passwords.admin or '' }}"
+                {% if current_passwords.admin %}data-any="1"{% endif %}>{% if current_passwords.admin %}••••••••{% else %}—{% endif %}</span>
+          {% if current_passwords.admin %}
+          <button type="button" onclick="togglePw('current-admin-pw', this)" class="text-gray-400 hover:text-white focus:outline-none" aria-label="toggle">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+          {% endif %}
         </div>
       </div>
       <div class="bg-gray-900/50 border border-gray-700/60 rounded-xl p-4">
         <div class="text-sm font-medium text-gray-300 mb-1">{{ t('server_password') }}</div>
-        <div class="text-gray-100 font-mono break-all" id="current-server-pw">
-          {% if current_passwords.server %}{{ current_passwords.server }}{% else %}<span class="text-gray-500">—</span>{% endif %}
+        <div class="flex items-center gap-2">
+          <span class="text-gray-100 font-mono break-all" id="current-server-pw" data-value="{{ current_passwords.server or '' }}"
+                {% if current_passwords.server %}data-any="1"{% endif %}>{% if current_passwords.server %}••••••••{% else %}—{% endif %}</span>
+          {% if current_passwords.server %}
+          <button type="button" onclick="togglePw('current-server-pw', this)" class="text-gray-400 hover:text-white focus:outline-none" aria-label="toggle">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+          {% endif %}
         </div>
       </div>
     </div>
@@ -458,6 +470,18 @@ function closeModal(id){
   var el = document.getElementById(id);
   el.classList.add('hidden');
   el.classList.remove('flex');
+}
+function togglePw(id, btn){
+  var el = document.getElementById(id);
+  if (!el) return;
+  var val = el.getAttribute('data-value') || '';
+  if (el.getAttribute('data-shown') === '1'){
+    el.textContent = '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022';
+    el.setAttribute('data-shown', '0');
+  } else {
+    el.textContent = val;
+    el.setAttribute('data-shown', '1');
+  }
 }
 </script>
 {% endblock %}
