@@ -23,11 +23,15 @@
       <p class="text-xs text-gray-400 uppercase tracking-wide mb-1">{{ t('server_status') }}</p>
       {% if server_status.online %}
       <span class="inline-flex items-center gap-1.5 text-green-400 font-semibold">
-        <span class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span> {{ t('server_online') }}
+        <span class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span> {{ t('server_online') }} <span class="text-xs text-gray-500">({{ server_status.status_text }})</span>
+      </span>
+      {% elif server_status.starting %}
+      <span class="inline-flex items-center gap-1.5 text-amber-400 font-semibold">
+        <span class="w-2 h-2 bg-amber-400 rounded-full animate-pulse"></span> {{ t('server_starting') }} <span class="text-xs text-gray-500">({{ server_status.status_text }})</span>
       </span>
       {% else %}
       <span class="inline-flex items-center gap-1.5 text-red-400 font-semibold">
-        <span class="w-2 h-2 bg-red-400 rounded-full"></span> {{ t('server_offline') }}
+        <span class="w-2 h-2 bg-red-400 rounded-full"></span> {{ t('server_offline') }} <span class="text-xs text-gray-500">({{ server_status.status_text }})</span>
       </span>
       {% endif %}
     </div>

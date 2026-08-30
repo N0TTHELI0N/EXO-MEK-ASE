@@ -1497,8 +1497,14 @@ def section_server_control(guild_id):
         _p["playtime_last_seen"] = _pt.get("last_seen") if _pt else None
 
     online_players = [p for p in players_list if p.get("online")]
+    _status_raw = str(info.get("status") or (info.get("game_status") or ""))
+    _status_l = _status_raw.lower()
+    _online = _status_l in ("online", "running", "started", "active") or bool(info.get("is_running"))
+    _starting = _online or ("install" in _status_l or "start" in _status_l or "boot" in _status_l)
     server_status = {
-        "online": bool(str(info.get("status", "")).lower() in ("online", "running", "started") or info.get("is_running")),
+        "online": _online,
+        "status_text": _status_raw or ("On" if _online else "Off"),
+        "starting": _starting,
         "map": _map or "Unknown",
         "players": _pick("player_count", "players_current", "player_current", "players", default=len(online_players)),
         "max_players": _pick("slots", "max_players", "maxplayers", "player_max", default=70),

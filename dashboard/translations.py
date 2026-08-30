@@ -284,6 +284,7 @@ TRANSLATIONS = {
     "server_status": {"ar": "حالة السيرفر", "en": "Server Status"},
     "server_online": {"ar": "متصل", "en": "Online"},
     "server_offline": {"ar": "غير متصل", "en": "Offline"},
+    "server_starting": {"ar": "جارٍ التشغيل...", "en": "Starting..."},
     "server_map": {"ar": "الخريطة", "en": "Map"},
     "server_players": {"ar": "اللاعبون", "en": "Players"},
     "server_ping": {"ar": "سرعة الاستجابة", "en": "Ping"},
