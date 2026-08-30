@@ -1294,6 +1294,20 @@ def section_server_control(guild_id):
             except Exception:
                 pass
             return redirect(url_for("section_server_control", guild_id=guild_id))
+        if action == "update_display_name":
+            svc = {}
+            try:
+                svc = guild_settings.get_active_nitrado_service(guild_id) or {}
+            except Exception:
+                svc = {}
+            if svc.get("id"):
+                guild_settings.update_nitrado_display_name(
+                    guild_id, svc["id"], request.form.get("display_name", "")
+                )
+            else:
+                # No service row yet (legacy config): also store a fallback name.
+                guild_settings.update_setting(guild_id, "nitrado_display_name", request.form.get("display_name", ""))
+            return redirect(url_for("section_server_control", guild_id=guild_id))
         notice = ""
         notice_type = "error"
         user_id = int((get_current_user() or {}).get("id", 0) or 0)
@@ -1492,6 +1506,8 @@ def section_server_control(guild_id):
         _svc = guild_settings.get_active_nitrado_service(guild_id)
         if _svc:
             _status_display_name = (_svc.get("display_name") or "").strip() or (_svc.get("name") or "").strip()
+        if not _status_display_name:
+            _status_display_name = str(guild_settings.get_setting(guild_id, "nitrado_display_name", "") or "").strip()
     except Exception:
         _status_display_name = ""
     if _status_display_name:

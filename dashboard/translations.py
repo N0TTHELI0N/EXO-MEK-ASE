@@ -332,6 +332,10 @@ TRANSLATIONS = {
     "server_select_label": {"ar": "السيرفر المُدار", "en": "Server to manage"},
     "server_select_switch": {"ar": "تبديل", "en": "Switch"},
     "server_select_hint": {"ar": "اختر السيرفر الذي تريد إدارته من القائمة.", "en": "Choose which server you want to manage."},
+    "server_display_name_label": {"ar": "اسم السيرفر الظاهر", "en": "Display name"},
+    "server_display_name_ph": {"ar": "اكتب اسم السيرفر", "en": "Type the server name"},
+    "server_display_name_hint": {"ar": "اسم يظهر في بطاقة الحالة فقط.", "en": "Name shown only in the status card."},
+    "server_set_name": {"ar": "حفظ الاسم", "en": "Set name"},
 
     "players_tab_total": {"ar": "إجمالي اللاعبين", "en": "Total Players"},
     "players_tab_online": {"ar": "المتصلون", "en": "Online"},

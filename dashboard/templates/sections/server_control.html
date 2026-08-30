@@ -76,6 +76,21 @@
     </div>
   </div>
 
+  <!-- Set display/join name (works for single or multi server) -->
+  <form method="POST" class="mt-5 flex flex-wrap items-center gap-3">
+    <input type="hidden" name="action" value="update_display_name">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <label for="display-name-input" class="text-sm font-medium text-gray-300">{{ t('server_display_name_label') }}</label>
+    <input type="text" id="display-name-input" name="display_name"
+           value="{{ server_status.server_name or '' }}"
+           placeholder="{{ t('server_display_name_ph') }}"
+           class="w-72 bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500">
+    <button type="submit" class="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white font-medium rounded-lg transition-colors">
+      {{ t('server_set_name') }}
+    </button>
+    <span class="text-xs text-gray-400">{{ t('server_display_name_hint') }}</span>
+  </form>
+
   <!-- Action Buttons -->
   <div class="flex gap-3 mt-6">
     <form method="POST" class="inline">
