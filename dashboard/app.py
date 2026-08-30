@@ -1369,6 +1369,13 @@ def section_server_control(guild_id):
                     notice_type = "ok"
             except Exception:
                 notice = "Failed to remove entry"
+        elif action == "reset_playtime":
+            try:
+                guild_settings.reset_playtime(guild_id)
+                notice = "Playtime tracking data reset"
+                notice_type = "ok"
+            except Exception:
+                notice = "Failed to reset playtime"
         return redirect(url_for("section_server_control", guild_id=guild_id, notice=notice, notice_type=notice_type))
     notice = request.args.get("notice", "")
     notice_type = request.args.get("notice_type", "ok")

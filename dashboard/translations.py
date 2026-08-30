@@ -320,6 +320,8 @@ TRANSLATIONS = {
     "players_tab_whitelisted": {"ar": "القائمة البيضاء", "en": "Whitelisted"},
     "top_players_tab": {"ar": "أفضل اللاعبين", "en": "Top Players"},
     "top_players_time": {"ar": "وقت اللعب", "en": "Playtime"},
+    "top_players_reset": {"ar": "إعادة تعيين بيانات التتبع", "en": "Reset Playtime"},
+    "top_players_reset_confirm": {"ar": "هل تريد إعادة تعيين جميع بيانات تتبع وقت اللعب؟", "en": "Reset all playtime tracking data?"},
     "player_search_placeholder": {"ar": "ابحث عن لاعب...", "en": "Search players..."},
     "player_actions": {"ar": "إجراءات", "en": "Actions"},
     "player_id": {"ar": "المعرف", "en": "ID"},
