@@ -24,6 +24,17 @@
           {% endif %}
         </div>
         <p class="text-xs text-gray-400 mt-0.5">Service ID: <span class="font-mono">{{ svc.service_id or '—' }}</span>{% if svc.has_token %} · {{ t('api_token') }}: {{ svc.api_token }}{% endif %}</p>
+        <form method="POST" action="" class="mt-2 flex items-center gap-2">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="service_action" value="rename">
+          <input type="hidden" name="svc_id" value="{{ svc.id }}">
+          <input type="text" name="svc_display_name" value="{{ svc.display_name or '' }}"
+                 placeholder="{{ t('nitrado_display_name_ph') }}"
+                 class="w-64 bg-gray-700 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500">
+          <button type="submit" class="px-3 py-1.5 text-xs bg-gray-600 hover:bg-gray-500 text-white rounded-lg transition-colors">
+            {{ t('nitrado_set_name') }}
+          </button>
+        </form>
       </div>
       <div class="flex items-center gap-2 shrink-0">
         {% if not svc.is_active %}

@@ -345,11 +345,13 @@ def init_db():
                     ftp_port    TEXT DEFAULT '22',
                     ftp_user    TEXT DEFAULT '',
                     ftp_password TEXT DEFAULT '',
+                    display_name TEXT DEFAULT '',
                     is_active   BOOLEAN DEFAULT FALSE,
                     created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
                     UNIQUE (guild_id, name)
                 )
             """)
+            cur.execute("ALTER TABLE nitrado_services ADD COLUMN IF NOT EXISTS display_name TEXT DEFAULT ''")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_nitrado_services_guild ON nitrado_services(guild_id)")
         conn.commit()
     finally:
@@ -484,7 +486,7 @@ def _svc_row_to_dict(row) -> dict:
     if row is None:
         return {}
     cols = ["id", "guild_id", "name", "service_id", "api_token", "ftp_host",
-            "ftp_port", "ftp_user", "ftp_password", "is_active"]
+            "ftp_port", "ftp_user", "ftp_password", "is_active", "display_name"]
     return {c: row[i] for i, c in enumerate(cols)}
 
 
@@ -494,7 +496,7 @@ def list_nitrado_services(guild_id: int) -> list[dict]:
     try:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT id, guild_id, name, service_id, api_token, ftp_host, ftp_port, ftp_user, ftp_password, is_active "
+                "SELECT id, guild_id, name, service_id, api_token, ftp_host, ftp_port, ftp_user, ftp_password, is_active, display_name "
                 "FROM nitrado_services WHERE guild_id = %s ORDER BY created_at ASC, id ASC",
                 (guild_id,),
             )
@@ -517,7 +519,7 @@ def get_active_nitrado_service(guild_id: int) -> dict:
     try:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT id, guild_id, name, service_id, api_token, ftp_host, ftp_port, ftp_user, ftp_password, is_active "
+                "SELECT id, guild_id, name, service_id, api_token, ftp_host, ftp_port, ftp_user, ftp_password, is_active, display_name "
                 "FROM nitrado_services WHERE guild_id = %s AND is_active = TRUE LIMIT 1",
                 (guild_id,),
             )
@@ -568,6 +570,25 @@ def set_active_nitrado_service(guild_id: int, service_record_id: int) -> bool:
             cur.execute(
                 "UPDATE nitrado_services SET is_active = TRUE WHERE guild_id = %s AND id = %s",
                 (guild_id, service_record_id),
+            )
+        conn.commit()
+        return True
+    except Exception:
+        conn.rollback()
+        return False
+    finally:
+        conn.close()
+
+
+def update_nitrado_display_name(guild_id: int, service_record_id: int, display_name: str) -> bool:
+    """Set an optional display/join name for a configured service."""
+    display_name = (display_name or "").strip()
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE nitrado_services SET display_name = %s WHERE guild_id = %s AND id = %s",
+                (display_name, guild_id, service_record_id),
             )
         conn.commit()
         return True

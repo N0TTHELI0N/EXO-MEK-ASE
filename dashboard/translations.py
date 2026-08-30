@@ -177,6 +177,8 @@ TRANSLATIONS = {
     "nitrado_add_service": {"ar": "إضافة سيرفر Nitrado", "en": "Add Nitrado server"},
     "nitrado_svc_name": {"ar": "اسم السيرفر (مثال: Map1)", "en": "Server name (e.g. Map1)"},
     "nitrado_svc_delete": {"ar": "حذف", "en": "Delete"},
+    "nitrado_display_name_ph": {"ar": "اسم العرض (اختياري)", "en": "Display/join name (optional)"},
+    "nitrado_set_name": {"ar": "تعيين الاسم", "en": "Set name"},
     "nitrado_servers_tab": {"ar": "السيرفرات", "en": "Servers"},
     "nitrado_legacy_tab": {"ar": "إعداد واحد (قديم)", "en": "Single config (legacy)"},
     "ftp_title": {"ar": "معلومات FTP / SFTP (لمتصفح ملفات الحفظ)", "en": "FTP / SFTP Details (for the Save Files browser)"},

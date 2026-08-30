@@ -525,6 +525,15 @@ def section_nitrado(guild_id):
                 guild_settings.set_active_nitrado_service(guild_id, int(request.form.get("svc_id", "0")))
             except Exception:
                 pass
+        elif action == "rename":
+            try:
+                guild_settings.update_nitrado_display_name(
+                    guild_id,
+                    int(request.form.get("svc_id", "0")),
+                    request.form.get("svc_display_name", ""),
+                )
+            except Exception:
+                pass
         elif action == "delete":
             try:
                 guild_settings.delete_nitrado_service(guild_id, int(request.form.get("svc_id", "0")))
