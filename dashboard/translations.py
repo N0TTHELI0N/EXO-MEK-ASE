@@ -330,6 +330,7 @@ TRANSLATIONS = {
     "server_password_new": {"ar": "جديد", "en": "New"},
     "server_save_passwords": {"ar": "حفظ كلمات المرور", "en": "Save Passwords"},
     "server_select_label": {"ar": "السيرفر المُدار", "en": "Server to manage"},
+    "server_select_switch": {"ar": "تبديل", "en": "Switch"},
     "server_select_hint": {"ar": "اختر السيرفر الذي تريد إدارته من القائمة.", "en": "Choose which server you want to manage."},
 
     "players_tab_total": {"ar": "إجمالي اللاعبين", "en": "Total Players"},
