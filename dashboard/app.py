@@ -1230,6 +1230,18 @@ def section_backup(guild_id):
                 save_error = "folder is empty/invalid - showing server root; click a folder to navigate"
         except Exception as e:
             save_error = str(e)
+        if client and not save_files:
+            try:
+                client.download_file_bytes("ShooterGame/Saved/Config/GameUserSettings.ini")
+            except Exception as e:
+                print(f"[nitrado-fs] probe config error: {type(e).__name__}: {e}")
+            for _m in ARK_MAPS:
+                if save_dir.rstrip("/").endswith("/" + _m["folder"]):
+                    try:
+                        client.download_file_bytes(f"ShooterGame/Saved/SavedArks/{_m['folder']}/{_m['folder']}.ark")
+                    except Exception as e:
+                        print(f"[nitrado-fs] probe ark error: {type(e).__name__}: {e}")
+                    break
     elif save_browsed and not client:
         save_error = "Nitrado is not configured."
         save_browsed = False

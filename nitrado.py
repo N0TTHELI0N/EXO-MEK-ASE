@@ -185,7 +185,9 @@ class NitradoClient:
 
     def read_file(self, file: str) -> str:
         """Read a file's content from the server."""
-        data = self._request("GET", f"{self.fs_base()}/download", params={"file": file})
+        raw = requests.get(f"{NITRADO_BASE_URL}{self.fs_base()}/download", params={"file": file}, headers=self.headers, timeout=30)
+        print(f"[nitrado-fs] download?file={file!r} HTTP={raw.status_code} text={raw.text[:300]!r}")
+        data = raw.json() if raw.text.startswith("{") else {}
         token_info = data.get("token") or data
         token = token_info.get("token")
         url = token_info.get("url")
@@ -313,7 +315,9 @@ class NitradoClient:
 
     def download_file_bytes(self, file: str) -> bytes:
         """Download a file as raw bytes (binary-safe). Returns b'' on failure."""
-        data = self._request("GET", f"{self.fs_base()}/download", params={"file": file})
+        raw = requests.get(f"{NITRADO_BASE_URL}{self.fs_base()}/download", params={"file": file}, headers=self.headers, timeout=30)
+        print(f"[nitrado-fs] download_bytes?file={file!r} HTTP={raw.status_code} text={raw.text[:200]!r}")
+        data = raw.json() if raw.text.startswith("{") else {}
         token_info = data.get("token") or data
         token = token_info.get("token")
         url = token_info.get("url")
