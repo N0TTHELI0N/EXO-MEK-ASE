@@ -86,6 +86,10 @@ class NitradoClient:
     def get_player_list(self) -> list[dict]:
         """Get list of currently connected players."""
         data = self._request("GET", f"/services/{self.service_id}/gameservers/games/players")
+        if not getattr(self, "_player_raw_logged", False):
+            import json as _json
+            print(f"[nitrado] RAW player list response: {_json.dumps(data, default=str)}", flush=True)
+            self._player_raw_logged = True
         players = data.get("players", [])
         return [
             {
