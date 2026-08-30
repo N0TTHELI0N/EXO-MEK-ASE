@@ -1406,6 +1406,51 @@ def section_server_control(guild_id):
                 return v
         return default
 
+    blocked_keys = ("settings", "credentials", "quota", "hostsystems", "modpacks")
+    for _bk in blocked_keys:
+        info.pop(_bk, None)
+
+    settings_flat = {}
+    try:
+        settings_flat = nitrado.get_ark_settings(guild_id) or {}
+    except Exception:
+        settings_flat = {}
+
+    def _sval(*keys, default=""):
+        for k in keys:
+            v = settings_flat.get(k)
+            if v not in (None, "", {}):
+                return v
+        return default
+
+    def _flt(v, default):
+        try:
+            f = float(v)
+            return f if f > 0 else default
+        except Exception:
+            return default
+
+    _map = _pick("map", "map_name", "current_map", default="")
+    if not _map:
+        _map = str(_sval("MapPlayerDedicatedServer", "MapName", "map", "Map", default=""))
+
+    _server_name = _pick("server_name", "name", "display_name", "hostname", "session_name", default="")
+    if not _server_name:
+        _server_name = str(_sval("SessionName", "ServerName", "server_name", default=""))
+
+    _cond = _pick("day_night_cycle", default=None)
+    _taming = _pick("taming_speed", default=None)
+    _harvest = _pick("harvest_amount", default=None)
+    _xp = _pick("xp_multiplier", default=None)
+    if _cond is None:
+        _cond = _sval("DayCycleSpeedScale", "DayNightSpeedScale", default=None)
+    if _taming is None:
+        _taming = _sval("TamingSpeedMultiplier", "TamingSpeed", default=None)
+    if _harvest is None:
+        _harvest = _sval("HarvestAmountMultiplier", "HarvestAmount", default=None)
+    if _xp is None:
+        _xp = _sval("XPMultiplier", "XPAmountMultiplier", default=None)
+
     players_list = []
     try:
         client = nitrado.get_client(guild_id)
@@ -1454,16 +1499,16 @@ def section_server_control(guild_id):
     online_players = [p for p in players_list if p.get("online")]
     server_status = {
         "online": bool(str(info.get("status", "")).lower() in ("online", "running", "started") or info.get("is_running")),
-        "map": _pick("map", "map_name", "current_map", default="Unknown"),
+        "map": _map or "Unknown",
         "players": _pick("player_count", "players_current", "player_current", "players", default=len(online_players)),
         "max_players": _pick("slots", "max_players", "maxplayers", "player_max", default=70),
         "ping": _pick("ping", "query_ping", default="-"),
         "uptime": _pick("uptime", default="-"),
-        "server_name": _pick("server_name", "name", "display_name", "hostname", "session_name", default=""),
-        "day_night_cycle": _pick("day_night_cycle", default=1),
-        "taming_speed": _pick("taming_speed", default=1),
-        "harvest_amount": _pick("harvest_amount", default=1),
-        "xp_multiplier": _pick("xp_multiplier", default=1),
+        "server_name": _server_name,
+        "day_night_cycle": _flt(_cond, 1),
+        "taming_speed": _flt(_taming, 1),
+        "harvest_amount": _flt(_harvest, 1),
+        "xp_multiplier": _flt(_xp, 1),
         "players_list": players_list,
         "online_players": online_players,
     }

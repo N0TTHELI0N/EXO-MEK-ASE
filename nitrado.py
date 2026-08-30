@@ -203,6 +203,48 @@ class NitradoClient:
         inner = data.get("settings", data)
         return inner if isinstance(inner, dict) else {}
 
+    def get_ark_settings(self) -> dict:
+        """Flatten the Nitrado GET settings response into a dict of ARK-relevant
+        values (map, multipliers, server name, passwords). Nitrado returns the
+        ARK ini config organised by category; we walk every category and pick
+        the keys the dashboard displays."""
+        settings = {}
+        try:
+            raw = self._request(
+                "GET",
+                f"/services/{self.service_id}/gameservers/settings",
+            )
+            if not isinstance(raw, dict):
+                raw = {}
+            inner = raw.get("settings", raw)
+            if not isinstance(inner, dict):
+                inner = {}
+            if not getattr(self, "_settings_diag_logged", False):
+                import json as _json
+                print(f"[nitrado-settings] TOP keys: {list(inner.keys())}", flush=True)
+                for _cname, _cval in list(inner.items())[:40]:
+                    if isinstance(_cval, dict):
+                        print(f"[nitrado-settings] cat {_cname}: {list(_cval.keys())[:120]}", flush=True)
+                self._settings_diag_logged = True
+            stack = [inner]
+            while stack:
+                _node = stack.pop()
+                if not isinstance(_node, dict):
+                    continue
+                for _k, _v in _node.items():
+                    if isinstance(_v, dict) or isinstance(_v, list):
+                        if isinstance(_v, list):
+                            for _item in _v:
+                                if isinstance(_item, dict):
+                                    stack.append(_item)
+                        else:
+                            stack.append(_v)
+                    else:
+                        settings.setdefault(str(_k), _v)
+        except Exception as e:
+            print(f"[nitrado-settings] error: {type(e).__name__}: {e}", flush=True)
+        return settings
+
 
     def update_game_setting(self, category: str, key: str, value: str) -> bool:
         """Update a single game setting via the Nitrado gameservers/settings API.
@@ -499,6 +541,14 @@ def get_server_info(guild_id: int) -> dict:
     if not client:
         return {}
     return client.get_server_status()
+
+
+def get_ark_settings(guild_id: int) -> dict:
+    """Flatten Nitrado settings for a guild into ARK-relevant values."""
+    client = get_client(guild_id)
+    if not client:
+        return {}
+    return client.get_ark_settings()
 
 
 def change_admin_password(guild_id: int, password: str) -> str:
