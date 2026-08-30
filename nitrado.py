@@ -96,6 +96,7 @@ class NitradoClient:
                 "name": p.get("name", "Unknown"),
                 "id": p.get("id_num", p.get("unique_id", "0")),
                 "ping": p.get("ping", 0),
+                "online": bool(p.get("online", False)),
             }
             for p in players
         ]

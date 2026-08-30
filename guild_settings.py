@@ -1821,7 +1821,7 @@ def set_category_rules(guild_id: int, rules: dict):
 # ============================================================
 
 def record_playtime(guild_id: int, players: list, seconds: int):
-    """Accumulate `seconds` of playtime for each currently-online player."""
+    """Accumulate `seconds` of playtime only for currently-online players."""
     if not players or seconds <= 0:
         return
     conn = get_conn()
@@ -1829,6 +1829,8 @@ def record_playtime(guild_id: int, players: list, seconds: int):
         with conn.cursor() as cur:
             for p in players:
                 if not isinstance(p, dict):
+                    continue
+                if not p.get("online"):
                     continue
                 pid = str(p.get("id") or p.get("name") or "unknown")
                 pname = str(p.get("name") or "Unknown")
@@ -1895,5 +1897,22 @@ def get_top_players(guild_id: int, limit: int = 20):
                 }
                 for r in cur.fetchall()
             ]
+    finally:
+        conn.close()
+
+
+def reset_playtime(guild_id: int = None):
+    """Clear accumulated playtime. If guild_id is None, clears for all guilds.
+
+    Used to wipe bogus data accumulated before the online-only tracking fix.
+    """
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            if guild_id is None:
+                cur.execute("DELETE FROM player_playtime")
+            else:
+                cur.execute("DELETE FROM player_playtime WHERE guild_id = %s", (guild_id,))
+        conn.commit()
     finally:
         conn.close()
