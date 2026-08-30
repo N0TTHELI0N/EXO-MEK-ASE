@@ -243,7 +243,8 @@ class NitradoClient:
         return roots
 
     def list_file_entries(self, directory: str) -> list[dict]:
-        base = (directory or "").strip().lstrip("/")
+        directory = (directory or "").strip()
+        base = directory.lstrip("/")
 
         def variant(dir_val):
             try:
@@ -252,34 +253,37 @@ class NitradoClient:
                 print(f"[nitrado-fs] list error dir={dir_val!r}: {type(e).__name__}: {e}")
                 return None
 
-        direct_forms = [base, "/" + base] if base else []
-        for f in direct_forms:
+        # Direct absolute path (e.g. already a /games/.../noftp/... path we built).
+        if directory.startswith("/games/"):
+            e = variant(directory)
+            if e:
+                return e
+
+        forms = [base, "/" + base] if base else []
+        for f in forms:
             e = variant(f)
             if e:
                 return e
 
         roots = self.base_roots()
         for root in roots:
-            forms = []
-            if base:
-                forms.append(root + "/" + base)
-                forms.append(root.rstrip("/") + "/" + base)
-            else:
-                forms.append(root)
-            for f in forms:
-                e = variant(f)
-                if e:
-                    return e
+            cand = root.rstrip("/") + ("/" + base if base else "")
+            e = variant(cand)
+            if e:
+                return e
 
         last = None
         for root in roots:
-            for f in ([root, root + "/"] if not base else [root + "/" + base]):
-                e = variant(f)
+            cand = root.rstrip("/") + ("/" + base if base else "")
+            e = variant(cand)
+            if e is not None:
+                last = e
+                break
+            if not base:
+                e = variant(root.rstrip("/") + "/")
                 if e is not None:
                     last = e
                     break
-            if last:
-                break
         if last is None:
             raise RuntimeError("nitrado file list returned no readable directory")
         return last
@@ -305,12 +309,13 @@ class NitradoClient:
         for e in entries:
             if not isinstance(e, dict):
                 continue
+            child_path = directory.rstrip("/") + "/" + (e.get("name") or "")
             out.append(
                 {
                     "name": e.get("name"),
                     "size": e.get("size") or 0,
                     "type": e.get("type"),
-                    "path": e.get("path") or directory,
+                    "path": child_path,
                 }
             )
         return out
