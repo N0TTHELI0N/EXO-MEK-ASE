@@ -31,7 +31,93 @@
   2️⃣ <code>/chat-bridge-channel channel:#chat-log</code> — one-way log<br>
   3️⃣ <code>/chat-bridge-relay channel:#game-bridge</code> — two-way relay (optional)<br>
   4️⃣ <code>/chat-bridge-toggle game_to_discord:true discord_to_game:true</code> — control direction<br>
-  Send a message into the game from Discord with <code>/chat-bridge-send</code> or by typing in the relay channel.
+  Send a message into the game from Discord with <code>/chat-bridge-send</code> or by typing in the relay channel.<br>
+  Auto-detect punishments below run only while the bridge is <b>enabled</b>.
+</div>
+
+<!-- Auto-Detect Rules -->
+<div class="mb-6 bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6">
+  <div class="flex items-center justify-between mb-4">
+    <div>
+      <h3 class="text-lg font-bold text-white">🤖 Auto-Detect Punishments</h3>
+      <p class="text-gray-400 text-sm mt-1">Add a word — when a player says it in-game chat the bot automatically punishes them. You pick the punishment.</p>
+    </div>
+    <form method="POST" action="" class="flex items-center gap-2 bg-gray-700 rounded-xl px-3 py-2">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="set_cooldown">
+      <label class="text-xs text-gray-300 whitespace-nowrap">Cooldown (min)</label>
+      <input type="number" name="cooldown_minutes" value="{{ auto_cooldown_min }}" min="0"
+             class="w-20 bg-gray-900 border border-gray-600 rounded-lg px-2 py-1 text-sm text-white focus:outline-none focus:border-red-500">
+      <button type="submit" class="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-sm rounded-lg">Save</button>
+    </form>
+  </div>
+
+  <!-- Add rule -->
+  <form method="POST" action="" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-5">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="add_rule">
+    <input name="word" placeholder="Trigger word (e.g. cheating, scam)"
+           class="bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-red-500 lg:col-span-2">
+    <select name="punishment" class="bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-red-500">
+      <option value="warn">⚠️ Warn</option>
+      <option value="tempban">🔨 Temp-ban</option>
+      <option value="ban">🔨 Ban</option>
+      <option value="blacklist">⛔ Blacklist</option>
+    </select>
+    <input type="number" name="tempban_hours" value="24" min="1" placeholder="Temp-ban hours"
+           class="bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-red-500">
+    <button type="submit" class="px-4 py-2.5 bg-red-600 hover:bg-red-500 text-white font-medium rounded-lg transition-colors">Add Trigger</button>
+  </form>
+
+  <!-- Rules list -->
+  {% if auto_rules %}
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm text-left">
+      <thead class="text-xs text-gray-400 uppercase border-b border-gray-700">
+        <tr>
+          <th class="px-4 py-2">Word</th>
+          <th class="px-4 py-2">Punishment</th>
+          <th class="px-4 py-2">Status</th>
+          <th class="px-4 py-2">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-700">
+        {% for r in auto_rules %}
+        <tr class="hover:bg-gray-800 align-middle">
+          <td class="px-4 py-2 text-white font-mono font-medium">{{ r.word }}</td>
+          <td class="px-4 py-2 text-gray-300">{{ r.punishment }}{% if r.punishment == 'tempban' %} ({{ r.tempban_hours }}h){% endif %}</td>
+          <td class="px-4 py-2">
+            <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full {{ 'bg-green-900 text-green-300' if r.enabled else 'bg-gray-700 text-gray-400' }}">
+              {{ 'Active' if r.enabled else 'Disabled' }}
+            </span>
+          </td>
+          <td class="px-4 py-2">
+            <div class="flex gap-2">
+              <form method="POST" action="">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="toggle_rule">
+                <input type="hidden" name="rule_id" value="{{ r.id }}">
+                <input type="hidden" name="enabled" value="{{ '0' if r.enabled else '1' }}">
+                <button type="submit" class="px-3 py-1 text-xs {{ 'bg-gray-700 text-gray-200' if r.enabled else 'bg-green-700 text-white' }} rounded-lg">
+                  {{ 'Disable' if r.enabled else 'Enable' }}
+                </button>
+              </form>
+              <form method="POST" action="" onsubmit="return confirm('Delete trigger {{ r.word }}?')">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="remove_rule">
+                <input type="hidden" name="rule_id" value="{{ r.id }}">
+                <button type="submit" class="px-3 py-1 text-xs bg-red-600/80 hover:bg-red-500 text-white rounded-lg">Remove</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-gray-500 text-sm">No trigger words yet. Add one above to auto-punish players who say it in-game.</p>
+  {% endif %}
 </div>
 
 <!-- Table -->

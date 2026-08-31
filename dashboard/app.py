@@ -1784,9 +1784,32 @@ def section_logs(guild_id):
 def section_chat(guild_id):
     if request.method == "POST":
         action = request.form.get("action")
+        user_id = (get_current_user() or {}).get("id")
         if action == "clear_chat":
-            if (get_current_user() or {}).get("id") == BOT_OWNER_ID:
+            if user_id == BOT_OWNER_ID:
                 guild_settings.clear_chat_logs(guild_id)
+        elif action == "add_rule":
+            word = request.form.get("word", "").strip()
+            punishment = request.form.get("punishment", "warn")
+            tempban_hours = int(request.form.get("tempban_hours") or 24)
+            if word:
+                try:
+                    guild_settings.add_chat_auto_rule(guild_id, word, punishment, tempban_hours, user_id)
+                except ValueError:
+                    pass
+        elif action == "remove_rule":
+            rid = request.form.get("rule_id", "").strip()
+            if rid.isdigit():
+                guild_settings.remove_chat_auto_rule(int(rid), guild_id)
+        elif action == "toggle_rule":
+            rid = request.form.get("rule_id", "").strip()
+            enabled = request.form.get("enabled") == "1"
+            if rid.isdigit():
+                guild_settings.set_chat_auto_rule_enabled(int(rid), guild_id, enabled)
+        elif action == "set_cooldown":
+            mins = request.form.get("cooldown_minutes", "").strip()
+            if mins.lstrip("-").isdigit():
+                guild_settings.update_setting(guild_id, "chat_auto_cooldown_minutes", int(mins))
         return redirect(url_for("section_chat", guild_id=guild_id))
 
     page = max(1, int(request.args.get("page", 1)))
@@ -1798,6 +1821,8 @@ def section_chat(guild_id):
         guild_id=guild_id,
         active_section="chat",
         cfg=cfg,
+        auto_rules=guild_settings.get_chat_auto_rules(guild_id),
+        auto_cooldown_min=int(guild_settings.get_setting(guild_id, "chat_auto_cooldown_minutes", 5) or 5),
         chats=guild_settings.get_chat_logs(guild_id, limit=per_page, offset=(page - 1) * per_page),
         chat_count=guild_settings.count_chat_logs(guild_id),
         page=page,
@@ -1858,6 +1883,7 @@ ALL_COMMANDS_LIST = [
     "custom", "custom-list", "custom-add", "custom-remove", "ark-command", "setup-forum-logs", "setup-shop-forum",
     "chat-bridge-enable", "chat-bridge-channel", "chat-bridge-relay", "chat-bridge-toggle",
     "chat-bridge-send", "chat-bridge-status",
+    "auto-chat-add", "auto-chat-remove", "auto-chat-list", "auto-chat-toggle", "auto-chat-clear", "auto-chat-cooldown",
 ]
 
 
@@ -1993,6 +2019,12 @@ COMMANDS_META = {
     "chat-bridge-toggle": ("chat", "Control chat bridge direction"),
     "chat-bridge-send": ("chat", "Send a message into the game chat as Discord"),
     "chat-bridge-status": ("chat", "Show chat bridge status"),
+    "auto-chat-add": ("chat", "Add an in-game chat trigger word with an auto-punishment"),
+    "auto-chat-remove": ("chat", "Remove an in-game chat trigger word"),
+    "auto-chat-list": ("chat", "List in-game chat trigger words"),
+    "auto-chat-toggle": ("chat", "Enable or disable a trigger word"),
+    "auto-chat-clear": ("chat", "Remove all in-game chat trigger words"),
+    "auto-chat-cooldown": ("chat", "Set the auto-punishment cooldown minutes"),
 }
 
 

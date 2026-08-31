@@ -1,6 +1,7 @@
 import re
 import time
 from collections import deque
+from datetime import datetime, timezone, timedelta
 
 import discord
 from discord.ext import commands, tasks
@@ -10,6 +11,7 @@ import guild_settings
 import nitrado
 import config
 import bot_i18n
+from security import sanitize_rcon_name
 
 
 CHAT_BRIDGE_INTERVAL_SECONDS = 20
@@ -76,6 +78,10 @@ class ChatBridge(commands.Cog):
         self._echo_guard = deque(maxlen=200)
         # avoid flooding a Discord channel during a log burst
         self._post_guard = deque(maxlen=100)
+        # chat auto-detection: rules cache + per (guild, player, word) cooldown
+        self._auto_rules_cache = {}
+        self._auto_rules_cache_ts = {}
+        self._auto_cooldown = {}
 
     # ── helpers ──────────────────────────────────────────────
 
@@ -158,6 +164,7 @@ class ChatBridge(commands.Cog):
                     guild.id, channel, player, message,
                     tribe_name=player, raw_line=text, direction="in",
                 )
+                await self._check_auto_rules(guild.id, player, message)
                 # forward to one-way log channel
                 target = None
                 if cfg.get("relay_out") and isinstance(relay_channel, _d.TextChannel):
@@ -186,6 +193,79 @@ class ChatBridge(commands.Cog):
             cfg = guild_settings.get_chat_bridge_config(guild.id)
             if cfg and cfg.get("last_log_line"):
                 self.seen_lines[guild.id] = cfg["last_log_line"]
+
+    # ── auto-detection: word -> punishment ──────────────────
+    def _get_auto_rules(self, guild_id: int):
+        now = time.time()
+        if guild_id in self._auto_rules_cache and now - self._auto_rules_cache_ts.get(guild_id, 0) < 60:
+            return self._auto_rules_cache[guild_id]
+        rules = guild_settings.get_enabled_chat_auto_rules(guild_id)
+        self._auto_rules_cache[guild_id] = rules
+        self._auto_rules_cache_ts[guild_id] = now
+        return rules
+
+    async def _check_auto_rules(self, guild_id: int, player: str, message: str):
+        rules = self._get_auto_rules(guild_id)
+        if not rules:
+            return
+        msg_l = (message or "").lower()
+        cooldown_min = int(guild_settings.get_setting(guild_id, "chat_auto_cooldown_minutes", 5) or 5)
+        for rule in rules:
+            word = rule["word"]
+            if not word or word not in msg_l:
+                continue
+            if not self._allow_auto_punish(guild_id, player, word, cooldown_min):
+                continue
+            self._auto_cooldown[(guild_id, (player or "").lower(), word)] = time.time()
+            await self._apply_auto_punishment(guild_id, player, rule)
+
+    def _allow_auto_punish(self, guild_id: int, player: str, word: str, cooldown_min: int) -> bool:
+        key = (guild_id, (player or "").lower(), word)
+        last = self._auto_cooldown.get(key)
+        if last is None:
+            return True
+        return time.time() - last >= (cooldown_min * 60) if last else True
+
+    async def _apply_auto_punishment(self, guild_id: int, player: str, rule: dict):
+        punishment = rule["punishment"]
+        safe = sanitize_rcon_name(player)
+        reason = f"Auto-detected banned word in chat: '{rule['word']}'"
+        try:
+            if punishment == "warn":
+                guild_settings.add_warning(guild_id, player, reason, 0)
+                await self._send_punish_alert(guild_id, f"⚠️ **{player}** auto-**warned** ({reason})")
+            elif punishment == "blacklist":
+                await asyncio_to_thread(nitrado.send_rcon, guild_id, f"Ban {safe}")
+                guild_settings.add_blacklist(guild_id, player, reason, 0, scope="player")
+                guild_settings.add_punishment(guild_id, player, "ban", reason, 0, scope="player")
+                await self._send_punish_alert(guild_id, f"⛔ **{player}** auto-**blacklisted** ({reason})")
+            elif punishment == "tempban":
+                hours = int(rule.get("tempban_hours") or guild_settings.get_setting(guild_id, "warning_tempban_hours", 24) or 24)
+                expires = datetime.now(timezone.utc) + timedelta(hours=hours)
+                resp = await asyncio_to_thread(nitrado.send_rcon, guild_id, f"Ban {safe}")
+                pid = guild_settings.add_punishment(guild_id, player, "tempban", reason, 0, expires_at=expires)
+                if resp:
+                    guild_settings.mark_punishment_executed(pid)
+                await self._send_punish_alert(guild_id, f"🔨 **{player}** auto **temp-banned** for {hours}h ({reason})")
+            elif punishment == "ban":
+                await asyncio_to_thread(nitrado.send_rcon, guild_id, f"Ban {safe}")
+                guild_settings.add_punishment(guild_id, player, "ban", reason, 0)
+                await self._send_punish_alert(guild_id, f"🔨 **{player}** auto-**banned** ({reason})")
+        except Exception:
+            pass
+
+    async def _send_punish_alert(self, guild_id: int, text: str):
+        cfg = guild_settings.get_chat_bridge_config(guild_id)
+        ch = None
+        if cfg.get("log_channel_id"):
+            ch = self.bot.get_channel(cfg.get("log_channel_id"))
+        if ch is None and cfg.get("relay_channel_id"):
+            ch = self.bot.get_channel(cfg.get("relay_channel_id"))
+        if ch is not None:
+            try:
+                await ch.send(text[:1900])
+            except Exception:
+                pass
 
     # ── relay: Discord -> game ───────────────────────────────
     @commands.Cog.listener()
@@ -285,6 +365,87 @@ class ChatBridge(commands.Cog):
         ]
         embed = discord.Embed(title="💬 Chat Bridge", description="\n".join(lines), color=discord.Color.blurple())
         await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    # ── auto-detection rule commands ─────────────────────────
+    @app_commands.command(name="auto-chat-add", description="Add an in-game chat trigger word with an auto-punishment (Admin)")
+    @app_commands.describe(
+        word="Word/trigger to detect in in-game chat",
+        punishment="Punishment to apply",
+        tempban_hours="Hours if punishment is tempban",
+    )
+    @app_commands.choices(punishment=[
+        app_commands.Choice(name="Warn", value="warn"),
+        app_commands.Choice(name="Temp-ban", value="tempban"),
+        app_commands.Choice(name="Ban", value="ban"),
+        app_commands.Choice(name="Blacklist", value="blacklist"),
+    ])
+    async def auto_chat_add(self, interaction: discord.Interaction, word: str,
+                            punishment: app_commands.Choice[str], tempban_hours: int = 24):
+        if not interaction.user.guild_permissions.administrator:
+            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
+        try:
+            guild_settings.add_chat_auto_rule(interaction.guild_id, word, punishment.value, tempban_hours, interaction.user.id)
+        except ValueError as e:
+            return await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+        self._auto_rules_cache.pop(interaction.guild_id, None)
+        await interaction.response.send_message(
+            f"✅ Trigger **{word}** added → **{punishment.value}**" + (f" ({tempban_hours}h)" if punishment.value == "tempban" else "") + ".", ephemeral=True,
+        )
+
+    @app_commands.command(name="auto-chat-remove", description="Remove an in-game chat trigger word (Admin)")
+    @app_commands.describe(word="The trigger word to remove")
+    async def auto_chat_remove(self, interaction: discord.Interaction, word: str):
+        if not interaction.user.guild_permissions.administrator:
+            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
+        removed = False
+        for r in guild_settings.get_chat_auto_rules(interaction.guild_id):
+            if r["word"] == word.strip().lower():
+                guild_settings.remove_chat_auto_rule(r["id"], interaction.guild_id)
+                removed = True
+        self._auto_rules_cache.pop(interaction.guild_id, None)
+        await interaction.response.send_message(
+            f"✅ Removed trigger **{word}**." if removed else f"❌ Trigger **{word}** not found.", ephemeral=True,
+        )
+
+    @app_commands.command(name="auto-chat-list", description="List all in-game chat trigger words (Admin)")
+    async def auto_chat_list(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.administrator:
+            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
+        rules = guild_settings.get_chat_auto_rules(interaction.guild_id)
+        if not rules:
+            return await interaction.response.send_message("No auto-detection triggers yet.", ephemeral=True)
+        lines = []
+        for r in rules:
+            extra = f" ({r['tempban_hours']}h)" if r["punishment"] == "tempban" else ""
+            state = '✅' if r['enabled'] else '⛔'
+            lines.append(f"#{r['id']} {state} **{r['word']}** → `{r['punishment']}{extra}`")
+        embed = discord.Embed(title="In-Game Chat Triggers", description="\n".join(lines[:20]), color=discord.Color.dark_red())
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @app_commands.command(name="auto-chat-toggle", description="Enable or disable a trigger word (Admin)")
+    @app_commands.describe(word_id="Rule ID (see /auto-chat-list)", enabled="Enabled or disabled")
+    async def auto_chat_toggle(self, interaction: discord.Interaction, word_id: int, enabled: bool):
+        if not interaction.user.guild_permissions.administrator:
+            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
+        guild_settings.set_chat_auto_rule_enabled(word_id, interaction.guild_id, enabled)
+        self._auto_rules_cache.pop(interaction.guild_id, None)
+        await interaction.response.send_message(f"✅ Rule #{word_id} **{'enabled' if enabled else 'disabled'}.**", ephemeral=True)
+
+    @app_commands.command(name="auto-chat-clear", description="Remove all in-game chat trigger words (Admin)")
+    async def auto_chat_clear(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.administrator:
+            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
+        guild_settings.clear_chat_auto_rules(interaction.guild_id)
+        self._auto_rules_cache.pop(interaction.guild_id, None)
+        await interaction.response.send_message("🗑️ All in-game chat triggers removed.", ephemeral=True)
+
+    @app_commands.command(name="auto-chat-cooldown", description="Set minutes between repeated auto-punishments per player+word (Admin)")
+    @app_commands.describe(minutes="Cooldown in minutes")
+    async def auto_chat_cooldown(self, interaction: discord.Interaction, minutes: int):
+        if not interaction.user.guild_permissions.administrator:
+            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
+        guild_settings.update_setting(interaction.guild_id, "chat_auto_cooldown_minutes", max(0, minutes))
+        await interaction.response.send_message(f"⏱️ Auto-punishment cooldown set to **{max(0, minutes)}** minutes.", ephemeral=True)
 
 
 async def asyncio_to_thread(fn, *args, **kwargs):

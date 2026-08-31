@@ -220,6 +220,19 @@ def init_db():
             """)
             cur.execute("CREATE INDEX IF NOT EXISTS idx_chat_logs_guild ON chat_logs(guild_id, relayed_at DESC)")
             cur.execute("""
+                CREATE TABLE IF NOT EXISTS chat_auto_rules (
+                    id             SERIAL PRIMARY KEY,
+                    guild_id       BIGINT NOT NULL,
+                    word           TEXT NOT NULL,
+                    punishment     TEXT DEFAULT 'warn',
+                    tempban_hours  INTEGER DEFAULT 24,
+                    enabled        BOOLEAN DEFAULT TRUE,
+                    added_by       BIGINT,
+                    created_at     TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_chat_auto_rules ON chat_auto_rules(guild_id)")
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS tribe_members (
                     guild_id    BIGINT NOT NULL,
                     tribe_name  TEXT NOT NULL,
@@ -1305,6 +1318,109 @@ def clear_chat_logs(guild_id: int):
     try:
         with conn.cursor() as cur:
             cur.execute("DELETE FROM chat_logs WHERE guild_id = %s", (guild_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+# ============================================================
+#  CHAT AUTO-DETECTION RULES (word -> auto punishment)
+# ============================================================
+
+CHAT_AUTO_PUNISHMENTS = ["warn", "tempban", "ban", "blacklist"]
+
+def add_chat_auto_rule(guild_id: int, word: str, punishment: str = "warn",
+                       tempban_hours: int = 24, added_by: int = None):
+    if punishment not in CHAT_AUTO_PUNISHMENTS:
+        raise ValueError(f"Invalid punishment: {punishment}")
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO chat_auto_rules (guild_id, word, punishment, tempban_hours, added_by)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (guild_id, word.strip().lower(), punishment, tempban_hours, added_by))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_chat_auto_rules(guild_id: int) -> list:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, word, punishment, tempban_hours, enabled, added_by, created_at
+                FROM chat_auto_rules WHERE guild_id = %s ORDER BY word
+            """, (guild_id,))
+            return [
+                {"id": r[0], "word": r[1], "punishment": r[2], "tempban_hours": r[3],
+                 "enabled": r[4], "added_by": r[5], "created_at": r[6]}
+                for r in cur.fetchall()
+            ]
+    finally:
+        conn.close()
+
+
+def get_enabled_chat_auto_rules(guild_id: int) -> list:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, word, punishment, tempban_hours, enabled
+                FROM chat_auto_rules WHERE guild_id = %s AND enabled = TRUE
+            """, (guild_id,))
+            return [
+                {"id": r[0], "word": r[1].lower(), "punishment": r[2], "tempban_hours": r[3], "enabled": r[4]}
+                for r in cur.fetchall()
+            ]
+    finally:
+        conn.close()
+
+
+def remove_chat_auto_rule(rule_id: int, guild_id: int) -> bool:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM chat_auto_rules WHERE id = %s AND guild_id = %s", (rule_id, guild_id))
+            return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
+def clear_chat_auto_rules(guild_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM chat_auto_rules WHERE guild_id = %s", (guild_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def set_chat_auto_rule_punishment(rule_id: int, guild_id: int, punishment: str, tempban_hours: int = 24):
+    if punishment not in CHAT_AUTO_PUNISHMENTS:
+        raise ValueError(f"Invalid punishment: {punishment}")
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE chat_auto_rules SET punishment = %s, tempban_hours = %s WHERE id = %s AND guild_id = %s",
+                (punishment, tempban_hours, rule_id, guild_id),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def set_chat_auto_rule_enabled(rule_id: int, guild_id: int, enabled: bool):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE chat_auto_rules SET enabled = %s WHERE id = %s AND guild_id = %s",
+                (enabled, rule_id, guild_id),
+            )
         conn.commit()
     finally:
         conn.close()
