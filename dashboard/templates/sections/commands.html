@@ -1,0 +1,96 @@
+{% extends "dashboard.html" %}
+{% block dashboard_content %}
+<div class="mb-6">
+  <h2 class="text-2xl font-bold text-white">Commands</h2>
+  <p class="text-gray-400 mt-1">Edit the description (help text), permissions (which roles can use it) and enable/disable each slash command.</p>
+</div>
+
+{% for cat in category_order %}
+  {% set cat_cmds = commands | selectattr('category', 'equalto', cat) | list %}
+  {% if cat_cmds %}
+  <div class="mb-6 bg-gray-800/50 border border-gray-700/50 rounded-2xl shadow-lg overflow-hidden">
+    <div class="px-6 py-4 border-b border-gray-700">
+      <h3 class="text-lg font-bold text-white">{{ cat_labels.get(cat, cat.title()) }} ({{ cat_cmds|length }})</h3>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left">
+        <thead class="bg-gray-800">
+          <tr>
+            <th class="px-6 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Command</th>
+            <th class="px-6 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Description / Message</th>
+            <th class="px-6 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Permissions (roles)</th>
+            <th class="px-6 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Enabled</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-700">
+          {% for c in cat_cmds %}
+          <tr class="hover:bg-gray-800 align-top">
+            <td class="px-6 py-4 text-sm text-white font-mono whitespace-nowrap">/{{ c.name }}</td>
+            <td class="px-6 py-4 text-sm text-gray-300 w-1/3">
+              <form method="POST" action="">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="cmd_action" value="set_description">
+                <input type="hidden" name="command" value="{{ c.name }}">
+                <textarea name="description" rows="2" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500">{{ c.description }}</textarea>
+                <button type="submit" class="mt-1 text-xs px-3 py-1 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-lg">Save description</button>
+              </form>
+            </td>
+            <td class="px-6 py-4 text-sm text-gray-300">
+              <div class="flex flex-wrap gap-2 mb-2">
+                {% for role in c.permissions %}
+                <span class="inline-flex items-center gap-1 bg-red-600/20 text-red-300 px-2 py-1 rounded text-sm">
+                  {{ role.name }}
+                  <form method="POST" action="" class="inline">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="cmd_action" value="remove_permission">
+                    <input type="hidden" name="command" value="{{ c.name }}">
+                    <input type="hidden" name="role_id" value="{{ role.id }}">
+                    <button type="submit" class="text-red-400 hover:text-red-300 ml-1">✕</button>
+                  </form>
+                </span>
+                {% else %}
+                <span class="text-xs text-gray-500">Anyone (no restriction)</span>
+                {% endfor %}
+              </div>
+              <form method="POST" action="" class="flex items-center gap-2 flex-wrap">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="cmd_action" value="add_permission">
+                <input type="hidden" name="command" value="{{ c.name }}">
+                <select name="role_id" class="bg-gray-900 border border-gray-700 rounded-lg px-2 py-1 text-sm text-white">
+                  <option value="">+ Add role…</option>
+                  {% for role in guild_roles %}
+                  <option value="{{ role.id }}">{{ role.name }}</option>
+                  {% endfor %}
+                </select>
+                <button type="submit" class="text-xs px-3 py-1 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-lg">Add</button>
+              </form>
+              {% if c.permissions %}
+              <form method="POST" action="" class="inline mt-1">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="cmd_action" value="clear_permissions">
+                <input type="hidden" name="command" value="{{ c.name }}">
+                <button type="submit" class="text-xs px-3 py-1 bg-red-900/60 hover:bg-red-700 text-white rounded-lg">Clear</button>
+              </form>
+              {% endif %}
+            </td>
+            <td class="px-6 py-4 text-sm">
+              <form method="POST" action="">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="cmd_action" value="toggle_disabled">
+                <input type="hidden" name="command" value="{{ c.name }}">
+                <input type="hidden" name="disabled" value="{{ '0' if c.disabled else '1' }}">
+                <button type="submit" class="text-xs px-3 py-1 rounded-lg {{ 'bg-green-600/20 text-green-300' if not c.disabled else 'bg-red-600/20 text-red-300' }} hover:opacity-80">
+                  {{ 'Enabled' if not c.disabled else 'Disabled' }}
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+{% endfor %}
+
+{% endblock %}

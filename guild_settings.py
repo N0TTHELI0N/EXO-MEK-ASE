@@ -1352,6 +1352,53 @@ def clear_command_permissions(guild_id: int, command: str):
         conn.close()
 
 
+def set_command_disabled(guild_id: int, command: str, disabled: bool):
+    """Enable/disable a slash command for a guild."""
+    disabled_list = get_disabled_commands(guild_id)
+    if disabled:
+        if command not in disabled_list:
+            disabled_list.append(command)
+    else:
+        disabled_list = [c for c in disabled_list if c != command]
+    update_setting(guild_id, "disabled_commands", disabled_list)
+
+
+def get_disabled_commands(guild_id: int) -> list:
+    """Return the list of disabled slash command names for a guild."""
+    value = get_settings(guild_id).get("disabled_commands", [])
+    if not isinstance(value, list):
+        value = []
+    return value
+
+
+def is_command_disabled(guild_id: int, command: str) -> bool:
+    return command in get_disabled_commands(guild_id)
+
+
+# ============================================================
+#  COMMAND DESCRIPTION OVERRIDES
+# ============================================================
+
+def get_command_descriptions(guild_id: int) -> dict:
+    """Return per-command description overrides for a guild."""
+    value = get_settings(guild_id).get("command_descriptions", {})
+    return value if isinstance(value, dict) else {}
+
+
+def set_command_description(guild_id: int, command: str, description: str):
+    overrides = get_command_descriptions(guild_id)
+    description = (description or "").strip()
+    if description:
+        overrides[command] = description
+    else:
+        overrides.pop(command, None)
+    update_setting(guild_id, "command_descriptions", overrides)
+
+
+def get_command_description(guild_id: int, command: str, default: str = "") -> str:
+    return get_command_descriptions(guild_id).get(command, default)
+
+
 def has_command_permission(guild_id: int, command: str, member) -> bool:
     """Check if a member has permission to use a command.
 

@@ -67,6 +67,7 @@ TRANSLATIONS = {
     "dash_license": {"ar": "الترخيص", "en": "License"},
     "dash_shop": {"ar": "المتجر", "en": "Shop"},
     "dash_custom_commands": {"ar": "الأوامر المخصصة", "en": "Custom Commands"},
+    "dash_commands": {"ar": "الأوامر", "en": "Commands"},
     "dash_points": {"ar": "النقاط", "en": "Points"},
     "dash_whitelist": {"ar": "القائمة البيضاء", "en": "Whitelist"},
     "dash_tribelog": {"ar": "سجل القبيلة", "en": "Tribe Log"},

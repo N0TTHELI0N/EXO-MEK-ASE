@@ -72,7 +72,8 @@ class HelpView(discord.ui.View):
         for cmd_name in commands_in_cat:
             cmd = self.bot.tree.get_command(cmd_name)
             if cmd:
-                desc = cmd.description or "No description"
+                default = cmd.description or "No description"
+                desc = guild_settings.get_command_description(self.guild_id, cmd_name, default)
                 lines.append(f"`/{cmd_name}` — {desc}")
             else:
                 lines.append(f"`/{cmd_name}`")
@@ -105,9 +106,7 @@ class Help(commands.Cog):
         if not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
 
-        overrides = guild_settings.get_setting(interaction.guild_id, "help_overrides", {})
-        overrides[command] = description
-        guild_settings.update_setting(interaction.guild_id, "help_overrides", overrides)
+        guild_settings.set_command_description(interaction.guild_id, command, description)
         await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "help_text_updated", key=command), ephemeral=True)
 
 

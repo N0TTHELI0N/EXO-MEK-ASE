@@ -59,6 +59,14 @@ async def global_permission_check(interaction: discord.Interaction) -> bool:
     if member.guild_permissions.administrator:
         return True
 
+    # Admin can globally disable a command for everyone else
+    if guild_settings.is_command_disabled(interaction.guild_id, command_name):
+        await interaction.response.send_message(
+            "❌ This command is disabled.",
+            ephemeral=True,
+        )
+        return False
+
     allowed_roles = guild_settings.get_command_permissions(interaction.guild_id, command_name)
     if not allowed_roles:
         return True  # no restriction — anyone can use

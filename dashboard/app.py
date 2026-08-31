@@ -1755,6 +1755,207 @@ ALL_COMMANDS_LIST = [
 ]
 
 
+# Category grouping for the Commands page (matches help menu categories)
+COMMAND_CATEGORY_ORDER = ["general", "server", "custom", "moderation", "shop", "whitelist",
+                          "tribelog", "leaderboard", "automod", "admin", "other"]
+
+# command -> (category, default description)
+COMMANDS_META = {
+    "help": ("general", "Show all available commands"),
+    "activate": ("general", "Activate / verify the bot licence for your server"),
+    "top-servers": ("general", "Show the top servers leaderboard"),
+    "set-language": ("general", "Set the bot language for the server"),
+    "set-help-text": ("general", "Override the description of a slash command"),
+    "custom": ("custom", "Run a custom server command"),
+    "custom-list": ("custom", "List all custom commands"),
+    "custom-add": ("custom", "Create a custom server command"),
+    "custom-remove": ("custom", "Delete a custom command"),
+    "ark-command": ("custom", "Run a raw ARK console command"),
+    "setup-forum-logs": ("custom", "Create the server-log forum with 4 category threads"),
+    "setup-shop-forum": ("custom", "Create the shop-logs forum with Done + Pending threads"),
+    "add-shop-dino": ("shop", "Add a dino to the shop"),
+    "remove-shop-dino": ("shop", "Remove a dino from the shop"),
+    "list-dinos": ("shop", "List all shop dinos"),
+    "buy-dino": ("shop", "Buy a dino from the shop"),
+    "balance": ("shop", "Check your point balance"),
+    "add-points": ("shop", "Add points to a member"),
+    "remove-points": ("shop", "Remove points from a member"),
+    "set-min-level": ("shop", "Set the minimum level for shop dinos"),
+    "pending-purchases": ("shop", "List pending shop purchases"),
+    "spawn-pending": ("shop", "Spawn a pending purchase"),
+    "cancel-pending": ("shop", "Cancel a pending purchase"),
+    "set-shop-channels": ("shop", "Set the shop pending/done channels"),
+    "shop-add": ("shop", "Add an item to the shop"),
+    "shop-remove": ("shop", "Remove an item from the shop"),
+    "shop-list": ("shop", "List shop items"),
+    "shop-edit": ("shop", "Edit a shop item"),
+    "points-add": ("shop", "Add points to a member"),
+    "points-remove": ("shop", "Remove points from a member"),
+    "points-check": ("shop", "Check a point balance"),
+    "points-leaderboard": ("shop", "Show the points leaderboard"),
+    "whitelist": ("whitelist", "Show whitelist status"),
+    "whitelist-add": ("whitelist", "Add a player to the whitelist"),
+    "whitelist-remove": ("whitelist", "Remove a player from the whitelist"),
+    "whitelist-restart": ("whitelist", "Restart the whitelist"),
+    "whitelist-link": ("whitelist", "Link your PSN gamertag to your Discord"),
+    "whitelist-unlink": ("whitelist", "Unlink your PSN gamertag"),
+    "linkpsn": ("whitelist", "Link your PSN gamertag"),
+    "unlinkpsn": ("whitelist", "Unlink your PSN gamertag"),
+    "wl-status": ("whitelist", "Show your whitelist status"),
+    "wl-list": ("whitelist", "List whitelisted players"),
+    "set-wl-path": ("whitelist", "Set the whitelist file path"),
+    "set-restart-time": ("whitelist", "Set the whitelist restart time"),
+    "ban": ("moderation", "Ban a member"),
+    "kick": ("moderation", "Kick a member"),
+    "mute": ("moderation", "Mute a member"),
+    "unmute": ("moderation", "Unmute a member"),
+    "warn": ("moderation", "Warn a member"),
+    "warnings": ("moderation", "List a member's warnings"),
+    "clear-warnings": ("moderation", "Clear a member's warnings"),
+    "banplayer": ("moderation", "Ban a player on the ARK server"),
+    "unbanplayer": ("moderation", "Unban a player on the ARK server"),
+    "wipe-player": ("moderation", "Wipe a player's data"),
+    "tempwarn": ("moderation", "Issue a temporary warning"),
+    "remove-warning": ("moderation", "Remove a specific warning"),
+    "punish-ban": ("moderation", "Ban a member via the punishment system"),
+    "punish-tempban": ("moderation", "Temp-ban a member"),
+    "punish-wipe": ("moderation", "Wipe a member's punishments"),
+    "punishment-history": ("moderation", "Show a member's punishment history"),
+    "set-warning-threshold": ("moderation", "Set the warning threshold"),
+    "set-warning-punishment": ("moderation", "Set the punishment for reaching a threshold"),
+    "set-warning-tempban-duration": ("moderation", "Set the temp-ban duration"),
+    "set-warning-default-expiry": ("moderation", "Set the default warning expiry"),
+    "set-punishment-log": ("moderation", "Set the punishment log channel"),
+    "tribelog-config": ("tribelog", "Configure the tribe log"),
+    "tribelog-test": ("tribelog", "Test the tribe log"),
+    "setup-tribe-forum": ("tribelog", "Create the tribe log forum"),
+    "add-tribe-name": ("tribelog", "Add a tribe name for logging"),
+    "set-tribe-log-source": ("tribelog", "Set the tribe log source"),
+    "set-tribelog-enabled": ("tribelog", "Enable or disable the tribe log"),
+    "set-tribe-log-channel": ("tribelog", "Set the tribe log channel"),
+    "set-tribe-log-config": ("tribelog", "Set the tribe log config"),
+    "view-tribelog": ("tribelog", "View the tribe log"),
+    "add-tribe-member": ("tribelog", "Add a member to a tribe"),
+    "set-tribe-owner": ("tribelog", "Set a tribe's owner"),
+    "add-tribe-points": ("tribelog", "Add points to a tribe"),
+    "remove-tribe-points": ("tribelog", "Remove points from a tribe"),
+    "tribe-log": ("tribelog", "View the tribe log"),
+    "enable-tribe-log": ("tribelog", "Enable the tribe log"),
+    "disable-tribe-log": ("tribelog", "Disable the tribe log"),
+    "leaderboard": ("leaderboard", "Show the leaderboard"),
+    "setup-leaderboard": ("leaderboard", "Set up the leaderboard"),
+    "leaderboard-preview": ("leaderboard", "Preview the leaderboard"),
+    "leaderboard-config": ("leaderboard", "Configure the leaderboard"),
+    "leaderboard-set-channel": ("leaderboard", "Set the leaderboard channel"),
+    "leaderboard-toggle": ("leaderboard", "Toggle the leaderboard"),
+    "leaderboard-force": ("leaderboard", "Force a leaderboard update"),
+    "leaderboard-sync": ("leaderboard", "Sync the leaderboard"),
+    "automod-config": ("automod", "Configure auto-moderation"),
+    "automod-list": ("automod", "List auto-mod settings"),
+    "automod-remove": ("automod", "Remove an auto-mod setting"),
+    "automod-toggle": ("automod", "Toggle auto-mod"),
+    "automod-set-log-channel": ("automod", "Set the auto-mod log channel"),
+    "automod-set-log-path": ("automod", "Set the auto-mod log path"),
+    "automod-add-word": ("automod", "Add a filtered word"),
+    "automod-remove-word": ("automod", "Remove a filtered word"),
+    "automod-list-words": ("automod", "List filtered words"),
+    "automod-clear-words": ("automod", "Clear filtered words"),
+    "set-nitrado-token": ("admin", "Set the Nitrado API token"),
+    "set-log-channel": ("admin", "Set a log channel"),
+    "set-license": ("admin", "Set the licence key"),
+    "ban-user": ("admin", "Ban a user from the bot"),
+    "view-guilds": ("admin", "View bot guilds"),
+    "force-sync-guild": ("admin", "Force-sync a guild"),
+    "set-command-permission": ("admin", "Set a command permission for a role"),
+    "remove-command-permission": ("admin", "Remove a command permission"),
+    "view-command-permissions": ("admin", "View command permissions"),
+    "clear-command-permissions": ("admin", "Clear command permissions"),
+    "backup-create": ("server", "Create a server backup"),
+    "backup-list": ("server", "List server backups"),
+    "backup-restore": ("server", "Restore a server backup"),
+    "backup-rollback": ("server", "Roll back a server backup"),
+    "backup-download": ("server", "Download a server backup"),
+    "server-status": ("server", "Show the ARK server status"),
+    "server-restart": ("server", "Restart the ARK server"),
+    "server-stop": ("server", "Stop the ARK server"),
+}
+
+
+def _command_default_desc(cmd: str) -> str:
+    return COMMANDS_META.get(cmd, ("other", "Slash command"))[1]
+
+
+@app.route("/dashboard/<int:guild_id>/commands", methods=["GET", "POST"])
+@login_required
+@guild_admin_required
+@validate_csrf
+def section_commands(guild_id):
+    guild_roles = get_guild_roles(guild_id)
+    permissions = _build_permissions_dict(guild_id, guild_roles)
+    disabled = set(guild_settings.get_disabled_commands(guild_id))
+    descriptions = guild_settings.get_command_descriptions(guild_id)
+    custom_commands = guild_settings.get_custom_commands(guild_id)
+
+    if request.method == "POST":
+        cmd_action = request.form.get("cmd_action", "")
+        command = request.form.get("command", "").strip()
+        if cmd_action == "set_description" and command:
+            guild_settings.set_command_description(guild_id, command, request.form.get("description", ""))
+        elif cmd_action == "toggle_disabled" and command:
+            guild_settings.set_command_disabled(guild_id, command, request.form.get("disabled", "0") == "1")
+        elif cmd_action == "add_permission" and command:
+            role_id = request.form.get("role_id", "").strip()
+            if role_id.isdigit():
+                guild_settings.set_command_permission(guild_id, command, int(role_id))
+        elif cmd_action == "remove_permission" and command:
+            role_id = request.form.get("role_id", "").strip()
+            if role_id.isdigit():
+                guild_settings.remove_command_permission(guild_id, command, int(role_id))
+        elif cmd_action == "clear_permissions" and command:
+            guild_settings.clear_command_permissions(guild_id, command)
+        elif cmd_action == "update_custom" and command:
+            command_string = request.form.get("command_string", "").strip() or None
+            category = request.form.get("category") or None
+            enabled_flag = request.form.get("enabled")
+            guild_settings.update_custom_command(guild_id, command, command_string, category,
+                                                 True if enabled_flag != "0" else False)
+        return redirect(url_for("section_commands", guild_id=guild_id))
+
+    # Build the command list (all known commands) ordered by category.
+    ordered = []
+    for cat in COMMAND_CATEGORY_ORDER:
+        for cmd in ALL_COMMANDS_LIST:
+            if (COMMANDS_META.get(cmd, ("other",))[0]) == cat:
+                ordered.append(cmd)
+    # include any custom commands (they live under the 'custom' category)
+    commands = []
+    for cmd in ordered:
+        cat = COMMANDS_META.get(cmd, ("other",))[0]
+        commands.append({
+            "name": cmd,
+            "category": cat,
+            "description": descriptions.get(cmd, _command_default_desc(cmd)),
+            "disabled": cmd in disabled,
+            "permissions": permissions.get(cmd, []),
+        })
+    return render_template(
+        "sections/commands.html",
+        user=get_current_user(),
+        guild_id=guild_id,
+        active_section="commands",
+        commands=commands,
+        guild_roles=guild_roles,
+        custom_commands=custom_commands,
+        category_order=COMMAND_CATEGORY_ORDER,
+        cat_labels={
+            "general": "General", "server": "Server", "custom": "Custom Commands",
+            "moderation": "Moderation", "shop": "Shop", "whitelist": "Whitelist",
+            "tribelog": "Tribe Log", "leaderboard": "Leaderboard", "automod": "Auto-Mod",
+            "admin": "Admin", "other": "Other",
+        },
+    )
+
+
 def _build_permissions_dict(guild_id, guild_roles):
     raw = guild_settings.get_all_command_permissions(guild_id)
     role_map = {r["id"]: r["name"] for r in guild_roles}

@@ -15,6 +15,20 @@ CATEGORY_META = {
 }
 
 
+async def _normalize_thread(result):
+    """Return a discord.Thread from the result of a forum create_thread call.
+
+    discord.py returns a Thread, but some versions wrap it in a tuple —
+    normalise so callers always get the Thread (or None).
+    """
+    if isinstance(result, tuple):
+        for item in result:
+            if isinstance(item, discord.Thread):
+                return item
+        return None
+    return result if isinstance(result, discord.Thread) else None
+
+
 class CustomCommands(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -243,19 +257,31 @@ class CustomCommands(commands.Cog):
 
         # ensure 4 threads exist (one per category)
         thread_ids = {}
+        errors = []
         for cat, meta in CATEGORY_META.items():
-            existing = discord.utils.get(forum.threads, name=lambda t, m=meta: t.name.startswith(m["emoji"]) and m["label"] in t.name)
+            existing = discord.utils.find(lambda t, m=meta: t.name.startswith(m["emoji"]) and m["label"] in t.name, forum.threads)
             if existing:
                 thread_ids[meta["thread"]] = existing.id
                 continue
             try:
-                thread = await forum.create_thread(
+                result = await forum.create_thread(
                     name=f"{meta['emoji']} {meta['label']}",
                     content=bot_i18n.t(interaction.guild_id, "forum_thread_intro", label=meta["label"]),
                 )
+                thread = await _normalize_thread(result)
+                if thread is None:
+                    raise RuntimeError("create_thread returned no thread")
                 thread_ids[meta["thread"]] = thread.id
             except Exception as e:
-                return await interaction.followup.send(f"❌ Could not create thread {meta['label']}: {e}", ephemeral=True)
+                errors.append(f"{meta['label']}: {type(e).__name__}")
+
+        if len(thread_ids) < 4:
+            missing = [CATEGORY_META[c]["label"] for c in CATEGORY_META if CATEGORY_META[c]["thread"] not in thread_ids]
+            errors_note = (" (" + "; ".join(errors) + ")") if errors else ""
+            return await interaction.followup.send(
+                f"⚠️ Only {len(thread_ids)}/4 threads were created. Missing: {', '.join(missing)}.{errors_note} "
+                "Run the command again to retry.", ephemeral=True,
+            )
 
         guild_settings.set_forum_log_config(
             interaction.guild_id,
@@ -293,16 +319,28 @@ class CustomCommands(commands.Cog):
 
         thread_map = {"✅ Done Deliveries": "thread_done", "⏳ Pending Deliveries": "thread_pending"}
         thread_ids = {}
+        errors = []
         for tname, tkey in thread_map.items():
-            existing = discord.utils.get(forum.threads, name=lambda t, n=tname: n in t.name or t.name.startswith(n.split()[-1]))
+            existing = discord.utils.find(lambda t, n=tname: n in t.name or t.name.startswith(n.split()[-1]), forum.threads)
             if existing:
                 thread_ids[tkey] = existing.id
                 continue
             try:
-                thread = await forum.create_thread(name=tname, content=bot_i18n.t(interaction.guild_id, "shop_forum_thread_intro", label=tname))
+                result = await forum.create_thread(name=tname, content=bot_i18n.t(interaction.guild_id, "shop_forum_thread_intro", label=tname))
+                thread = await _normalize_thread(result)
+                if thread is None:
+                    raise RuntimeError("create_thread returned no thread")
                 thread_ids[tkey] = thread.id
             except Exception as e:
-                return await interaction.followup.send(f"❌ Could not create thread {tname}: {e}", ephemeral=True)
+                errors.append(f"{tname}: {type(e).__name__}")
+
+        if len(thread_ids) < 2:
+            missing = [t for t, k in thread_map.items() if k not in thread_ids]
+            errors_note = (" (" + "; ".join(errors) + ")") if errors else ""
+            return await interaction.followup.send(
+                f"⚠️ Could not create all shop threads. Missing: {', '.join(missing)}.{errors_note} "
+                "Run the command again to retry.", ephemeral=True,
+            )
 
         guild_settings.set_shop_forum_config(
             interaction.guild_id, forum.id, thread_ids.get("thread_done"), thread_ids.get("thread_pending")
