@@ -653,51 +653,7 @@ def _handle_pending_shop_action(guild_id: int, action: str, purchase_id: int):
 @guild_admin_required
 @validate_csrf
 def section_custom_commands(guild_id):
-    if request.method == "POST":
-        app_action = request.form.get("app_action")
-        if app_action == "toggle_runner":
-            current = guild_settings.get_bool_setting(guild_id, "runner_enabled", False)
-            guild_settings.update_setting(guild_id, "runner_enabled", "0" if current else "1")
-        elif app_action == "add_custom":
-            name = request.form.get("name", "").strip().lower().replace(" ", "-")
-            command_string = request.form.get("command_string", "").strip()
-            category = request.form.get("category") or None
-            if name and command_string:
-                guild_settings.add_custom_command(guild_id, name, command_string, category)
-        elif app_action == "update_custom":
-            name = request.form.get("name", "").strip()
-            command_string = request.form.get("command_string", "").strip() or None
-            category = request.form.get("category") or None
-            enabled = request.form.get("enabled")
-            guild_settings.update_custom_command(guild_id, name, command_string, category,
-                                                 True if enabled != "0" else False)
-        elif app_action == "delete_custom":
-            name = request.form.get("name", "").strip()
-            guild_settings.remove_custom_command(guild_id, name)
-        elif app_action == "toggle_enable":
-            name = request.form.get("name", "").strip()
-            enabled_str = request.form.get("enabled", "")
-            enabled = enabled_str != "0"
-            guild_settings.update_custom_command(guild_id, name, enabled=enabled)
-        elif app_action == "save_rules":
-            rules = {}
-            for cat in ["dino_spawn", "gfi", "player", "gcm"]:
-                raw = request.form.get(f"rules_{cat}", "").strip()
-                if raw:
-                    rules[cat] = [k.strip() for k in raw.split(",") if k.strip()]
-            guild_settings.set_category_rules(guild_id, rules)
-        return redirect(url_for("section_custom_commands", guild_id=guild_id))
-    return render_template(
-        "sections/custom_commands.html",
-        user=get_current_user(),
-        guild_id=guild_id,
-        active_section="custom-commands",
-        runner_enabled=guild_settings.get_bool_setting(guild_id, "runner_enabled", False),
-        custom_commands=guild_settings.get_custom_commands(guild_id),
-        category_rules=guild_settings.get_category_rules(guild_id),
-        forum_cfg=guild_settings.get_forum_log_config(guild_id),
-        shop_forum_cfg=guild_settings.get_shop_forum_config(guild_id),
-    )
+    return redirect(url_for("section_commands", guild_id=guild_id))
 
 
 @app.route("/dashboard/<int:guild_id>/points", methods=["GET", "POST"])
@@ -1667,6 +1623,15 @@ def serve_evidence(guild_id, filename):
 def section_logs(guild_id):
     if request.method == "POST":
         action = request.form.get("action")
+        app_action = request.form.get("app_action")
+        if app_action == "save_rules":
+            rules = {}
+            for cat in ["dino_spawn", "gfi", "player", "gcm"]:
+                raw = request.form.get(f"rules_{cat}", "").strip()
+                if raw:
+                    rules[cat] = [k.strip() for k in raw.split(",") if k.strip()]
+            guild_settings.set_category_rules(guild_id, rules)
+            return redirect(url_for("section_logs", guild_id=guild_id))
         if session.get("user", {}).get("id") != BOT_OWNER_ID:
             return redirect(url_for("section_logs", guild_id=guild_id) + "?notice=owner")
         if action == "wipe_logs":
@@ -1699,6 +1664,9 @@ def section_logs(guild_id):
         per_page=per_page,
         log_count=total,
         log_settings=log_settings,
+        forum_cfg=guild_settings.get_forum_log_config(guild_id),
+        shop_forum_cfg=guild_settings.get_shop_forum_config(guild_id),
+        category_rules=guild_settings.get_category_rules(guild_id),
         is_owner=(get_current_user() or {}).get("id") == BOT_OWNER_ID,
     )
 
@@ -1899,7 +1867,18 @@ def section_commands(guild_id):
     if request.method == "POST":
         cmd_action = request.form.get("cmd_action", "")
         command = request.form.get("command", "").strip()
-        if cmd_action == "set_description" and command:
+        if cmd_action == "toggle_runner":
+            current = guild_settings.get_bool_setting(guild_id, "runner_enabled", False)
+            guild_settings.update_setting(guild_id, "runner_enabled", "0" if current else "1")
+        elif cmd_action == "add_custom":
+            name = request.form.get("name", "").strip().lower().replace(" ", "-")
+            command_string = request.form.get("command_string", "").strip()
+            category = request.form.get("category") or None
+            if name and command_string:
+                guild_settings.add_custom_command(guild_id, name, command_string, category)
+        elif cmd_action == "delete_custom" and command:
+            guild_settings.remove_custom_command(guild_id, command)
+        elif cmd_action == "set_description" and command:
             guild_settings.set_command_description(guild_id, command, request.form.get("description", ""))
         elif cmd_action == "toggle_disabled" and command:
             guild_settings.set_command_disabled(guild_id, command, request.form.get("disabled", "0") == "1")
@@ -1942,29 +1921,19 @@ def section_commands(guild_id):
             "disabled": cmd in disabled,
             "permissions": permissions.get(cmd, []),
         })
-    # user-defined custom commands grouped under their own section, with
-    # role-permission controls keyed by the custom command's name.
-    custom_perms = []
-    for cc in custom_commands:
-        cname = cc.get("name", "")
-        enabled_flag = bool(cc.get("enabled", True))
-        custom_perms.append({
-            "name": cname,
-            "command_string": cc.get("command_string", ""),
-            "category": cc.get("category", ""),
-            "enabled": enabled_flag,
-            "disabled": not enabled_flag,
-            "permissions": permissions.get(cname, []),
-        })
+    # user-defined custom commands: permission lookup keyed by command name
+    custom_perms_dict = {cc.get("name", ""): permissions.get(cc.get("name", ""), [])
+                         for cc in custom_commands}
     return render_template(
         "sections/commands.html",
         user=get_current_user(),
         guild_id=guild_id,
         active_section="commands",
         commands=commands,
-        custom_perms=custom_perms,
+        custom_perms_dict=custom_perms_dict,
         guild_roles=guild_roles,
         custom_commands=custom_commands,
+        runner_enabled=guild_settings.get_bool_setting(guild_id, "runner_enabled", False),
         category_order=COMMAND_CATEGORY_ORDER,
         cat_labels={
             "general": "General", "server": "Server", "custom": "Custom Commands",

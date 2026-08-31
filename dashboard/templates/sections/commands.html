@@ -1,8 +1,196 @@
 {% extends "dashboard.html" %}
 {% block dashboard_content %}
+{% set custom_cat_labels = {
+  "dino_spawn": "🦖 Dino Spawning",
+  "gfi": "🎁 GFI Commands",
+  "player": "🧍 Player Features",
+  "gcm": "🎮 GCM"
+} %}
 <div class="mb-6">
   <h2 class="text-2xl font-bold text-white">Commands</h2>
-  <p class="text-gray-400 mt-1">Edit the description (help text), permissions (which roles can use it) and enable/disable each slash command.</p>
+  <p class="text-gray-400 mt-1">Create and manage custom commands, then edit the description (help text), permissions (which roles can use it) and enable/disable every slash command.</p>
+</div>
+
+<!-- Raw Command Runner Toggle -->
+<div class="mb-6 bg-gray-800/50 border border-gray-700/50 rounded-2xl shadow-lg p-6">
+  <div class="flex items-center justify-between">
+    <div>
+      <h3 class="text-lg font-bold text-white">🎮 Raw Command Runner (<code>/ark-command</code>)</h3>
+      <p class="text-gray-400 text-sm mt-1">When enabled, admins can run any ARK console command via <code>/ark-command &lt;command&gt;</code>. Off by default.</p>
+    </div>
+    <form method="POST" action="">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="cmd_action" value="toggle_runner">
+      <button type="submit"
+        class="px-4 py-2 rounded-lg font-semibold transition-colors
+        {% if runner_enabled %}bg-green-600 hover:bg-green-500 text-white{% else %}bg-gray-700 hover:bg-gray-600 text-gray-300{% endif %}">
+        {{ 'RUNNER: ON' if runner_enabled else 'RUNNER: OFF' }}
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- Create Custom Command -->
+<div class="mb-6 bg-gray-800/50 border border-gray-700/50 rounded-2xl shadow-lg p-6">
+  <h3 class="text-lg font-bold text-white mb-4">➕ Create Custom Command</h3>
+  <form method="POST" action="" class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="cmd_action" value="add_custom">
+    <div>
+      <label class="block text-sm text-gray-400 mb-1">Name</label>
+      <input name="name" required placeholder="e.g. speed-buff"
+        class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500">
+    </div>
+    <div class="md:col-span-2">
+      <label class="block text-sm text-gray-400 mb-1">ARK Command</label>
+      <input name="command_string" required placeholder="e.g. GiveResources 100 1 1 1 1000"
+        class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-red-500">
+      <p class="text-xs text-gray-500 mt-1">Placeholders: <code>{display_name}</code> = who runs it.</p>
+    </div>
+    <div>
+      <label class="block text-sm text-gray-400 mb-1">Forum Category</label>
+      <select name="category" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white">
+        <option value="">Auto-detect</option>
+        <option value="dino_spawn">🦖 Dino Spawning</option>
+        <option value="gfi">🎁 GFI Commands</option>
+        <option value="player">🧍 Player Features</option>
+        <option value="gcm">🎮 GCM</option>
+      </select>
+    </div>
+    <div class="md:col-span-3">
+      <button type="submit" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-medium transition-colors">Create</button>
+    </div>
+  </form>
+</div>
+
+<!-- Custom Commands List -->
+<div class="mb-6 bg-gray-800/50 border border-gray-700/50 rounded-2xl shadow-lg overflow-hidden">
+  <div class="px-6 py-4 border-b border-gray-700">
+    <h3 class="text-lg font-bold text-white">⚙️ Custom Commands ({{ custom_commands|length }})</h3>
+    <p class="text-gray-400 text-sm mt-1">Edit the command message, category, status, and which roles can run it via <code>/custom &lt;name&gt;</code>. Leave permissions empty for anyone. Admins always have access.</p>
+  </div>
+  {% if custom_commands %}
+  <div class="overflow-x-auto">
+    <table class="w-full text-left">
+      <thead class="bg-gray-800">
+        <tr>
+          <th class="px-6 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Name</th>
+          <th class="px-6 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">ARK Command / Category</th>
+          <th class="px-6 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Permissions (roles)</th>
+          <th class="px-6 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Status</th>
+          <th class="px-6 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-700">
+        {% for c in custom_commands %}
+        <tr class="hover:bg-gray-800">
+          <td class="px-6 py-4 text-sm text-white font-mono whitespace-nowrap">/{{ c.name }}</td>
+          <td class="px-6 py-4 text-sm text-gray-300 font-mono break-all">
+            <span class="text-xs text-gray-500">{{ custom_cat_labels.get(c.category, c.category) }}</span><br>
+            {{ c.command_string }}
+          </td>
+          <td class="px-6 py-4 text-sm text-gray-300">
+            <div class="flex flex-wrap gap-1.5 mb-2">
+              {% set cperms = custom_perms_dict.get(c.name, []) %}
+              {% for role in cperms %}
+              <span class="inline-flex items-center gap-1 bg-red-600/20 text-red-300 px-2 py-0.5 rounded text-xs">
+                {{ role.name }}
+                <form method="POST" action="" class="inline">
+                  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                  <input type="hidden" name="cmd_action" value="remove_permission">
+                  <input type="hidden" name="command" value="{{ c.name }}">
+                  <input type="hidden" name="role_id" value="{{ role.id }}">
+                  <button type="submit" class="text-red-400 hover:text-red-300 ml-0.5">✕</button>
+                </form>
+              </span>
+              {% else %}
+              <span class="text-xs text-gray-500">Anyone</span>
+              {% endfor %}
+            </div>
+            <form method="POST" action="" class="flex items-center gap-1.5 flex-wrap">
+              <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="cmd_action" value="add_permission">
+              <input type="hidden" name="command" value="{{ c.name }}">
+              <select name="role_id" class="bg-gray-900 border border-gray-700 rounded px-1.5 py-1 text-xs text-white">
+                <option value="">+ role</option>
+                {% for role in guild_roles %}
+                <option value="{{ role.id }}">{{ role.name }}</option>
+                {% endfor %}
+              </select>
+              <button type="submit" class="text-xs px-2 py-1 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded">Add</button>
+            </form>
+            {% if cperms %}
+            <form method="POST" action="" class="mt-1">
+              <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="cmd_action" value="clear_permissions">
+              <input type="hidden" name="command" value="{{ c.name }}">
+              <button type="submit" class="text-xs px-2 py-1 bg-red-900/60 hover:bg-red-700 text-white rounded">Clear</button>
+            </form>
+            {% endif %}
+          </td>
+          <td class="px-6 py-4 text-sm">
+            <form method="POST" action="">
+              <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="cmd_action" value="toggle_custom_enabled">
+              <input type="hidden" name="command" value="{{ c.name }}">
+              <input type="hidden" name="enabled" value="{{ '0' if c.enabled else '1' }}">
+              <button type="submit" class="text-xs px-3 py-1 rounded-lg {{ 'bg-green-600/20 text-green-300' if c.enabled else 'bg-red-600/20 text-red-300' }} hover:opacity-80">
+                {{ 'Enabled' if c.enabled else 'Disabled' }}
+              </button>
+            </form>
+          </td>
+          <td class="px-6 py-4 text-sm space-x-2 whitespace-nowrap">
+            <button type="button" onclick="toggleEdit('edit-{{ loop.index }}')" class="text-xs px-3 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 rounded-lg">Edit</button>
+            <form method="POST" action="" class="inline" onsubmit="return confirm('Delete /{{ c.name }} ?')">
+              <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="cmd_action" value="delete_custom">
+              <input type="hidden" name="command" value="{{ c.name }}">
+              <button type="submit" class="text-xs px-3 py-1 bg-red-600/80 hover:bg-red-500 text-white rounded-lg">Delete</button>
+            </form>
+          </td>
+        </tr>
+        <tr id="edit-{{ loop.index }}" class="hidden bg-gray-900/40">
+          <td colspan="5" class="px-6 py-4">
+            <form method="POST" action="" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="cmd_action" value="update_custom">
+              <input type="hidden" name="command" value="{{ c.name }}">
+              <div class="md:col-span-2">
+                <label class="block text-xs text-gray-400 mb-1">ARK Command (message)</label>
+                <input name="command_string" value="{{ c.command_string }}" required
+                  class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-red-500">
+              </div>
+              <div>
+                <label class="block text-xs text-gray-400 mb-1">Category</label>
+                <select name="category" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white">
+                  <option value="">Auto-detect</option>
+                  <option value="dino_spawn" {% if c.category == 'dino_spawn' %}selected{% endif %}>🦖 Dino Spawning</option>
+                  <option value="gfi" {% if c.category == 'gfi' %}selected{% endif %}>🎁 GFI Commands</option>
+                  <option value="player" {% if c.category == 'player' %}selected{% endif %}>🧍 Player Features</option>
+                  <option value="gcm" {% if c.category == 'gcm' %}selected{% endif %}>🎮 GCM</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs text-gray-400 mb-1">Status</label>
+                <select name="enabled" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white">
+                  <option value="1" {% if c.enabled %}selected{% endif %}>Enabled</option>
+                  <option value="0" {% if not c.enabled %}selected{% endif %}>Disabled</option>
+                </select>
+              </div>
+              <div class="md:col-span-2">
+                <button type="submit" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-medium">Save Changes</button>
+                <button type="button" onclick="toggleEdit('edit-{{ loop.index }}')" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg">Cancel</button>
+              </div>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="px-6 py-8 text-center text-gray-500">No custom commands yet. Create one above, or in Discord with <code>/custom-add</code>.</div>
+  {% endif %}
 </div>
 
 {% for cat in category_order %}
@@ -93,85 +281,10 @@
   {% endif %}
 {% endfor %}
 
-{% if custom_perms %}
-<div class="mb-6 bg-gray-800/50 border border-gray-700/50 rounded-2xl shadow-lg overflow-hidden">
-  <div class="px-6 py-4 border-b border-gray-700">
-    <h3 class="text-lg font-bold text-white">Your Custom Commands (permissions) ({{ custom_perms|length }})</h3>
-    <p class="text-gray-400 text-sm mt-1">Manage which roles can run each custom command (<code>/custom &lt;name&gt;</code>). Leave empty for anyone to use. Admins always have access.</p>
-  </div>
-  <div class="overflow-x-auto">
-    <table class="w-full text-left">
-      <thead class="bg-gray-800">
-        <tr>
-          <th class="px-6 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Name</th>
-          <th class="px-6 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">ARK Command</th>
-          <th class="px-6 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Permissions (roles)</th>
-          <th class="px-6 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Enabled</th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-gray-700">
-        {% for c in custom_perms %}
-        <tr class="hover:bg-gray-800 align-top">
-          <td class="px-6 py-4 text-sm text-white font-mono whitespace-nowrap">/{{ c.name }}</td>
-          <td class="px-6 py-4 text-sm text-gray-300 font-mono break-all w-1/3">
-            <span class="text-xs text-gray-500 mr-1">{{ custom_cat_labels.get(c.category, c.category) }}</span><br>
-            {{ c.command_string }}
-          </td>
-          <td class="px-6 py-4 text-sm text-gray-300">
-            <div class="flex flex-wrap gap-2 mb-2">
-              {% for role in c.permissions %}
-              <span class="inline-flex items-center gap-1 bg-red-600/20 text-red-300 px-2 py-1 rounded text-sm">
-                {{ role.name }}
-                <form method="POST" action="" class="inline">
-                  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                  <input type="hidden" name="cmd_action" value="remove_permission">
-                  <input type="hidden" name="command" value="{{ c.name }}">
-                  <input type="hidden" name="role_id" value="{{ role.id }}">
-                  <button type="submit" class="text-red-400 hover:text-red-300 ml-1">✕</button>
-                </form>
-              </span>
-              {% else %}
-              <span class="text-xs text-gray-500">Anyone (no restriction)</span>
-              {% endfor %}
-            </div>
-            <form method="POST" action="" class="flex items-center gap-2 flex-wrap">
-              <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-              <input type="hidden" name="cmd_action" value="add_permission">
-              <input type="hidden" name="command" value="{{ c.name }}">
-              <select name="role_id" class="bg-gray-900 border border-gray-700 rounded-lg px-2 py-1 text-sm text-white">
-                <option value="">+ Add role…</option>
-                {% for role in guild_roles %}
-                <option value="{{ role.id }}">{{ role.name }}</option>
-                {% endfor %}
-              </select>
-              <button type="submit" class="text-xs px-3 py-1 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-lg">Add</button>
-            </form>
-            {% if c.permissions %}
-            <form method="POST" action="" class="mt-1">
-              <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-              <input type="hidden" name="cmd_action" value="clear_permissions">
-              <input type="hidden" name="command" value="{{ c.name }}">
-              <button type="submit" class="text-xs px-3 py-1 bg-red-900/60 hover:bg-red-700 text-white rounded-lg">Clear</button>
-            </form>
-            {% endif %}
-          </td>
-          <td class="px-6 py-4 text-sm">
-            <form method="POST" action="">
-              <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-              <input type="hidden" name="cmd_action" value="toggle_custom_enabled">
-              <input type="hidden" name="command" value="{{ c.name }}">
-              <input type="hidden" name="enabled" value="{{ '0' if c.enabled else '1' }}">
-              <button type="submit" class="text-xs px-3 py-1 rounded-lg {{ 'bg-green-600/20 text-green-300' if c.enabled else 'bg-red-600/20 text-red-300' }} hover:opacity-80">
-                {{ 'Enabled' if c.enabled else 'Disabled' }}
-              </button>
-            </form>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
-{% endif %}
-
+<script>
+function toggleEdit(id) {
+  var el = document.getElementById(id);
+  if (el) { el.classList.toggle('hidden'); }
+}
+</script>
 {% endblock %}

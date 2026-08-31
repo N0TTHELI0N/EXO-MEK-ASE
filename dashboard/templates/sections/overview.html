@@ -82,7 +82,7 @@
         <p class="text-sm text-gray-400 mt-1">{{ t('overview_setup_license_desc') }}</p>
       </div>
     </a>
-    <a href="/dashboard/{{ guild_id }}/custom-commands" class="group flex items-start gap-4 bg-gray-800/50 border border-gray-700/50 rounded-2xl p-5 hover:border-red-500/50 hover:bg-gray-800 transition-all">
+    <a href="/dashboard/{{ guild_id }}/commands" class="group flex items-start gap-4 bg-gray-800/50 border border-gray-700/50 rounded-2xl p-5 hover:border-red-500/50 hover:bg-gray-800 transition-all">
       <div class="w-10 h-10 flex-shrink-0 rounded-xl bg-red-500/15 flex items-center justify-center text-red-400 font-bold">3</div>
       <div>
         <h4 class="font-semibold text-white group-hover:text-red-300 transition-colors">{{ t('overview_setup_commands_title') }}</h4>
@@ -110,7 +110,7 @@
       ("tribelog", "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2", "overview_feat_tribelog", "overview_feat_tribelog_desc"),
       ("automod", "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z", "overview_feat_automod", "overview_feat_automod_desc"),
       ("punishments", "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z", "overview_feat_punish", "overview_feat_punish_desc"),
-      ("custom-commands", "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4", "overview_feat_commands", "overview_feat_commands_desc"),
+      ("commands", "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4", "overview_feat_commands", "overview_feat_commands_desc"),
       ("embeds", "M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01", "overview_feat_embeds", "overview_feat_embeds_desc"),
       ("server-control", "M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z", "overview_feat_server", "overview_feat_server_desc"),
       ("leaderboard", "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z", "overview_feat_leaderboard", "overview_feat_leaderboard_desc"),
