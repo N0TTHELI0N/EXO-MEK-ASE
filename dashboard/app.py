@@ -142,7 +142,9 @@ def get_user_guilds():
     )
     if resp.status_code != 200:
         return []
-    return [g for g in resp.json() if int(g.get("permissions", 0)) & 0x20]
+    # Require Administrator (0x8) so the gate matches the server list, which
+    # shows every server the user can administer.
+    return [g for g in resp.json() if int(g.get("permissions", 0)) & 0x8]
 
 
 def get_bot_guilds():
@@ -162,6 +164,15 @@ def get_mutual_guilds():
     user_guilds = {g["id"]: g for g in get_user_guilds()}
     bot_guilds = {g["id"]: g for g in get_bot_guilds()}
     return [user_guilds[gid] for gid in set(user_guilds) & set(bot_guilds)]
+
+
+def get_user_admin_guilds():
+    """Guilds where the logged-in user has Administrator permission (0x8)."""
+    return get_user_guilds()
+
+
+def get_bot_guild_ids():
+    return {g["id"] for g in get_bot_guilds()}
 
 
 def get_guild_roles(guild_id):
@@ -456,10 +467,19 @@ def setup():
 @app.route("/dashboard")
 @login_required
 def dashboard():
+    bot_guild_ids = get_bot_guild_ids()
+    guilds = get_user_admin_guilds()
+    for g in guilds:
+        g["bot_in"] = g["id"] in bot_guild_ids
     return render_template(
         "servers.html",
         user=get_current_user(),
-        guilds=get_mutual_guilds(),
+        guilds=guilds,
+        bot_invite_base=(
+            f"https://discord.com/api/oauth2/authorize?client_id={DISCORD_CLIENT_ID}&permissions=8&scope=bot"
+            if DISCORD_CLIENT_ID
+            else "#"
+        ),
     )
 
 

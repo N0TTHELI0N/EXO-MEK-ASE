@@ -56,11 +56,12 @@ TRANSLATIONS = {
     "footer_copyright": {"ar": "© 2024 EXO-BOT. غير تابعة لـ ARK أو Studio Wildcard.", "en": "&copy; 2024 EXO-BOT. Not affiliated with ARK or Studio Wildcard."},
 
     "servers_title": {"ar": "اختر سيرفرًا", "en": "Select a Server"},
-    "servers_sub": {"ar": "اختر سيرفرًا حيث لديك أنت والبوت وصول", "en": "Choose a server where both you and the bot have access"},
+    "servers_sub": {"ar": "اختر السيرفرات التي لديك فيها صلاحية إدارة (أدمن). إذا لم يكن البوت فيها بعد، ادعوه لإضافته.", "en": "Choose a server where you have Administrator access. If the bot isn't there yet, invite it to join."},
     "servers_members": {"ar": "عضو", "en": "members"},
     "servers_empty_title": {"ar": "لا توجد سيرفرات", "en": "No servers found"},
-    "servers_empty_desc": {"ar": "تأكد أن البوت في سيرفرك ولديك صلاحية إدارة السيرفر.", "en": "Make sure the bot is in your server and you have Manage Server permission."},
+    "servers_empty_desc": {"ar": "لا نجد سيرفرات لديك فيها صلاحية إدارة (أدمن).", "en": "We couldn't find any servers where you have Administrator access."},
     "servers_invite": {"ar": "دعوة البوت للسيرفر", "en": "Invite Bot to Server"},
+    "servers_bot_not_in": {"ar": "البوت ليس في هذا السيرفر بعد", "en": "Bot not in this server yet"},
 
     "dash_overview": {"ar": "نظرة عامة", "en": "Overview"},
     "dash_nitrado": {"ar": "Nitrado API", "en": "Nitrado API"},
