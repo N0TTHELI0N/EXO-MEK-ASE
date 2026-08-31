@@ -78,6 +78,7 @@ TRANSLATIONS = {
     "dash_leaderboard": {"ar": "لوحة الترتيب", "en": "Leaderboard"},
     "dash_server": {"ar": "التحكم بالسيرفر", "en": "Server Control"},
     "dash_logs": {"ar": "السجلات", "en": "Logs"},
+    "dash_chat": {"ar": "شات اللعبة", "en": "In-Game Chat"},
     "dash_settings": {"ar": "الإعدادات", "en": "Settings"},
     "dash_permissions": {"ar": "الصلاحيات", "en": "Permissions"},
 

@@ -117,6 +117,7 @@ EXTENSIONS = [
     "cogs.automod",
     "cogs.server_backup",
     "cogs.moderation",
+    "cogs.chat_bridge",
     "cogs.topservers",
     "cogs.help",
 ]

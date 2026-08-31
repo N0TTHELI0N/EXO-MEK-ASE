@@ -195,6 +195,31 @@ def init_db():
                 )
             """)
             cur.execute("""
+                CREATE TABLE IF NOT EXISTS chat_bridge_config (
+                    guild_id            BIGINT PRIMARY KEY,
+                    enabled             BOOLEAN DEFAULT FALSE,
+                    log_channel_id      BIGINT,
+                    relay_channel_id    BIGINT,
+                    relay_out           BOOLEAN DEFAULT FALSE,
+                    relay_in            BOOLEAN DEFAULT FALSE,
+                    last_log_line       TEXT DEFAULT ''
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS chat_logs (
+                    id          SERIAL PRIMARY KEY,
+                    guild_id    BIGINT NOT NULL,
+                    channel     TEXT DEFAULT 'global',
+                    player_name TEXT,
+                    tribe_name  TEXT,
+                    message     TEXT NOT NULL,
+                    raw_line    TEXT,
+                    direction   TEXT DEFAULT 'in',
+                    relayed_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_chat_logs_guild ON chat_logs(guild_id, relayed_at DESC)")
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS tribe_members (
                     guild_id    BIGINT NOT NULL,
                     tribe_name  TEXT NOT NULL,
@@ -1176,6 +1201,114 @@ def get_evidence(punishment_id: int):
             return cur.fetchall()
     finally:
         conn.close()
+
+
+# ============================================================
+#  CHAT BRIDGE (in-game chat log + Discord <-> game relay)
+# ============================================================
+
+def get_chat_bridge_config(guild_id: int) -> dict:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT enabled, log_channel_id, relay_channel_id, relay_out, relay_in, last_log_line "
+                "FROM chat_bridge_config WHERE guild_id = %s",
+                (guild_id,),
+            )
+            row = cur.fetchone()
+            if row:
+                return {
+                    "enabled": row[0],
+                    "log_channel_id": row[1],
+                    "relay_channel_id": row[2],
+                    "relay_out": row[3],
+                    "relay_in": row[4],
+                    "last_log_line": row[5],
+                }
+            return {
+                "enabled": False,
+                "log_channel_id": None,
+                "relay_channel_id": None,
+                "relay_out": False,
+                "relay_in": False,
+                "last_log_line": "",
+            }
+    finally:
+        conn.close()
+
+
+def update_chat_bridge_config(guild_id: int, **kwargs):
+    allowed = {"enabled", "log_channel_id", "relay_channel_id", "relay_out", "relay_in", "last_log_line"}
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO chat_bridge_config (guild_id) VALUES (%s)
+                ON CONFLICT (guild_id) DO NOTHING
+            """, (guild_id,))
+            for key, val in kwargs.items():
+                if key not in allowed:
+                    raise ValueError(f"Invalid chat bridge column: {key}")
+                cur.execute(f"UPDATE chat_bridge_config SET {key} = %s WHERE guild_id = %s", (val, guild_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def add_chat_log(guild_id: int, channel: str, player_name: str, message: str,
+                 tribe_name: str = None, raw_line: str = None, direction: str = "in"):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO chat_logs (guild_id, channel, player_name, tribe_name, message, raw_line, direction)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, (guild_id, channel, player_name, tribe_name, message, raw_line, direction))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_chat_logs(guild_id: int, limit: int = 200, offset: int = 0):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, channel, player_name, tribe_name, message, direction, relayed_at
+                FROM chat_logs WHERE guild_id = %s
+                ORDER BY relayed_at DESC LIMIT %s OFFSET %s
+            """, (guild_id, limit, offset))
+            return [
+                {
+                    "id": r[0], "channel": r[1], "player_name": r[2], "tribe_name": r[3],
+                    "message": r[4], "direction": r[5], "relayed_at": r[6],
+                }
+                for r in cur.fetchall()
+            ]
+    finally:
+        conn.close()
+
+
+def count_chat_logs(guild_id: int) -> int:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM chat_logs WHERE guild_id = %s", (guild_id,))
+            return cur.fetchone()[0]
+    finally:
+        conn.close()
+
+
+def clear_chat_logs(guild_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM chat_logs WHERE guild_id = %s", (guild_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
 
 
 # ============================================================

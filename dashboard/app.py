@@ -1777,6 +1777,35 @@ def section_logs(guild_id):
     )
 
 
+@app.route("/dashboard/<int:guild_id>/chat", methods=["GET", "POST"])
+@login_required
+@guild_admin_required
+@validate_csrf
+def section_chat(guild_id):
+    if request.method == "POST":
+        action = request.form.get("action")
+        if action == "clear_chat":
+            if (get_current_user() or {}).get("id") == BOT_OWNER_ID:
+                guild_settings.clear_chat_logs(guild_id)
+        return redirect(url_for("section_chat", guild_id=guild_id))
+
+    page = max(1, int(request.args.get("page", 1)))
+    per_page = 100
+    cfg = guild_settings.get_chat_bridge_config(guild_id)
+    return render_template(
+        "sections/chat.html",
+        user=get_current_user(),
+        guild_id=guild_id,
+        active_section="chat",
+        cfg=cfg,
+        chats=guild_settings.get_chat_logs(guild_id, limit=per_page, offset=(page - 1) * per_page),
+        chat_count=guild_settings.count_chat_logs(guild_id),
+        page=page,
+        per_page=per_page,
+        is_owner=(get_current_user() or {}).get("id") == BOT_OWNER_ID,
+    )
+
+
 @app.route("/dashboard/<int:guild_id>/settings", methods=["GET", "POST"])
 @login_required
 @guild_admin_required
@@ -1827,12 +1856,14 @@ ALL_COMMANDS_LIST = [
     "set-warning-tempban-duration", "set-warning-default-expiry", "set-punishment-log",
     "add-tribe-member", "server-status", "server-restart", "server-stop",
     "custom", "custom-list", "custom-add", "custom-remove", "ark-command", "setup-forum-logs", "setup-shop-forum",
+    "chat-bridge-enable", "chat-bridge-channel", "chat-bridge-relay", "chat-bridge-toggle",
+    "chat-bridge-send", "chat-bridge-status",
 ]
 
 
 # Category grouping for the Commands page (matches help menu categories)
 COMMAND_CATEGORY_ORDER = ["general", "server", "custom", "moderation", "shop", "whitelist",
-                          "tribelog", "leaderboard", "automod", "admin", "other"]
+                          "tribelog", "leaderboard", "automod", "chat", "admin", "other"]
 
 # command -> (category, default description)
 COMMANDS_META = {
@@ -1956,6 +1987,12 @@ COMMANDS_META = {
     "server-status": ("server", "Show the ARK server status"),
     "server-restart": ("server", "Restart the ARK server"),
     "server-stop": ("server", "Stop the ARK server"),
+    "chat-bridge-enable": ("chat", "Enable or disable the in-game chat bridge"),
+    "chat-bridge-channel": ("chat", "Set the one-way in-game chat log channel"),
+    "chat-bridge-relay": ("chat", "Set the two-way Discord<->game relay channel"),
+    "chat-bridge-toggle": ("chat", "Control chat bridge direction"),
+    "chat-bridge-send": ("chat", "Send a message into the game chat as Discord"),
+    "chat-bridge-status": ("chat", "Show chat bridge status"),
 }
 
 
@@ -2049,6 +2086,7 @@ def section_commands(guild_id):
             "general": "General", "server": "Server", "custom": "Custom Commands",
             "moderation": "Moderation", "shop": "Shop", "whitelist": "Whitelist",
             "tribelog": "Tribe Log", "leaderboard": "Leaderboard", "automod": "Auto-Mod",
+            "chat": "In-Game Chat",
             "admin": "Admin", "other": "Other",
         },
         custom_cat_labels={

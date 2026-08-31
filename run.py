@@ -34,6 +34,7 @@ def run_bot():
         "cogs.automod",
         "cogs.server_backup",
         "cogs.moderation",
+        "cogs.chat_bridge",
         "cogs.topservers",
         "cogs.help",
         "cogs.playtime",

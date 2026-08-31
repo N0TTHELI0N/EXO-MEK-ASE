@@ -1,0 +1,108 @@
+{% extends "dashboard.html" %}
+{% block dashboard_content %}
+<div class="mb-6">
+  <h2 class="text-2xl font-bold text-white">💬 In-Game Chat</h2>
+  <p class="text-gray-400 mt-1">Live in-game ARK chat. The bot polls the server log, stores every chat line, and can relay it to Discord (and Discord back into the game).</p>
+</div>
+
+<!-- Status -->
+<div class="mb-6 bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+  <div>
+    <p class="text-xs text-gray-500 uppercase">Enabled</p>
+    <p class="mt-1 text-white font-semibold">{{ '✅ On' if cfg.enabled else '⏸️ Off' }}</p>
+  </div>
+  <div>
+    <p class="text-xs text-gray-500 uppercase">Log Channel</p>
+    <p class="mt-1 text-white font-semibold">{{ ('<#' ~ cfg.log_channel_id ~ '>')|safe if cfg.log_channel_id else 'Not set' }}</p>
+  </div>
+  <div>
+    <p class="text-xs text-gray-500 uppercase">Relay Channel</p>
+    <p class="mt-1 text-white font-semibold">{{ ('<#' ~ cfg.relay_channel_id ~ '>')|safe if cfg.relay_channel_id else 'Not set' }}</p>
+  </div>
+  <div>
+    <p class="text-xs text-gray-500 uppercase">Relay In / Out</p>
+    <p class="mt-1 text-white font-semibold">in→discord: {{ '✅' if cfg.relay_out else '⛔' }} · discord→game: {{ '✅' if cfg.relay_in else '⛔' }}</p>
+  </div>
+</div>
+
+<div class="mb-6 px-5 py-4 rounded-lg border bg-blue-500/10 border-blue-500/40 text-blue-200 text-sm leading-relaxed">
+  <b>Setup (run in Discord, Admin only):</b><br>
+  1️⃣ <code>/chat-bridge-enable enabled:true</code><br>
+  2️⃣ <code>/chat-bridge-channel channel:#chat-log</code> — one-way log<br>
+  3️⃣ <code>/chat-bridge-relay channel:#game-bridge</code> — two-way relay (optional)<br>
+  4️⃣ <code>/chat-bridge-toggle game_to_discord:true discord_to_game:true</code> — control direction<br>
+  Send a message into the game from Discord with <code>/chat-bridge-send</code> or by typing in the relay channel.
+</div>
+
+<!-- Table -->
+<div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl shadow-lg overflow-hidden mb-6">
+  <div class="px-6 py-4 border-b border-gray-700 flex items-center justify-between">
+    <div>
+      <h3 class="text-lg font-bold text-white">💬 Chat messages ({{ chat_count }} total)</h3>
+      <p class="text-gray-400 text-sm mt-1">Newest first. <code>out</code> = sent from Discord into the game; <code>in</code> = captured from in-game chat.</p>
+    </div>
+  </div>
+  {% if chats %}
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm text-left">
+      <thead class="text-xs text-gray-400 uppercase border-b border-gray-700">
+        <tr>
+          <th class="px-4 py-3">{{ t('logs_timestamp') }}</th>
+          <th class="px-4 py-3">Dir</th>
+          <th class="px-4 py-3">Channel</th>
+          <th class="px-4 py-3">Player</th>
+          <th class="px-4 py-3">Message</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-700">
+        {% for c in chats %}
+        <tr class="hover:bg-gray-800 align-top">
+          <td class="px-4 py-3 text-gray-400 text-xs font-mono whitespace-nowrap">{{ c.relayed_at.strftime('%Y-%m-%d %H:%M') if c.relayed_at else '—' }}</td>
+          <td class="px-4 py-3">
+            <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full {{ 'bg-purple-900 text-purple-300' if c.direction == 'out' else 'bg-green-900 text-green-300' }}">
+              {{ 'OUT' if c.direction == 'out' else 'IN' }}
+            </span>
+          </td>
+          <td class="px-4 py-3 text-gray-300 text-xs whitespace-nowrap">{{ c.channel }}</td>
+          <td class="px-4 py-3 text-white font-medium whitespace-nowrap">{{ c.player_name or '—' }}{% if c.tribe_name and c.tribe_name != c.player_name %}<span class="block text-xs text-gray-500">{{ c.tribe_name }}</span>{% endif %}</td>
+          <td class="px-4 py-3 text-gray-200 max-w-md">{{ c.message }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="px-6 py-12 text-center text-gray-500">No chat messages captured yet. Enable the bridge and make sure the server allows chat to be written to the log.</div>
+  {% endif %}
+</div>
+
+<!-- Pagination -->
+{% set total_pages = ((chat_count + per_page - 1) // per_page) if chat_count else 1 %}
+<div class="flex items-center justify-between mb-6">
+  <p class="text-sm text-gray-400">Showing page {{ page }} of {{ total_pages }}</p>
+  <div class="flex items-center gap-2">
+    {% if page > 1 %}
+    <a href="?page={{ page - 1 }}" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium rounded-lg transition-colors">{{ t('logs_prev') }}</a>
+    {% else %}
+    <span class="px-4 py-2 bg-gray-800 text-gray-600 text-sm font-medium rounded-lg cursor-not-allowed">{{ t('logs_prev') }}</span>
+    {% endif %}
+    {% if page < total_pages %}
+    <a href="?page={{ page + 1 }}" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium rounded-lg transition-colors">{{ t('logs_next') }}</a>
+    {% else %}
+    <span class="px-4 py-2 bg-gray-800 text-gray-600 text-sm font-medium rounded-lg cursor-not-allowed">{{ t('logs_next') }}</span>
+    {% endif %}
+  </div>
+</div>
+
+{% if is_owner %}
+<div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6">
+  <h3 class="text-lg font-semibold text-white mb-2">🗑️ Clear chat logs</h3>
+  <p class="text-sm text-gray-400 mb-4">Delete all stored in-game chat messages for this server. Owner only.</p>
+  <form method="POST" onsubmit="return confirm('Delete ALL stored chat logs for this server?')">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="clear_chat">
+    <button type="submit" class="px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white font-medium rounded-lg transition-colors">Clear chat logs</button>
+  </form>
+</div>
+{% endif %}
+{% endblock %}
