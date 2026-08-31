@@ -158,6 +158,40 @@
               <input type="hidden" name="name" value="{{ c.name }}">
               <button type="submit" class="text-xs px-3 py-1 bg-red-600/80 hover:bg-red-500 text-white rounded-lg">Delete</button>
             </form>
+            <button type="button" onclick="toggleEdit('edit-{{ loop.index }}')" class="text-xs px-3 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 rounded-lg">Edit</button>
+          </td>
+        </tr>
+        <tr id="edit-{{ loop.index }}" class="hidden bg-gray-900/40">
+          <td colspan="5" class="px-6 py-4">
+            <form method="POST" action="" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <input type="hidden" name="app_action" value="update_custom">
+              <input type="hidden" name="name" value="{{ c.name }}">
+              <div class="md:col-span-2">
+                <label class="block text-xs text-gray-400 mb-1">ARK Command (message)</label>
+                <input name="command_string" value="{{ c.command_string }}" required
+                  class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-red-500">
+              </div>
+              <div>
+                <label class="block text-xs text-gray-400 mb-1">Category</label>
+                <select name="category" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white">
+                  <option value="dino_spawn" {% if c.category == 'dino_spawn' %}selected{% endif %}>🦖 Dino Spawning</option>
+                  <option value="gfi" {% if c.category == 'gfi' %}selected{% endif %}>🎁 GFI Commands</option>
+                  <option value="player" {% if c.category == 'player' %}selected{% endif %}>🧍 Player Features</option>
+                  <option value="gcm" {% if c.category == 'gcm' %}selected{% endif %}>🎮 GCM</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs text-gray-400 mb-1">Status</label>
+                <select name="enabled" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white">
+                  <option value="1" {% if c.enabled %}selected{% endif %}>Enabled</option>
+                  <option value="0" {% if not c.enabled %}selected{% endif %}>Disabled</option>
+                </select>
+              </div>
+              <div class="md:col-span-2">
+                <button type="submit" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-medium">Save Changes</button>
+                <button type="button" onclick="toggleEdit('edit-{{ loop.index }}')" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg">Cancel</button>
+              </div>
+            </form>
           </td>
         </tr>
         {% endfor %}
@@ -168,4 +202,10 @@
   <div class="px-6 py-8 text-center text-gray-500">No custom commands yet. Create one above, or in Discord with <code>/custom-add</code>.</div>
   {% endif %}
 </div>
+<script>
+function toggleEdit(id) {
+  var el = document.getElementById(id);
+  if (el) { el.classList.toggle('hidden'); }
+}
+</script>
 {% endblock %}
