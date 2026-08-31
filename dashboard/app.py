@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import guild_settings
 import shop_db
 import nitrado
+import commands_manifest
 from security import validate_path, sanitize_rcon_name
 from translations import TRANSLATIONS, DASHBOARD_DEFAULT_LANG, DASHBOARD_LANGS
 
@@ -1862,176 +1863,6 @@ def section_settings(guild_id):
 
 # ── Permissions ─────────────────────────────────────────────
 
-ALL_COMMANDS_LIST = [
-    "activate", "help", "top-servers",
-    "set-nitrado-token",
-    "set-log-channel", "set-license", "ban-user", "view-guilds", "force-sync-guild",
-    "set-command-permission", "remove-command-permission", "view-command-permissions", "clear-command-permissions",
-    "shop-add", "shop-remove", "shop-list", "shop-edit",
-    "points-add", "points-remove", "points-check", "points-leaderboard",
-    "whitelist-add", "whitelist-remove", "whitelist-restart", "whitelist-link", "whitelist-unlink",
-    "tribelog-config", "tribelog-test", "setup-tribe-forum", "add-tribe-name", "set-tribe-log-source", "set-tribelog-enabled", "set-tribe-log-channel", "set-tribe-log-config", "view-tribelog",
-    "automod-config", "automod-list", "automod-remove",
-    "backup-create", "backup-list", "backup-restore",
-    "leaderboard-config", "leaderboard-set-channel", "leaderboard-toggle", "leaderboard-force", "leaderboard-sync",
-    "warn", "tempwarn", "warnings", "clear-warnings", "remove-warning",
-    "punish-ban", "punish-tempban", "punish-wipe",
-    "blacklist", "unblacklist", "blacklist-list",
-    "punishment-history", "set-warning-threshold", "set-warning-punishment",
-    "set-warning-tempban-duration", "set-warning-default-expiry", "set-punishment-log",
-    "add-tribe-member", "server-status", "server-restart", "server-stop",
-    "custom", "custom-list", "custom-add", "custom-remove", "ark-command", "setup-forum-logs", "setup-shop-forum",
-    "chat-bridge-enable", "chat-bridge-channel", "chat-bridge-relay", "chat-bridge-toggle",
-    "chat-bridge-send", "chat-bridge-status",
-    "auto-chat-add", "auto-chat-remove", "auto-chat-list", "auto-chat-toggle", "auto-chat-clear", "auto-chat-cooldown",
-]
-
-
-# Category grouping for the Commands page (matches help menu categories)
-COMMAND_CATEGORY_ORDER = ["general", "server", "custom", "moderation", "shop", "whitelist",
-                          "tribelog", "leaderboard", "automod", "chat", "admin", "other"]
-
-# command -> (category, default description)
-COMMANDS_META = {
-    "help": ("general", "Show all available commands"),
-    "activate": ("general", "Activate / verify the bot licence for your server"),
-    "top-servers": ("general", "Show the top servers leaderboard"),
-    "set-language": ("general", "Set the bot language for the server"),
-    "set-help-text": ("general", "Override the description of a slash command"),
-    "custom": ("custom", "Run a custom server command"),
-    "custom-list": ("custom", "List all custom commands"),
-    "custom-add": ("custom", "Create a custom server command"),
-    "custom-remove": ("custom", "Delete a custom command"),
-    "ark-command": ("custom", "Run a raw ARK console command"),
-    "setup-forum-logs": ("custom", "Create the server-log forum with 4 category threads"),
-    "setup-shop-forum": ("custom", "Create the shop-logs forum with Done + Pending threads"),
-    "add-shop-dino": ("shop", "Add a dino to the shop"),
-    "remove-shop-dino": ("shop", "Remove a dino from the shop"),
-    "list-dinos": ("shop", "List all shop dinos"),
-    "buy-dino": ("shop", "Buy a dino from the shop"),
-    "balance": ("shop", "Check your point balance"),
-    "add-points": ("shop", "Add points to a member"),
-    "remove-points": ("shop", "Remove points from a member"),
-    "set-min-level": ("shop", "Set the minimum level for shop dinos"),
-    "pending-purchases": ("shop", "List pending shop purchases"),
-    "spawn-pending": ("shop", "Spawn a pending purchase"),
-    "cancel-pending": ("shop", "Cancel a pending purchase"),
-    "set-shop-channels": ("shop", "Set the shop pending/done channels"),
-    "shop-add": ("shop", "Add an item to the shop"),
-    "shop-remove": ("shop", "Remove an item from the shop"),
-    "shop-list": ("shop", "List shop items"),
-    "shop-edit": ("shop", "Edit a shop item"),
-    "points-add": ("shop", "Add points to a member"),
-    "points-remove": ("shop", "Remove points from a member"),
-    "points-check": ("shop", "Check a point balance"),
-    "points-leaderboard": ("shop", "Show the points leaderboard"),
-    "whitelist": ("whitelist", "Show whitelist status"),
-    "whitelist-add": ("whitelist", "Add a player to the whitelist"),
-    "whitelist-remove": ("whitelist", "Remove a player from the whitelist"),
-    "whitelist-restart": ("whitelist", "Restart the whitelist"),
-    "whitelist-link": ("whitelist", "Link your PSN gamertag to your Discord"),
-    "whitelist-unlink": ("whitelist", "Unlink your PSN gamertag"),
-    "linkpsn": ("whitelist", "Link your PSN gamertag"),
-    "unlinkpsn": ("whitelist", "Unlink your PSN gamertag"),
-    "wl-status": ("whitelist", "Show your whitelist status"),
-    "wl-list": ("whitelist", "List whitelisted players"),
-    "set-wl-path": ("whitelist", "Set the whitelist file path"),
-    "set-restart-time": ("whitelist", "Set the whitelist restart time"),
-    "ban": ("moderation", "Ban a member"),
-    "kick": ("moderation", "Kick a member"),
-    "mute": ("moderation", "Mute a member"),
-    "unmute": ("moderation", "Unmute a member"),
-    "warn": ("moderation", "Warn a member"),
-    "warnings": ("moderation", "List a member's warnings"),
-    "clear-warnings": ("moderation", "Clear a member's warnings"),
-    "banplayer": ("moderation", "Ban a player on the ARK server"),
-    "unbanplayer": ("moderation", "Unban a player on the ARK server"),
-    "wipe-player": ("moderation", "Wipe a player's data"),
-    "tempwarn": ("moderation", "Issue a temporary warning"),
-    "remove-warning": ("moderation", "Remove a specific warning"),
-    "punish-ban": ("moderation", "Ban a member via the punishment system"),
-    "punish-tempban": ("moderation", "Temp-ban a member"),
-    "punish-wipe": ("moderation", "Wipe a member's punishments"),
-    "blacklist": ("moderation", "Permanently blacklist a member (and ban)"),
-    "unblacklist": ("moderation", "Remove a member from the blacklist and unban"),
-    "blacklist-list": ("moderation", "List all blacklisted members"),
-    "punishment-history": ("moderation", "Show a member's punishment history"),
-    "set-warning-threshold": ("moderation", "Set the warning threshold"),
-    "set-warning-punishment": ("moderation", "Set the punishment for reaching a threshold"),
-    "set-warning-tempban-duration": ("moderation", "Set the temp-ban duration"),
-    "set-warning-default-expiry": ("moderation", "Set the default warning expiry"),
-    "set-punishment-log": ("moderation", "Set the punishment log channel"),
-    "tribelog-config": ("tribelog", "Configure the tribe log"),
-    "tribelog-test": ("tribelog", "Test the tribe log"),
-    "setup-tribe-forum": ("tribelog", "Create the tribe log forum"),
-    "add-tribe-name": ("tribelog", "Add a tribe name for logging"),
-    "set-tribe-log-source": ("tribelog", "Set the tribe log source"),
-    "set-tribelog-enabled": ("tribelog", "Enable or disable the tribe log"),
-    "set-tribe-log-channel": ("tribelog", "Set the tribe log channel"),
-    "set-tribe-log-config": ("tribelog", "Set the tribe log config"),
-    "view-tribelog": ("tribelog", "View the tribe log"),
-    "add-tribe-member": ("tribelog", "Add a member to a tribe"),
-    "set-tribe-owner": ("tribelog", "Set a tribe's owner"),
-    "add-tribe-points": ("tribelog", "Add points to a tribe"),
-    "remove-tribe-points": ("tribelog", "Remove points from a tribe"),
-    "tribe-log": ("tribelog", "View the tribe log"),
-    "enable-tribe-log": ("tribelog", "Enable the tribe log"),
-    "disable-tribe-log": ("tribelog", "Disable the tribe log"),
-    "leaderboard": ("leaderboard", "Show the leaderboard"),
-    "setup-leaderboard": ("leaderboard", "Set up the leaderboard"),
-    "leaderboard-preview": ("leaderboard", "Preview the leaderboard"),
-    "leaderboard-config": ("leaderboard", "Configure the leaderboard"),
-    "leaderboard-set-channel": ("leaderboard", "Set the leaderboard channel"),
-    "leaderboard-toggle": ("leaderboard", "Toggle the leaderboard"),
-    "leaderboard-force": ("leaderboard", "Force a leaderboard update"),
-    "leaderboard-sync": ("leaderboard", "Sync the leaderboard"),
-    "automod-config": ("automod", "Configure auto-moderation"),
-    "automod-list": ("automod", "List auto-mod settings"),
-    "automod-remove": ("automod", "Remove an auto-mod setting"),
-    "automod-toggle": ("automod", "Toggle auto-mod"),
-    "automod-set-log-channel": ("automod", "Set the auto-mod log channel"),
-    "automod-set-log-path": ("automod", "Set the auto-mod log path"),
-    "automod-add-word": ("automod", "Add a filtered word"),
-    "automod-remove-word": ("automod", "Remove a filtered word"),
-    "automod-list-words": ("automod", "List filtered words"),
-    "automod-clear-words": ("automod", "Clear filtered words"),
-    "set-nitrado-token": ("admin", "Set the Nitrado API token"),
-    "set-log-channel": ("admin", "Set a log channel"),
-    "set-license": ("admin", "Set the licence key"),
-    "ban-user": ("admin", "Ban a user from the bot"),
-    "view-guilds": ("admin", "View bot guilds"),
-    "force-sync-guild": ("admin", "Force-sync a guild"),
-    "set-command-permission": ("admin", "Set a command permission for a role"),
-    "remove-command-permission": ("admin", "Remove a command permission"),
-    "view-command-permissions": ("admin", "View command permissions"),
-    "clear-command-permissions": ("admin", "Clear command permissions"),
-    "backup-create": ("server", "Create a server backup"),
-    "backup-list": ("server", "List server backups"),
-    "backup-restore": ("server", "Restore a server backup"),
-    "backup-rollback": ("server", "Roll back a server backup"),
-    "backup-download": ("server", "Download a server backup"),
-    "server-status": ("server", "Show the ARK server status"),
-    "server-restart": ("server", "Restart the ARK server"),
-    "server-stop": ("server", "Stop the ARK server"),
-    "chat-bridge-enable": ("chat", "Enable or disable the in-game chat bridge"),
-    "chat-bridge-channel": ("chat", "Set the one-way in-game chat log channel"),
-    "chat-bridge-relay": ("chat", "Set the two-way Discord<->game relay channel"),
-    "chat-bridge-toggle": ("chat", "Control chat bridge direction"),
-    "chat-bridge-send": ("chat", "Send a message into the game chat as Discord"),
-    "chat-bridge-status": ("chat", "Show chat bridge status"),
-    "auto-chat-add": ("chat", "Add an in-game chat trigger word with an auto-punishment"),
-    "auto-chat-remove": ("chat", "Remove an in-game chat trigger word"),
-    "auto-chat-list": ("chat", "List in-game chat trigger words"),
-    "auto-chat-toggle": ("chat", "Enable or disable a trigger word"),
-    "auto-chat-clear": ("chat", "Remove all in-game chat trigger words"),
-    "auto-chat-cooldown": ("chat", "Set the auto-punishment cooldown minutes"),
-}
-
-
-def _command_default_desc(cmd: str) -> str:
-    return COMMANDS_META.get(cmd, ("other", "Slash command"))[1]
-
-
 @app.route("/dashboard/<int:guild_id>/commands", methods=["GET", "POST"])
 @login_required
 @guild_admin_required
@@ -2084,19 +1915,12 @@ def section_commands(guild_id):
         return redirect(url_for("section_commands", guild_id=guild_id))
 
     # Build the command list (all known commands) ordered by category.
-    ordered = []
-    for cat in COMMAND_CATEGORY_ORDER:
-        for cmd in ALL_COMMANDS_LIST:
-            if (COMMANDS_META.get(cmd, ("other",))[0]) == cat:
-                ordered.append(cmd)
-    # include any custom commands (they live under the 'custom' category)
     commands = []
-    for cmd in ordered:
-        cat = COMMANDS_META.get(cmd, ("other",))[0]
+    for cmd, cat, default_desc in commands_manifest.COMMANDS:
         commands.append({
             "name": cmd,
             "category": cat,
-            "description": descriptions.get(cmd, _command_default_desc(cmd)),
+            "description": descriptions.get(cmd, default_desc),
             "disabled": cmd in disabled,
             "permissions": permissions.get(cmd, []),
         })
@@ -2113,14 +1937,8 @@ def section_commands(guild_id):
         guild_roles=guild_roles,
         custom_commands=custom_commands,
         runner_enabled=guild_settings.get_bool_setting(guild_id, "runner_enabled", False),
-        category_order=COMMAND_CATEGORY_ORDER,
-        cat_labels={
-            "general": "General", "server": "Server", "custom": "Custom Commands",
-            "moderation": "Moderation", "shop": "Shop", "whitelist": "Whitelist",
-            "tribelog": "Tribe Log", "leaderboard": "Leaderboard", "automod": "Auto-Mod",
-            "chat": "In-Game Chat",
-            "admin": "Admin", "other": "Other",
-        },
+        category_order=commands_manifest.CATEGORY_ORDER,
+        cat_labels=commands_manifest.CATEGORY_LABELS,
         custom_cat_labels={
             "dino_spawn": "🦖 Dino Spawning",
             "gfi": "🎁 GFI Commands",
