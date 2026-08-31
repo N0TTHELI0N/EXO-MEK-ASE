@@ -471,6 +471,7 @@ def dashboard():
     guilds = get_user_admin_guilds()
     for g in guilds:
         g["bot_in"] = g["id"] in bot_guild_ids
+    guilds.sort(key=lambda g: not g.get("bot_in", False))
     return render_template(
         "servers.html",
         user=get_current_user(),
