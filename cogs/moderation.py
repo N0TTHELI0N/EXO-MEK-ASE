@@ -320,6 +320,83 @@ class Moderation(commands.Cog):
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     # ============================================================
+    #  BLACKLIST
+    # ============================================================
+
+    @app_commands.command(name="blacklist", description="Permanently blacklist a player (also bans them on the server)")
+    @app_commands.describe(player="Player name", reason="Reason", tribe="Whole tribe (optional)")
+    async def blacklist(self, interaction: discord.Interaction, player: str, reason: str, tribe: str = None):
+        if not interaction.user.guild_permissions.ban_members:
+            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
+
+        await interaction.response.defer()
+        targets = [(player, None)]
+        if tribe:
+            members = guild_settings.get_tribe_members(interaction.guild_id, tribe)
+            targets = [(m[0], m[1]) for m in members] or [(player, None)]
+
+        results = []
+        for p_name, p_id in targets:
+            safe_name = sanitize_rcon_name(p_name)
+            if not guild_settings.is_blacklisted(interaction.guild_id, p_name):
+                await _send_rcon(interaction.guild_id, f"Ban {safe_name}")
+                guild_settings.add_blacklist(
+                    interaction.guild_id, p_name, reason, interaction.user.id,
+                    player_id=p_id, tribe_name=tribe or None,
+                    scope="tribe" if tribe else "player",
+                )
+                if interaction.message and interaction.message.attachments:
+                    pid = guild_settings.add_punishment(
+                        interaction.guild_id, p_name, "ban", reason, interaction.user.id,
+                        scope="tribe" if tribe else "player", player_id=p_id, tribe_name=tribe or None,
+                    )
+                    await _save_evidence(interaction, pid)
+                _log(interaction.guild_id, "punishment", "blacklist", interaction.user, p_name,
+                     details={"reason": reason, "scope": "tribe" if tribe else "player"})
+                results.append(f"⛔ **{p_name}** blacklisted.")
+            else:
+                results.append(f"ℹ️ **{p_name}** is already blacklisted.")
+
+        await interaction.followup.send("\n".join(results))
+
+    @app_commands.command(name="unblacklist", description="Remove a player from the blacklist and unban them")
+    @app_commands.describe(player="Player name")
+    async def unblacklist(self, interaction: discord.Interaction, player: str):
+        if not interaction.user.guild_permissions.administrator:
+            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
+
+        rows = guild_settings.get_blacklists(interaction.guild_id, player)
+        safe_name = sanitize_rcon_name(player)
+        result = await _send_rcon(interaction.guild_id, f"UnBan {safe_name}")
+        removed = 0
+        for row in rows:
+            if guild_settings.remove_blacklist(row[0], interaction.guild_id):
+                removed += 1
+        _log(interaction.guild_id, "punishment", "unblacklist", interaction.user, player)
+        msg = f"✅ **{player}** removed from blacklist ({removed} record{'s' if removed != 1 else ''})."
+        if result is None:
+            msg += "\n`UnBan` failed (server not reachable / not configured) — record still removed."
+        await interaction.response.send_message(msg)
+
+    @app_commands.command(name="blacklist-list", description="List all blacklisted players")
+    async def blacklist_list(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.administrator:
+            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
+
+        rows = guild_settings.get_blacklists(interaction.guild_id)
+        if not rows:
+            return await interaction.response.send_message("No players are blacklisted.", ephemeral=True)
+
+        lines = []
+        for r in rows:
+            bid, pname, pid, tribe, reason, issued_by, scp, issued_at = r
+            tribe_str = f" (tribe: {tribe})" if tribe else ""
+            lines.append(f"#{bid} | {pname}{tribe_str} | {reason} | by <@{issued_by}> | {issued_at.strftime('%Y-%m-%d %H:%M')}")
+
+        embed = discord.Embed(title="Blacklisted Players", description="\n".join(lines[:20]), color=discord.Color.dark_red())
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    # ============================================================
     #  SETTINGS
     # ============================================================
 

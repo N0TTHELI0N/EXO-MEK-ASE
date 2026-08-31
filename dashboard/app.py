@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import guild_settings
 import shop_db
 import nitrado
-from security import validate_path
+from security import validate_path, sanitize_rcon_name
 from translations import TRANSLATIONS, DASHBOARD_DEFAULT_LANG, DASHBOARD_LANGS
 
 def _lang_from_session():
@@ -853,6 +853,32 @@ def section_automod(guild_id):
     )
 
 
+def _revoke_punishment(guild_id: int, punishment_id):
+    """Revoke a ban/tempban: send RCON unban, remove the record, log it."""
+    if not punishment_id or not str(punishment_id).isdigit():
+        return
+    punishment_id = int(punishment_id)
+    for row in guild_settings.get_punishments(guild_id, limit=500, offset=0):
+        if row[0] == punishment_id and row[4] in ("ban", "tempban"):
+            safe_name = sanitize_rcon_name(row[1])
+            nitrado.send_rcon(guild_id, f"UnBan {safe_name}")
+            guild_settings.delete_punishment(punishment_id, guild_id)
+            _punishment_log(guild_id, row[1], row[5])
+            return
+
+
+def _punishment_log(guild_id: int, player_name: str, reason: str):
+    try:
+        import guild_settings as _gs
+        _gs.log_action(
+            guild_id, "punishment",
+            user_id=None, user_name="Dashboard", player_name=player_name,
+            command="revoke_punishment", sub_type="revoke", details={"reason": reason},
+        )
+    except Exception:
+        pass
+
+
 @app.route("/dashboard/<int:guild_id>/punishments", methods=["GET", "POST"])
 @login_required
 @guild_admin_required
@@ -870,22 +896,102 @@ def section_punishments(guild_id):
             player = request.form.get("player", "").strip()
             if player:
                 guild_settings.clear_warnings(guild_id, player)
+        elif action in ("revoke_ban", "revoke_warn", "revoke_blacklist"):
+            current_user_id = str((get_current_user() or {}).get("id", ""))
+            if current_user_id != str(BOT_OWNER_ID):
+                return redirect(url_for("section_punishments", guild_id=guild_id) + "?notice=owner")
+            if action == "revoke_ban":
+                _revoke_punishment(guild_id, request.form.get("punishment_id"))
+            elif action == "revoke_warn":
+                warning_id = request.form.get("warning_id")
+                if warning_id and str(warning_id).isdigit():
+                    guild_settings.remove_warning(int(warning_id))
+            elif action == "revoke_blacklist":
+                bl_id = request.form.get("blacklist_id", "").strip()
+                if bl_id.isdigit():
+                    for row in guild_settings.get_blacklists(guild_id):
+                        if row[0] == int(bl_id):
+                            nitrado.send_rcon(guild_id, f"UnBan {sanitize_rcon_name(row[1])}")
+                            break
+                    guild_settings.remove_blacklist(int(bl_id), guild_id)
         return redirect(url_for("section_punishments", guild_id=guild_id))
-    search_player = request.args.get("player", "").strip()
-    warnings = []
-    punishments = []
-    if search_player:
-        warnings = guild_settings.get_warnings(guild_id, search_player)
-        punishments = guild_settings.get_punishments(guild_id, search_player)
+
+    bans = []
+    now = datetime.now(timezone.utc)
+    for row in guild_settings.get_punishments(guild_id, limit=500, offset=0):
+        # row: id, player_name, player_id, tribe_name, punishment_type, reason, issued_by, scope, issued_at, expires_at, executed, appealed
+        if row[4] not in ("ban", "tempban"):
+            continue
+        expires = row[9]
+        time_left = ""
+        if expires is not None:
+            delta = expires - now
+            if delta.total_seconds() > 0:
+                days, rem = divmod(int(delta.total_seconds()), 86400)
+                hours, rem = divmod(rem, 3600)
+                mins = rem // 60
+                time_left = f"{days}d {hours}h {mins}m"
+            else:
+                time_left = "Expired"
+        bans.append({
+            "id": row[0],
+            "player_name": row[1],
+            "tribe_name": row[3],
+            "punishment_type": row[4],
+            "reason": row[5],
+            "issued_by": row[6],
+            "scoped": row[7] == "tribe",
+            "issued_at": row[8],
+            "expires_at": expires,
+            "executed": row[10],
+            "appealed": row[11],
+            "time_left": time_left,
+            "evidence": guild_settings.get_evidence(row[0]),
+        })
+
+    warns = []
+    for row in guild_settings.get_all_warnings(guild_id):
+        # row: id, player_name, reason, warned_by, warned_at, expires_at, active
+        expires = row[5]
+        time_left = ""
+        if expires is not None:
+            delta = expires - now
+            time_left = f"{int(delta.total_seconds() // 3600)}h" if delta.total_seconds() > 0 else "Expired"
+        warns.append({
+            "id": row[0],
+            "player_name": row[1],
+            "reason": row[2],
+            "warned_by": row[3],
+            "warned_at": row[4],
+            "expires_at": expires,
+            "active": row[6],
+            "time_left": time_left,
+        })
+
+    blacklists = []
+    for row in guild_settings.get_blacklists(guild_id):
+        # row: id, player_name, player_id, tribe_name, reason, issued_by, scope, issued_at
+        blacklists.append({
+            "id": row[0],
+            "player_name": row[1],
+            "tribe_name": row[3],
+            "reason": row[4],
+            "issued_by": row[5],
+            "scoped": row[6] == "tribe",
+            "issued_at": row[7],
+        })
+
     return render_template(
         "sections/punishments.html",
         user=get_current_user(),
         guild_id=guild_id,
         active_section="punishments",
         settings=guild_settings.get_settings(guild_id),
-        warnings=warnings,
-        punishments=punishments,
-        search_player=search_player,
+        bans=bans,
+        warns=warns,
+        blacklists=blacklists,
+        is_owner=str((get_current_user() or {}).get("id", "")) == str(BOT_OWNER_ID),
+        notice=request.args.get("notice"),
     )
 
 
@@ -1716,6 +1822,7 @@ ALL_COMMANDS_LIST = [
     "leaderboard-config", "leaderboard-set-channel", "leaderboard-toggle", "leaderboard-force", "leaderboard-sync",
     "warn", "tempwarn", "warnings", "clear-warnings", "remove-warning",
     "punish-ban", "punish-tempban", "punish-wipe",
+    "blacklist", "unblacklist", "blacklist-list",
     "punishment-history", "set-warning-threshold", "set-warning-punishment",
     "set-warning-tempban-duration", "set-warning-default-expiry", "set-punishment-log",
     "add-tribe-member", "server-status", "server-restart", "server-stop",
@@ -1788,6 +1895,9 @@ COMMANDS_META = {
     "punish-ban": ("moderation", "Ban a member via the punishment system"),
     "punish-tempban": ("moderation", "Temp-ban a member"),
     "punish-wipe": ("moderation", "Wipe a member's punishments"),
+    "blacklist": ("moderation", "Permanently blacklist a member (and ban)"),
+    "unblacklist": ("moderation", "Remove a member from the blacklist and unban"),
+    "blacklist-list": ("moderation", "List all blacklisted members"),
     "punishment-history": ("moderation", "Show a member's punishment history"),
     "set-warning-threshold": ("moderation", "Set the warning threshold"),
     "set-warning-punishment": ("moderation", "Set the punishment for reaching a threshold"),

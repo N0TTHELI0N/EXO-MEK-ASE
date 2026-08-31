@@ -182,6 +182,19 @@ def init_db():
                 )
             """)
             cur.execute("""
+                CREATE TABLE IF NOT EXISTS player_blacklist (
+                    id          SERIAL PRIMARY KEY,
+                    guild_id    BIGINT NOT NULL,
+                    player_name TEXT NOT NULL,
+                    player_id   TEXT,
+                    tribe_name  TEXT,
+                    reason      TEXT NOT NULL,
+                    issued_by   BIGINT NOT NULL,
+                    scope       TEXT DEFAULT 'player',
+                    issued_at   TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """)
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS tribe_members (
                     guild_id    BIGINT NOT NULL,
                     tribe_name  TEXT NOT NULL,
@@ -932,6 +945,20 @@ def get_warnings(guild_id: int, player_name: str):
         conn.close()
 
 
+def get_all_warnings(guild_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, player_name, reason, warned_by, warned_at, expires_at, active
+                FROM player_warnings WHERE guild_id = %s
+                ORDER BY warned_at DESC
+            """, (guild_id,))
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
 def clear_warnings(guild_id: int, player_name: str):
     conn = get_conn()
     try:
@@ -1045,6 +1072,78 @@ def appeal_punishment(punishment_id: int, appeal_reason: str):
                 (appeal_reason, punishment_id),
             )
         conn.commit()
+    finally:
+        conn.close()
+
+
+def delete_punishment(punishment_id: int, guild_id: int):
+    """Remove a punishment record (used when an owner revokes a ban)."""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM player_punishments WHERE id = %s AND guild_id = %s", (punishment_id, guild_id))
+            return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
+# ============================================================
+#  BLACKLIST
+# ============================================================
+
+def add_blacklist(guild_id: int, player_name: str, reason: str, issued_by: int,
+                  player_id: str = None, tribe_name: str = None, scope: str = "player"):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO player_blacklist (guild_id, player_name, player_id, tribe_name, reason, issued_by, scope)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+            """, (guild_id, player_name, player_id, tribe_name, reason, issued_by, scope))
+            bl_id = cur.fetchone()[0]
+        conn.commit()
+        return bl_id
+    finally:
+        conn.close()
+
+
+def get_blacklists(guild_id: int, player_name: str = None):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            query = "SELECT id, player_name, player_id, tribe_name, reason, issued_by, scope, issued_at FROM player_blacklist WHERE guild_id = %s"
+            params = [guild_id]
+            if player_name:
+                query += " AND player_name = %s"
+                params.append(player_name)
+            query += " ORDER BY issued_at DESC"
+            cur.execute(query, params)
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def remove_blacklist(entry_id: int, guild_id: int):
+    """Remove a player from the blacklist."""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM player_blacklist WHERE id = %s AND guild_id = %s", (entry_id, guild_id))
+            return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
+def is_blacklisted(guild_id: int, player_name: str) -> bool:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT 1 FROM player_blacklist WHERE guild_id = %s AND player_name = %s LIMIT 1",
+                (guild_id, player_name),
+            )
+            return cur.fetchone() is not None
     finally:
         conn.close()
 
