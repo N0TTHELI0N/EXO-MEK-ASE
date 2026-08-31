@@ -1919,6 +1919,10 @@ def section_commands(guild_id):
             enabled_flag = request.form.get("enabled")
             guild_settings.update_custom_command(guild_id, command, command_string, category,
                                                  True if enabled_flag != "0" else False)
+        elif cmd_action == "toggle_custom_enabled" and command:
+            guild_settings.update_custom_command(
+                guild_id, command,
+                enabled=True if request.form.get("enabled", "0") == "1" else False)
         return redirect(url_for("section_commands", guild_id=guild_id))
 
     # Build the command list (all known commands) ordered by category.
@@ -1938,12 +1942,27 @@ def section_commands(guild_id):
             "disabled": cmd in disabled,
             "permissions": permissions.get(cmd, []),
         })
+    # user-defined custom commands grouped under their own section, with
+    # role-permission controls keyed by the custom command's name.
+    custom_perms = []
+    for cc in custom_commands:
+        cname = cc.get("name", "")
+        enabled_flag = bool(cc.get("enabled", True))
+        custom_perms.append({
+            "name": cname,
+            "command_string": cc.get("command_string", ""),
+            "category": cc.get("category", ""),
+            "enabled": enabled_flag,
+            "disabled": not enabled_flag,
+            "permissions": permissions.get(cname, []),
+        })
     return render_template(
         "sections/commands.html",
         user=get_current_user(),
         guild_id=guild_id,
         active_section="commands",
         commands=commands,
+        custom_perms=custom_perms,
         guild_roles=guild_roles,
         custom_commands=custom_commands,
         category_order=COMMAND_CATEGORY_ORDER,
@@ -1952,6 +1971,12 @@ def section_commands(guild_id):
             "moderation": "Moderation", "shop": "Shop", "whitelist": "Whitelist",
             "tribelog": "Tribe Log", "leaderboard": "Leaderboard", "automod": "Auto-Mod",
             "admin": "Admin", "other": "Other",
+        },
+        custom_cat_labels={
+            "dino_spawn": "🦖 Dino Spawning",
+            "gfi": "🎁 GFI Commands",
+            "player": "🧍 Player Features",
+            "gcm": "🎮 GCM",
         },
     )
 
@@ -1969,18 +1994,7 @@ def _build_permissions_dict(guild_id, guild_roles):
 @login_required
 @guild_admin_required
 def section_permissions(guild_id):
-    guild_roles = get_guild_roles(guild_id)
-    permissions = _build_permissions_dict(guild_id, guild_roles)
-    return render_template(
-        "sections/permissions.html",
-        user=get_current_user(),
-        guild_id=guild_id,
-        guild_name=get_guild_name(guild_id),
-        active_section="permissions",
-        permissions=permissions,
-        all_commands=ALL_COMMANDS_LIST,
-        guild_roles=guild_roles,
-    )
+    return redirect(url_for("section_commands", guild_id=guild_id))
 
 
 @app.route("/dashboard/<int:guild_id>/permissions/add", methods=["POST"])
@@ -1988,11 +2002,7 @@ def section_permissions(guild_id):
 @guild_admin_required
 @validate_csrf
 def permissions_add(guild_id):
-    command = request.form.get("command", "").strip()
-    role_id = request.form.get("role_id", "").strip()
-    if command and role_id:
-        guild_settings.set_command_permission(guild_id, command, int(role_id))
-    return redirect(url_for("section_permissions", guild_id=guild_id))
+    return redirect(url_for("section_commands", guild_id=guild_id))
 
 
 @app.route("/dashboard/<int:guild_id>/permissions/remove", methods=["POST"])
@@ -2000,11 +2010,7 @@ def permissions_add(guild_id):
 @guild_admin_required
 @validate_csrf
 def permissions_remove(guild_id):
-    command = request.form.get("command", "").strip()
-    role_id = request.form.get("role_id", "").strip()
-    if command and role_id:
-        guild_settings.remove_command_permission(guild_id, command, int(role_id))
-    return redirect(url_for("section_permissions", guild_id=guild_id))
+    return redirect(url_for("section_commands", guild_id=guild_id))
 
 
 @app.route("/dashboard/<int:guild_id>/permissions/clear", methods=["POST"])
@@ -2012,10 +2018,7 @@ def permissions_remove(guild_id):
 @guild_admin_required
 @validate_csrf
 def permissions_clear(guild_id):
-    command = request.form.get("command", "").strip()
-    if command:
-        guild_settings.clear_command_permissions(guild_id, command)
-    return redirect(url_for("section_permissions", guild_id=guild_id))
+    return redirect(url_for("section_commands", guild_id=guild_id))
 
 
 # ────────────────────────────────────────────────────────────

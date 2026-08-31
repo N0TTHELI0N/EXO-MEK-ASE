@@ -157,6 +157,16 @@ class CustomCommands(commands.Cog):
             return await interaction.response.send_message(
                 bot_i18n.t(interaction.guild_id, "custom_not_found", name=name), ephemeral=True
             )
+        if not interaction.user.guild_permissions.administrator:
+            if not cmd.get("enabled", True):
+                return await interaction.response.send_message(
+                    "❌ This command is disabled.", ephemeral=True
+                )
+            allowed_roles = guild_settings.get_command_permissions(interaction.guild_id, name)
+            if allowed_roles and not ({r.id for r in interaction.user.roles} & set(allowed_roles)):
+                return await interaction.response.send_message(
+                    "❌ You don't have permission to use this command.", ephemeral=True
+                )
         final = await self._build_command(cmd["command_string"], interaction.user)
         await interaction.response.defer(ephemeral=False)
         resp = await self._execute(interaction.guild_id, final, cmd["category"], interaction.user, "custom")
