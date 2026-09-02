@@ -1,6 +1,8 @@
 # bot_i18n.py
 # Bilingual translation support (Arabic / English)
 
+import time
+
 import guild_settings
 
 STRINGS = {
@@ -248,11 +250,30 @@ STRINGS = {
 
 DEFAULT_LANGUAGE = "ar"
 
+# Small TTL cache for content overrides so we don't hit the DB on every
+# bot message. Owner edits show up within a few seconds on every server.
+_OVERRIDE_CACHE = {}
+_OVERRIDE_CACHE_TTL = 5.0
+
+
+def _get_override(key: str, lang: str):
+    now = time.time()
+    entry = _OVERRIDE_CACHE.get(key)
+    if entry and now - entry[0] < _OVERRIDE_CACHE_TTL:
+        return entry[1].get(lang)
+    value = guild_settings.get_content_override(key, lang)
+    _OVERRIDE_CACHE[key] = (now, {lang: value})
+    return value
+
 
 def t(guild_id: int, key: str, **kwargs) -> str:
     lang = guild_settings.get_setting(guild_id, "bot_language", DEFAULT_LANGUAGE)
+    override = _get_override(key, lang)
     translations = STRINGS.get(key, {})
-    text = translations.get(lang, translations.get(DEFAULT_LANGUAGE, key))
+    if override:
+        text = override
+    else:
+        text = translations.get(lang, translations.get(DEFAULT_LANGUAGE, key))
     try:
         return text.format_map(_SafeDict(kwargs))
     except (KeyError, IndexError, ValueError):

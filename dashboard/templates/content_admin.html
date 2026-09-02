@@ -4,9 +4,9 @@
 <div class="max-w-6xl mx-auto py-8 px-4">
 
   <!-- Header -->
-  <div class="mb-8">
+  <div class="mb-6">
     <h1 class="text-3xl font-bold text-white">✏️ Content Customization</h1>
-    <p class="text-gray-400 mt-2">Edit any dashboard text (Arabic / English) live — changes apply instantly, no redeploy.</p>
+    <p class="text-gray-400 mt-2">Edit any dashboard text, bot message, command reply or command embed live — changes apply instantly, no redeploy.</p>
   </div>
 
   <!-- Flash Messages -->
@@ -15,6 +15,196 @@
     {{ message }}
   </div>
   {% endif %}
+
+  <!-- Tabs -->
+  <div class="flex gap-2 mb-8 border-b border-gray-700">
+    <a href="/admin/content?tab=text"
+       class="px-5 py-3 text-sm font-semibold rounded-t-lg transition-colors {% if tab != 'commands' %}bg-gray-800 text-red-400 border border-b-0 border-gray-700{% else %}text-gray-400 hover:text-red-300{% endif %}">
+      💬 Text Keys
+    </a>
+    <a href="/admin/content?tab=commands"
+       class="px-5 py-3 text-sm font-semibold rounded-t-lg transition-colors {% if tab == 'commands' %}bg-gray-800 text-red-400 border border-b-0 border-gray-700{% else %}text-gray-400 hover:text-red-300{% endif %}">
+      🎨 Command Embeds
+    </a>
+  </div>
+
+  {% if tab == 'commands' %}
+  <!-- ================================================================
+       COMMAND EMBEDS TAB
+       ================================================================ -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+    <!-- Editor -->
+    <div class="bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-700/50">
+      <h2 class="text-xl font-semibold text-white mb-2">Command Display</h2>
+      <p class="text-sm text-gray-400 mb-5">Pick a command, change the text it replies with, the embed it shows and its buttons. Saved globally for every server.</p>
+
+      <!-- Command selector -->
+      <form method="GET" action="/admin/content" class="mb-6">
+        <input type="hidden" name="tab" value="commands">
+        <label class="block text-sm font-medium text-gray-300 mb-1">Select Command</label>
+        <div class="flex gap-2">
+          <select name="cmd" onchange="this.form.submit()"
+                  class="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-3 py-2.5 text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500">
+            {% for c in commands %}
+            <option value="{{ c }}" {% if c == cmd_name %}selected{% endif %}>/{{ c }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </form>
+
+      {% if cmd_name %}
+      <form method="POST" action="/admin/content/command/save" oninput="updatePreview()">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="command_name" value="{{ cmd_name }}">
+
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-300 mb-1">Plain Text Reply (what it says when no embed has text)</label>
+          <textarea name="plain_reply" id="f_plain_reply" rows="2"
+                    placeholder="Leave empty to keep default..."
+                    class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500">{{ cmd_cfg.get('plain_reply', '') }}</textarea>
+          <p class="text-xs text-gray-500 mt-1">Shown as plain text. Blank = command keeps its own text. (Per-server override on the Commands page takes priority.)</p>
+        </div>
+
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-300 mb-1">Embed Title</label>
+          <input type="text" id="f_title" name="title" value="{{ cmd_cfg.get('title', '') }}"
+                 placeholder="Leave empty to keep default"
+                 class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500">
+        </div>
+
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-300 mb-1">Embed Description</label>
+          <textarea name="description" id="f_description" rows="5"
+                    placeholder="Leave empty to keep default"
+                    class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500">{{ cmd_cfg.get('description', '') }}</textarea>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-300 mb-1">Embed Color</label>
+            <div class="flex items-center gap-2">
+              <input type="color" id="f_color_picker" value="{{ cmd_cfg.get('color', '#5865F2') }}"
+                     class="w-10 h-10 rounded cursor-pointer bg-gray-700 border border-gray-600">
+              <input type="text" name="color" id="f_color" value="{{ cmd_cfg.get('color', '') }}"
+                     placeholder="e.g. #5865F2"
+                     class="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-3 py-2.5 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500">
+            </div>
+            <p class="text-xs text-gray-500 mt-1">Blank = keep default color.</p>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-300 mb-1">Embed Footer</label>
+            <input type="text" name="footer_text" id="f_footer" value="{{ cmd_cfg.get('footer_text', '') }}"
+                   placeholder="Leave empty to keep default"
+                   class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500">
+          </div>
+        </div>
+
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-300 mb-1">Thumbnail Image URL</label>
+          <input type="text" name="thumbnail_url" id="f_thumb" value="{{ cmd_cfg.get('thumbnail_url', '') }}"
+                 placeholder="https://... (optional)"
+                 class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500">
+        </div>
+
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-300 mb-1">Large Image URL</label>
+          <input type="text" name="image_url" id="f_image" value="{{ cmd_cfg.get('image_url', '') }}"
+                 placeholder="https://... (optional)"
+                 class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500">
+        </div>
+
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-300 mb-1">Buttons</label>
+          <p class="text-xs text-gray-500 mb-2">New label appears in the order written. Optionally type the button's current label (Original) to rename that specific button instead.</p>
+          <div id="buttons_container" class="space-y-2">
+            {% set btns = cmd_cfg.get('buttons', []) %}
+            {% if btns %}
+              {% for b in btns %}
+              <div class="flex gap-2">
+                <input type="text" name="btn_from" value="{{ b.get('from', '') }}"
+                       placeholder="Original label (optional)"
+                       class="w-1/2 bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500">
+                <input type="text" name="btn_label" value="{{ b.get('label', '') }}"
+                       placeholder="New label"
+                       class="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500">
+                <button type="button" onclick="this.parentElement.remove()"
+                        class="px-3 text-gray-500 hover:text-red-400">✕</button>
+              </div>
+              {% endfor %}
+            {% else %}
+              <div class="flex gap-2">
+                <input type="text" name="btn_from" placeholder="Original label (optional)"
+                       class="w-1/2 bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500">
+                <input type="text" name="btn_label" placeholder="New label"
+                       class="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500">
+                <button type="button" onclick="this.parentElement.remove()"
+                        class="px-3 text-gray-500 hover:text-red-400">✕</button>
+              </div>
+            {% endif %}
+          </div>
+          <button type="button" onclick="addButtonRow()"
+                  class="mt-2 text-xs text-red-400 hover:text-red-300 font-medium">+ Add Button</button>
+          <p class="text-xs text-gray-500 mt-2">Hint for /help: buttons are the category buttons (عامة, السيرفر, ...). Use "Original label → New label" to rename them.</p>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <button type="submit"
+                  class="px-6 py-2.5 bg-red-600 hover:bg-red-500 text-white font-medium rounded-lg transition-colors">
+            Save Display
+          </button>
+          <form method="POST" action="/admin/content/command/delete" class="inline"
+                onsubmit="return confirm('Reset /{{ cmd_name }} to defaults?')">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="command_name" value="{{ cmd_name }}">
+            <button type="submit" class="px-5 py-2.5 text-sm text-gray-400 hover:text-red-400 border border-gray-600 rounded-lg">
+              Reset to Defaults
+            </button>
+          </form>
+        </div>
+      </form>
+      {% else %}
+      <p class="text-gray-500 py-8 text-center">Select a command from the dropdown above to edit its embed and buttons.</p>
+      {% endif %}
+    </div>
+
+    <!-- Live Preview -->
+    <div>
+      <h3 class="text-xl font-semibold text-white mb-3">Live Preview</h3>
+      <p class="text-sm text-gray-400 mb-4">This is how it will look in Discord. Blank fields fall back to the command's default.</p>
+
+      <div id="preview_plain" class="mb-4 bg-gray-800 rounded-xl p-4 border border-gray-700/50 text-gray-200 hidden"></div>
+
+      <div class="bg-[#2c2f33] rounded-lg p-4 shadow-lg max-w-md">
+        <div id="preview_embed">
+          <div class="flex gap-3">
+            <div id="preview_color_bar" class="w-1 rounded-full bg-[#5865F2]"></div>
+            <div class="flex-1">
+              <div class="flex justify-between gap-3">
+                <p id="preview_title" class="text-white font-semibold leading-snug"></p>
+                <div id="preview_thumb" class="hidden w-16 h-16 rounded-lg overflow-hidden flex-shrink-0">
+                  <img id="preview_thumb_img" src="" class="w-full h-full object-cover">
+                </div>
+              </div>
+              <div id="preview_desc" class="text-gray-300 text-sm mt-2 whitespace-pre-wrap"></div>
+              <div id="preview_image_wrap" class="hidden mt-3 rounded-lg overflow-hidden">
+                <img id="preview_image_img" src="" class="w-full h-auto">
+              </div>
+              <p id="preview_footer" class="text-gray-500 text-xs mt-3"></p>
+            </div>
+          </div>
+        </div>
+        <div id="preview_buttons" class="flex flex-wrap gap-2 mt-4"></div>
+      </div>
+
+      <p class="text-xs text-gray-500 mt-3">Placeholders shown in the preview come from the command's current saved overrides. Actual default embed text (used when a field is blank) is only visible when the command runs.</p>
+    </div>
+  </div>
+
+  {% else %}
+  <!-- ================================================================
+       TEXT KEYS TAB
+       ================================================================ -->
 
   <!-- Stats -->
   <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
@@ -36,8 +226,9 @@
       <div>
         <label for="content_key" class="block text-sm font-medium text-gray-300 mb-1">Content Key</label>
         <input type="text" id="content_key" name="content_key" required
-               placeholder="e.g. home_tagline, dash_nitrado, custom_banner_title"
-               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent">
+               placeholder="e.g. help_description, home_tagline, dash_nitrado"
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500">
+        <p class="text-xs text-gray-500 mt-1">Keys starting with bot message names (help_description, admin_only, automod_*, ...) change what the BOT says to players. Other keys are dashboard page text.</p>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
@@ -65,8 +256,9 @@
 
   <!-- All keys table -->
   <div class="bg-gray-800 rounded-xl shadow-lg border border-gray-700/50 overflow-hidden">
-    <div class="px-6 py-4 border-b border-gray-700">
+    <div class="px-6 py-4 border-b border-gray-700 flex items-center justify-between">
       <h2 class="text-xl font-semibold text-white">All Text Keys</h2>
+      <span class="text-xs text-gray-500">The grey preview below each box shows the current message so you know what the key means.</span>
     </div>
 
     {% if keys %}
@@ -83,7 +275,10 @@
         <tbody>
           {% for key in keys %}
           <tr class="border-b border-gray-700/50 hover:bg-gray-800 transition-colors align-top">
-            <td class="px-4 py-3 text-sm text-gray-300 font-mono align-top">{{ key }}</td>
+            <td class="px-4 py-3 text-sm text-gray-300 font-mono align-top">
+              {{ key }}
+              {% if key in bot_i18n_keys %}<span class="block text-[10px] text-red-400/80 font-sans mt-1">bot message</span>{% endif %}
+            </td>
             <td class="px-4 py-3">
               <form method="POST" action="/admin/content/save">
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
@@ -91,8 +286,8 @@
                 <input type="hidden" name="lang" value="ar">
                 <input type="text" name="value"
                        value="{{ overrides.get(key, {}).get('ar', '') }}"
-                       placeholder="{{ ('Arabic default: ' ) }}"
-                       class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm text-gray-100">
+                       placeholder="{% if defaults.get(key, {}).get('ar') %}Default: {{ defaults[key]['ar'] }}{% else %}No Arabic default{% endif %}"
+                       class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm text-gray-100 placeholder-gray-500">
                 <button type="submit" class="mt-1 text-xs text-red-400 hover:text-red-300">Save AR</button>
               </form>
               {% if overrides.get(key, {}).get('ar') %}
@@ -111,8 +306,8 @@
                 <input type="hidden" name="lang" value="en">
                 <input type="text" name="value"
                        value="{{ overrides.get(key, {}).get('en', '') }}"
-                       placeholder="{{ ('English default') }}"
-                       class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm text-gray-100">
+                       placeholder="{% if defaults.get(key, {}).get('en') %}Default: {{ defaults[key]['en'] }}{% else %}No English default{% endif %}"
+                       class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm text-gray-100 placeholder-gray-500">
                 <button type="submit" class="mt-1 text-xs text-red-400 hover:text-red-300">Save EN</button>
               </form>
               {% if overrides.get(key, {}).get('en') %}
@@ -146,5 +341,78 @@
     </div>
     {% endif %}
   </div>
+  {% endif %}
 </div>
+
+<script>
+function addButtonRow() {
+  const container = document.getElementById('buttons_container');
+  const row = document.createElement('div');
+  row.className = 'flex gap-2';
+  row.innerHTML =
+    '<input type="text" name="btn_from" placeholder="Original label (optional)" ' +
+    'class="w-1/2 bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500">' +
+    '<input type="text" name="btn_label" placeholder="New label" ' +
+    'class="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500">' +
+    '<button type="button" onclick="this.parentElement.remove()" class="px-3 text-gray-500 hover:text-red-400">✕</button>';
+  container.appendChild(row);
+}
+
+function updatePreview() {
+  const title = document.getElementById('f_title')?.value || '';
+  const desc = document.getElementById('f_description')?.value || '';
+  const footer = document.getElementById('f_footer')?.value || '';
+  const thumb = document.getElementById('f_thumb')?.value || '';
+  const image = document.getElementById('f_image')?.value || '';
+  const color = document.getElementById('f_color')?.value || '#5865F2';
+  const plain = document.getElementById('f_plain_reply')?.value || '';
+
+  const plainBox = document.getElementById('preview_plain');
+  if (plain) {
+    plainBox.textContent = plain;
+    plainBox.classList.remove('hidden');
+  } else {
+    plainBox.classList.add('hidden');
+  }
+
+  document.getElementById('preview_title').textContent = title || 'Command Output';
+  document.getElementById('preview_desc').textContent = desc || '(no custom description — command uses its default text)';
+  document.getElementById('preview_footer').textContent = footer;
+  document.getElementById('preview_color_bar').style.background = color;
+
+  const thumbWrap = document.getElementById('preview_thumb');
+  if (thumb) {
+    document.getElementById('preview_thumb_img').src = thumb;
+    thumbWrap.classList.remove('hidden');
+  } else {
+    thumbWrap.classList.add('hidden');
+  }
+
+  const imgWrap = document.getElementById('preview_image_wrap');
+  if (image) {
+    document.getElementById('preview_image_img').src = image;
+    imgWrap.classList.remove('hidden');
+  } else {
+    imgWrap.classList.add('hidden');
+  }
+
+  const btnWrap = document.getElementById('preview_buttons');
+  btnWrap.innerHTML = '';
+  document.querySelectorAll('#buttons_container input[name="btn_label"]').forEach(input => {
+    const label = input.value.trim();
+    if (!label) return;
+    const chip = document.createElement('span');
+    chip.className = 'px-4 py-1.5 rounded bg-gray-600 text-gray-200 text-sm';
+    chip.textContent = label;
+    btnWrap.appendChild(chip);
+  });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const colorInput = document.getElementById('f_color');
+  const picker = document.getElementById('f_color_picker');
+  if (colorInput && picker && colorInput.value) picker.value = colorInput.value;
+  updatePreview();
+});
+</script>
 {% endblock %}

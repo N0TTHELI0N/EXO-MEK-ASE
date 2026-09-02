@@ -17,6 +17,7 @@ import guild_settings
 import shop_db
 import nitrado
 import commands_manifest
+import bot_i18n
 from security import validate_path, sanitize_rcon_name
 from translations import TRANSLATIONS, DASHBOARD_DEFAULT_LANG, DASHBOARD_LANGS
 
@@ -405,15 +406,35 @@ def admin_content():
     overrides = guild_settings.get_all_content_overrides()
     # Build a list of all known keys from defaults + any custom override keys
     known = set(TRANSLATIONS.keys())
+    known |= set(bot_i18n.STRINGS.keys())
     known |= set(overrides.keys())
     keys = sorted(known)
+    defaults = {}
+    for k in keys:
+        defaults[k] = {
+            **TRANSLATIONS.get(k, {}),
+            **bot_i18n.STRINGS.get(k, {}),
+        }
+    bot_i18n_keys = set(bot_i18n.STRINGS.keys())
+    tab = request.args.get("tab", "text")
+    cmd_name = request.args.get("cmd", "")
+    commands = [name for name, _cat, _desc in commands_manifest.COMMANDS]
+    if cmd_name and cmd_name not in commands:
+        cmd_name = ""
+    cmd_cfg = guild_settings.get_command_display(cmd_name) if cmd_name else {}
     return render_template(
         "content_admin.html",
         user=get_current_user(),
         keys=keys,
         overrides=overrides,
+        defaults=defaults,
+        bot_i18n_keys=bot_i18n_keys,
         message=request.args.get("message", ""),
         message_type=request.args.get("type", "success"),
+        tab=tab,
+        commands=commands,
+        cmd_name=cmd_name,
+        cmd_cfg=cmd_cfg,
     )
 
 
@@ -442,6 +463,48 @@ def admin_content_delete():
         return redirect(url_for("admin_content", message="Missing key.", type="error"))
     guild_settings.delete_content_override(content_key, lang or None)
     return redirect(url_for("admin_content", message=f"Reset ({content_key}) to default.", type="success"))
+
+
+@app.route("/admin/content/command/save", methods=["POST"])
+@login_required
+@owner_required
+@validate_csrf
+def admin_content_command_save():
+    cmd_name = request.form.get("command_name", "").strip()
+    if cmd_name not in [name for name, _cat, _desc in commands_manifest.COMMANDS]:
+        return redirect(url_for("admin_content", tab="commands", message="Invalid command.", type="error"))
+
+    fields = {k: (request.form.get(k, "").strip() or None) for k in (
+        "plain_reply", "title", "description", "color", "footer_text",
+        "thumbnail_url", "image_url",
+    )}
+    buttons = []
+    froms = request.form.getlist("btn_from")
+    labels = request.form.getlist("btn_label")
+    for src, label in zip(froms, labels):
+        label = (label or "").strip()
+        if not label:
+            continue
+        entry = {"label": label}
+        if src and src.strip():
+            entry["from"] = src.strip()
+        buttons.append(entry)
+    fields["buttons"] = buttons or None
+
+    guild_settings.set_command_display(cmd_name, **fields)
+    return redirect(url_for("admin_content", tab="commands", cmd=cmd_name,
+                            message=f"Saved display for /{cmd_name}.", type="success"))
+
+
+@app.route("/admin/content/command/delete", methods=["POST"])
+@login_required
+@owner_required
+@validate_csrf
+def admin_content_command_delete():
+    cmd_name = request.form.get("command_name", "").strip()
+    guild_settings.delete_command_display(cmd_name)
+    return redirect(url_for("admin_content", tab="commands", cmd=cmd_name,
+                            message=f"Reset /{cmd_name} to defaults.", type="success"))
 
 
 # ────────────────────────────────────────────────────────────

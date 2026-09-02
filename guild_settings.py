@@ -340,6 +340,20 @@ def init_db():
                 )
             """)
             cur.execute("""
+                CREATE TABLE IF NOT EXISTS command_display_overrides (
+                    command_name   TEXT PRIMARY KEY,
+                    plain_reply    TEXT,
+                    title          TEXT,
+                    description    TEXT,
+                    color          TEXT,
+                    footer_text    TEXT,
+                    thumbnail_url  TEXT,
+                    image_url      TEXT,
+                    buttons        JSONB,
+                    updated_at     TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """)
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS forum_log_config (
                     guild_id       BIGINT PRIMARY KEY,
                     forum_id       BIGINT,
@@ -1919,6 +1933,126 @@ def get_content_override(content_key: str, lang: str) -> str:
             )
             row = cur.fetchone()
             return row[0] if row else None
+    finally:
+        conn.close()
+
+
+# ============================================================
+#  COMMAND DISPLAY OVERRIDES (global, owner-managed)
+#  Lets the owner customize what a bot command shows:
+#  plain reply text, its embed, and its buttons. Applied by
+#  command_overrides.install() at send time for ALL commands.
+# ============================================================
+
+
+def get_command_display(command_name: str) -> dict:
+    """Return the global display override for a command (or {} if none)."""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT plain_reply, title, description, color, footer_text, "
+                "thumbnail_url, image_url, buttons FROM command_display_overrides "
+                "WHERE command_name = %s",
+                (command_name,),
+            )
+            row = cur.fetchone()
+        if not row:
+            return {}
+        plain_reply, title, description, color, footer_text, thumbnail_url, image_url, buttons = row
+        cfg = {}
+        if plain_reply:
+            cfg["plain_reply"] = plain_reply
+        if title:
+            cfg["title"] = title
+        if description:
+            cfg["description"] = description
+        if color:
+            cfg["color"] = color
+        if footer_text:
+            cfg["footer_text"] = footer_text
+        if thumbnail_url:
+            cfg["thumbnail_url"] = thumbnail_url
+        if image_url:
+            cfg["image_url"] = image_url
+        if buttons:
+            cfg["buttons"] = buttons
+        return cfg
+    finally:
+        conn.close()
+
+
+def get_all_command_displays() -> dict:
+    """Return {command_name: cfg} for every command with an override."""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT command_name FROM command_display_overrides")
+            rows = cur.fetchall()
+        result = {}
+        for (name,) in rows:
+            cfg = get_command_display(name)
+            if cfg:
+                result[name] = cfg
+        return result
+    finally:
+        conn.close()
+
+
+def set_command_display(command_name: str, **fields) -> None:
+    """Insert/update a command's global display override.
+    Supported fields: plain_reply, title, description, color,
+    footer_text, thumbnail_url, image_url, buttons (list)."""
+    allowed = {
+        "plain_reply", "title", "description", "color",
+        "footer_text", "thumbnail_url", "image_url", "buttons",
+    }
+    data = {k: v for k, v in fields.items() if k in allowed}
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """INSERT INTO command_display_overrides
+                     (command_name, plain_reply, title, description, color,
+                      footer_text, thumbnail_url, image_url, buttons, updated_at)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, now())
+                   ON CONFLICT (command_name)
+                   DO UPDATE SET plain_reply = EXCLUDED.plain_reply,
+                                 title = EXCLUDED.title,
+                                 description = EXCLUDED.description,
+                                 color = EXCLUDED.color,
+                                 footer_text = EXCLUDED.footer_text,
+                                 thumbnail_url = EXCLUDED.thumbnail_url,
+                                 image_url = EXCLUDED.image_url,
+                                 buttons = EXCLUDED.buttons,
+                                 updated_at = now()
+                """,
+                (
+                    command_name,
+                    data.get("plain_reply"),
+                    data.get("title"),
+                    data.get("description"),
+                    data.get("color"),
+                    data.get("footer_text"),
+                    data.get("thumbnail_url"),
+                    data.get("image_url"),
+                    json.dumps(data.get("buttons")) if data.get("buttons") else None,
+                ),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def delete_command_display(command_name: str) -> None:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM command_display_overrides WHERE command_name = %s",
+                (command_name,),
+            )
+        conn.commit()
     finally:
         conn.close()
 
