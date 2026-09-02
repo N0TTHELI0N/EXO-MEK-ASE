@@ -153,7 +153,7 @@ def get_bot_guilds():
     if not BOT_TOKEN:
         return []
     resp = requests.get(
-        f"{DISCORD_API_BASE}/users/@me/guilds",
+        f"{DISCORD_API_BASE}/users/@me/guilds?with_counts=true",
         headers={"Authorization": f"Bot {BOT_TOKEN}"},
         timeout=10,
     )
