@@ -349,10 +349,12 @@ def init_db():
                     footer_text    TEXT,
                     thumbnail_url  TEXT,
                     image_url      TEXT,
+                    help_description TEXT,
                     buttons        JSONB,
                     updated_at     TIMESTAMP WITH TIME ZONE DEFAULT NOW()
                 )
             """)
+            cur.execute("ALTER TABLE command_display_overrides ADD COLUMN IF NOT EXISTS help_description TEXT")
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS forum_log_config (
                     guild_id       BIGINT PRIMARY KEY,
@@ -1758,31 +1760,13 @@ def set_command_description(guild_id: int, command: str, description: str):
 
 
 def get_command_description(guild_id: int, command: str, default: str = "") -> str:
-    return get_command_descriptions(guild_id).get(command, default)
-
-
-# ============================================================
-#  COMMAND MESSAGE OVERRIDES
-# ============================================================
-
-def get_command_messages(guild_id: int) -> dict:
-    """Return per-command message overrides for a guild (owner-set reply text)."""
-    value = get_settings(guild_id).get("command_messages", {})
-    return value if isinstance(value, dict) else {}
-
-
-def set_command_message(guild_id: int, command: str, message: str):
-    overrides = get_command_messages(guild_id)
-    message = (message or "").strip()
-    if message:
-        overrides[command] = message
-    else:
-        overrides.pop(command, None)
-    update_setting(guild_id, "command_messages", overrides)
-
-
-def get_command_message(guild_id: int, command: str, default: str = "") -> str:
-    return get_command_messages(guild_id).get(command, default)
+    per_guild = get_command_descriptions(guild_id).get(command)
+    if per_guild:
+        return per_guild
+    display = get_command_display(command)
+    if display.get("help_description"):
+        return display["help_description"]
+    return default
 
 
 def has_command_permission(guild_id: int, command: str, member) -> bool:
@@ -1952,14 +1936,14 @@ def get_command_display(command_name: str) -> dict:
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT plain_reply, title, description, color, footer_text, "
-                "thumbnail_url, image_url, buttons FROM command_display_overrides "
+                "thumbnail_url, image_url, help_description, buttons FROM command_display_overrides "
                 "WHERE command_name = %s",
                 (command_name,),
             )
             row = cur.fetchone()
         if not row:
             return {}
-        plain_reply, title, description, color, footer_text, thumbnail_url, image_url, buttons = row
+        plain_reply, title, description, color, footer_text, thumbnail_url, image_url, help_description, buttons = row
         cfg = {}
         if plain_reply:
             cfg["plain_reply"] = plain_reply
@@ -1975,6 +1959,8 @@ def get_command_display(command_name: str) -> dict:
             cfg["thumbnail_url"] = thumbnail_url
         if image_url:
             cfg["image_url"] = image_url
+        if help_description:
+            cfg["help_description"] = help_description
         if buttons:
             cfg["buttons"] = buttons
         return cfg
@@ -2002,10 +1988,11 @@ def get_all_command_displays() -> dict:
 def set_command_display(command_name: str, **fields) -> None:
     """Insert/update a command's global display override.
     Supported fields: plain_reply, title, description, color,
-    footer_text, thumbnail_url, image_url, buttons (list)."""
+    footer_text, thumbnail_url, image_url, help_description, buttons (list)."""
     allowed = {
         "plain_reply", "title", "description", "color",
-        "footer_text", "thumbnail_url", "image_url", "buttons",
+        "footer_text", "thumbnail_url", "image_url",
+        "help_description", "buttons",
     }
     data = {k: v for k, v in fields.items() if k in allowed}
     conn = get_conn()
@@ -2014,8 +2001,9 @@ def set_command_display(command_name: str, **fields) -> None:
             cur.execute(
                 """INSERT INTO command_display_overrides
                      (command_name, plain_reply, title, description, color,
-                      footer_text, thumbnail_url, image_url, buttons, updated_at)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, now())
+                      footer_text, thumbnail_url, image_url, help_description,
+                      buttons, updated_at)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
                    ON CONFLICT (command_name)
                    DO UPDATE SET plain_reply = EXCLUDED.plain_reply,
                                  title = EXCLUDED.title,
@@ -2024,6 +2012,7 @@ def set_command_display(command_name: str, **fields) -> None:
                                  footer_text = EXCLUDED.footer_text,
                                  thumbnail_url = EXCLUDED.thumbnail_url,
                                  image_url = EXCLUDED.image_url,
+                                 help_description = EXCLUDED.help_description,
                                  buttons = EXCLUDED.buttons,
                                  updated_at = now()
                 """,
@@ -2036,6 +2025,7 @@ def set_command_display(command_name: str, **fields) -> None:
                     data.get("footer_text"),
                     data.get("thumbnail_url"),
                     data.get("image_url"),
+                    data.get("help_description"),
                     json.dumps(data.get("buttons")) if data.get("buttons") else None,
                 ),
             )

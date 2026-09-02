@@ -478,6 +478,8 @@ def admin_content_command_save():
         "plain_reply", "title", "description", "color", "footer_text",
         "thumbnail_url", "image_url",
     )}
+    help_desc = request.form.get("help_description", "").strip() or None
+    fields["help_description"] = help_desc
     buttons = []
     froms = request.form.getlist("btn_from")
     labels = request.form.getlist("btn_label")
@@ -1993,8 +1995,6 @@ def section_commands(guild_id):
     guild_roles = get_guild_roles(guild_id)
     permissions = _build_permissions_dict(guild_id, guild_roles)
     disabled = set(guild_settings.get_disabled_commands(guild_id))
-    descriptions = guild_settings.get_command_descriptions(guild_id)
-    messages = guild_settings.get_command_messages(guild_id)
     user = get_current_user() or {}
     is_owner = int(user.get("id", 0)) == BOT_OWNER_ID
     custom_commands = guild_settings.get_custom_commands(guild_id)
@@ -2013,11 +2013,6 @@ def section_commands(guild_id):
                 guild_settings.add_custom_command(guild_id, name, command_string, category)
         elif cmd_action == "delete_custom" and command:
             guild_settings.remove_custom_command(guild_id, command)
-        elif cmd_action == "set_description" and command:
-            guild_settings.set_command_description(guild_id, command, request.form.get("description", ""))
-        elif cmd_action == "set_message" and command:
-            if is_owner:
-                guild_settings.set_command_message(guild_id, command, request.form.get("message", ""))
         elif cmd_action == "toggle_disabled" and command:
             guild_settings.set_command_disabled(guild_id, command, request.form.get("disabled", "0") == "1")
         elif cmd_action == "add_permission" and command:
@@ -2048,8 +2043,7 @@ def section_commands(guild_id):
         commands.append({
             "name": cmd,
             "category": cat,
-            "description": descriptions.get(cmd, default_desc),
-            "message": messages.get(cmd, ""),
+            "description": guild_settings.get_command_description(guild_id, cmd, default_desc),
             "disabled": cmd in disabled,
             "permissions": permissions.get(cmd, []),
         })

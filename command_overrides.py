@@ -95,12 +95,9 @@ def install():
                     and not kwargs.get("attachments")
                     and not kwargs.get("view")
                 )
-                per_guild_msg = guild_settings.get_command_message(guild_id, name) if guild_id else None
-                if per_guild_msg and has_plain:
-                    content = per_guild_msg
                 cfg = guild_settings.get_command_display(name)
                 if cfg:
-                    if not per_guild_msg and has_plain and cfg.get("plain_reply"):
+                    if guild_id and cfg.get("plain_reply") and has_plain:
                         content = cfg["plain_reply"]
                     for embed in (kwargs.get("embeds") or []):
                         _apply_embed_overrides(embed, cfg)

@@ -59,6 +59,13 @@
         <input type="hidden" name="command_name" value="{{ cmd_name }}">
 
         <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-300 mb-1">Command Description (shown in /help and on the server dashboard)</label>
+          <textarea name="help_description" id="f_help_desc" rows="2"
+                    placeholder="Leave empty to use the built-in description"
+                    class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500">{{ cmd_cfg.get('help_description', '') }}</textarea>
+        </div>
+
+        <div class="mb-4">
           <label class="block text-sm font-medium text-gray-300 mb-1">Plain Text Reply (what it says when no embed has text)</label>
           <textarea name="plain_reply" id="f_plain_reply" rows="2"
                     placeholder="Leave empty to keep default..."
