@@ -93,6 +93,32 @@ class AntiAbuse(commands.Cog):
                 if not player:
                     continue
                 guild_settings.add_ip_record(guild.id, player, ip, source="log")
+                # Auto alt-detection: check whether this IP is already linked to a
+                # different tracked player. If so, this looks like an alt joining.
+                alts = guild_settings.find_alts(guild.id, player)
+                for alt in alts:
+                    if alt != player:
+                        await self._notify_alt(guild, player, ip, alt)
+
+    async def _notify_alt(self, guild, player, ip, alt):
+        """Push an alt-account alert to the configured anti-abuse log channel."""
+        try:
+            ch_id = guild_settings.get_setting(guild.id, "anti_abuse_log_channel_id")
+            if ch_id:
+                ch = guild.get_channel(int(ch_id))
+                if ch:
+                    embed = discord.Embed(
+                        title="🚨 Possible Alt Account Detected",
+                        description=(
+                            f"**{player}** joined from IP `{ip}` which is also linked to "
+                            f"**{alt}**.\n\nPossibly the same person playing on an alt account."
+                        ),
+                        color=discord.Color.yellow(),
+                    )
+                    embed.set_footer(text="Anti-Abuse auto-detection")
+                    await ch.send(embed=embed)
+        except Exception as e:
+            print(f"[AntiAbuse] Alt notify error: {e}")
 
     @ip_monitor.before_loop
     async def before_ip_monitor(self):

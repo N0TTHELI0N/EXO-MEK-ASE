@@ -64,6 +64,21 @@
         {{ t('anti_abuse_toggle') }}
       </button>
     </form>
+
+    <h3 class="text-lg font-semibold text-white mt-8 mb-1">{{ t('anti_abuse_alt_channel') }}</h3>
+    <p class="text-xs text-gray-400 mb-4">{{ t('anti_abuse_alt_channel_desc') }}</p>
+    <form method="POST" class="space-y-2">
+      <input type="hidden" name="action" value="set_alt_channel">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input name="alt_channel_id" value="{{ alt_channel }}" placeholder="123456789012345678"
+             class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-500 outline-none">
+      <div class="flex gap-2">
+        <button class="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg text-sm">{{ t('anti_abuse_save') }}</button>
+        {% if alt_channel %}
+        <button name="clear_alt_channel" value="1" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm">{{ t('anti_abuse_clear') }}</button>
+        {% endif %}
+      </div>
+    </form>
   </div>
 </div>
 

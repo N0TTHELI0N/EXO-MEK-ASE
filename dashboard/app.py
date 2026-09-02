@@ -1240,6 +1240,12 @@ def section_anti_abuse(guild_id):
             bid = request.form.get("ban_id")
             if bid and bid.isdigit():
                 guild_settings.remove_ip_ban(int(bid), guild_id)
+        elif action == "set_alt_channel":
+            ch = request.form.get("alt_channel_id", "").strip()
+            if ch:
+                guild_settings.update_setting(guild_id, "anti_abuse_log_channel_id", ch)
+            elif request.form.get("clear_alt_channel"):
+                guild_settings.update_setting(guild_id, "anti_abuse_log_channel_id", "")
         return redirect(url_for("section_anti_abuse", guild_id=guild_id))
 
     page = int(request.args.get("page", 1))
@@ -1260,6 +1266,7 @@ def section_anti_abuse(guild_id):
         page=page,
         per_page=per_page,
         ip_auto=guild_settings.get_bool_setting(guild_id, "anti_abuse_ip_auto", False),
+        alt_channel=guild_settings.get_setting(guild_id, "anti_abuse_log_channel_id", ""),
         is_owner=str((get_current_user() or {}).get("id", "")) == str(BOT_OWNER_ID),
     )
 
@@ -1270,18 +1277,104 @@ def section_anti_abuse(guild_id):
 @validate_csrf
 def section_players(guild_id):
     if request.method == "POST":
-        action = request.form.get("action")
+        action = request.form.get("action", "")
+        user_id = int((get_current_user() or {}).get("id", 0) or 0)
+        notice = ""
+        notice_type = "error"
+
         if action == "add_ip":
             name = request.form.get("player_name", "").strip()
             ip = request.form.get("ip_address", "").strip()
             pid = request.form.get("player_id", "").strip() or None
             if name and ip:
                 guild_settings.add_ip_record(guild_id, name, ip, player_id=pid, source="manual")
+                notice = "IP record added"
+                notice_type = "ok"
         elif action == "delete_ip":
             rid = request.form.get("record_id")
             if rid and rid.isdigit():
                 guild_settings.delete_ip_record(int(rid), guild_id)
-        return redirect(url_for("section_players", guild_id=guild_id))
+                notice = "IP record removed"
+                notice_type = "ok"
+        elif action == "ban_player":
+            pname = request.form.get("player_name", "").strip()
+            reason = request.form.get("reason", "").strip() or "No reason"
+            duration_h = request.form.get("duration_hours", "").strip()
+            fimg = request.files.get("evidence_image")
+            if pname:
+                rmsg = nitrado.ban_player(guild_id, pname) if nitrado.get_client(guild_id) else "Nitrado not configured"
+                expires = None
+                ptype = "ban"
+                if duration_h:
+                    try:
+                        hours = float(duration_h)
+                        if hours > 0:
+                            expires = datetime.now(timezone.utc) + timedelta(hours=hours)
+                            ptype = "tempban"
+                    except Exception:
+                        expires = None
+                pid = guild_settings.add_punishment(guild_id, pname, ptype, reason, user_id, player_id=request.form.get("player_id", ""))
+                self_ev_dir = os.path.join("evidence", str(guild_id), str(pid))
+                if fimg and fimg.filename:
+                    os.makedirs(self_ev_dir, exist_ok=True)
+                    safe_ext = os.path.splitext(fimg.filename)[1].lower()[:10]
+                    if safe_ext not in (".png", ".jpg", ".jpeg", ".gif", ".webp"):
+                        safe_ext = ".png"
+                    fname = f"{uuid4().hex}{safe_ext}"
+                    fimg.save(os.path.join(self_ev_dir, fname))
+                    guild_settings.add_evidence(pid, guild_id, fname, fimg.filename, 0, user_id)
+                notice = f"{pname}: {rmsg}"
+                notice_type = "ok" if "Banned" in rmsg else "error"
+        elif action == "unban_player":
+            pname = request.form.get("player_name", "").strip()
+            if pname:
+                rmsg = nitrado.unban_player(guild_id, pname) if nitrado.get_client(guild_id) else "Nitrado not configured"
+                notice = f"{pname}: {rmsg}"
+                notice_type = "ok" if "Unbanned" in rmsg else "error"
+        elif action == "whitelist_player":
+            pname = request.form.get("player_name", "").strip()
+            reason = request.form.get("reason", "").strip()
+            duration_h = request.form.get("duration_hours", "").strip()
+            if pname:
+                rmsg = nitrado.whitelist_player(guild_id, pname) if nitrado.get_client(guild_id) else "Nitrado not configured"
+                expires = None
+                if duration_h:
+                    try:
+                        hours = float(duration_h)
+                        if hours > 0:
+                            expires = datetime.now(timezone.utc) + timedelta(hours=hours)
+                    except Exception:
+                        expires = None
+                guild_settings.add_whitelist(guild_id, pname, request.form.get("player_id", ""), reason, user_id, expires)
+                notice = f"{pname}: {rmsg}"
+                notice_type = "ok" if "Whitelisted" in rmsg else "error"
+        elif action == "remove_whitelist":
+            entry_id = request.form.get("entry_id", "")
+            try:
+                if guild_settings.remove_whitelist(int(entry_id), guild_id):
+                    notice = "Whitelist entry removed"
+                    notice_type = "ok"
+            except Exception:
+                notice = "Failed to remove entry"
+        elif action == "unban_ip":
+            ban_id = request.form.get("ban_id", "")
+            try:
+                guild_settings.remove_ip_ban(int(ban_id), guild_id)
+                notice = "IP ban removed"
+                notice_type = "ok"
+            except Exception:
+                notice = "Failed to remove IP ban"
+        elif action == "reset_playtime":
+            try:
+                guild_settings.reset_playtime(guild_id)
+                notice = "Playtime tracking data reset"
+                notice_type = "ok"
+            except Exception:
+                notice = "Failed to reset playtime"
+        return redirect(url_for("section_players", guild_id=guild_id, notice=notice, notice_type=notice_type))
+
+    notice = request.args.get("notice", "")
+    notice_type = request.args.get("notice_type", "ok")
 
     # Group IP records by player for an at-a-glance view.
     records = guild_settings.get_ip_records(guild_id, limit=500)
@@ -1306,13 +1399,104 @@ def section_players(guild_id):
             "blacklisted": guild_settings.is_blacklisted(guild_id, name),
         })
 
+    # Nitrado live player roster + playtime
+    players_list = []
+    try:
+        client = nitrado.get_client(guild_id)
+        if client:
+            players_list = client.get_player_list()
+    except Exception:
+        players_list = []
+
+    _playtime_map = {}
+    try:
+        _playtime_map = guild_settings.get_playtime_map(guild_id)
+    except Exception:
+        _playtime_map = {}
+    _by_id = _playtime_map.get("by_id", {}) if isinstance(_playtime_map, dict) else {}
+    _by_name = _playtime_map.get("by_name", {}) if isinstance(_playtime_map, dict) else {}
+
+    def _fmt_secs(_secs):
+        _secs = int(_secs or 0)
+        _parts = []
+        _d, _rem = divmod(_secs, 86400)
+        _h, _rem = divmod(_rem, 3600)
+        _m, _s = divmod(_rem, 60)
+        if _d:
+            _parts.append(f"{_d}d")
+        if _h:
+            _parts.append(f"{_h}h")
+        if _m:
+            _parts.append(f"{_m}m")
+        if not _parts:
+            _parts.append(f"{_s}s")
+        return " ".join(_parts)
+
+    for _p in players_list:
+        _pt = None
+        _pid = str(_p.get("steam_id") or _p.get("id") or "")
+        if _pid and _pid in _by_id:
+            _pt = _by_id[_pid]
+        else:
+            _pn = str(_p.get("name") or "")
+            if _pn:
+                _pt = _by_name.get(_pn.lower())
+        _p["playtime_display"] = _fmt_secs(_pt["seconds"]) if _pt else None
+
+    online_players = [p for p in players_list if p.get("online")]
+    server_status = {"players_list": players_list, "online_players": online_players}
+
+    banned_players = []
+    try:
+        for row in guild_settings.get_punishments(guild_id, limit=500, offset=0):
+            ptype, pname, preason = row[4], row[1], row[5]
+            if ptype not in ("ban", "tempban"):
+                continue
+            pid = row[0]
+            evidence = []
+            for ev in guild_settings.get_evidence(pid):
+                evidence.append({"filename": ev[1], "original_name": ev[2]})
+            banned_players.append({
+                "punishment_id": pid,
+                "player_name": pname,
+                "player_id": row[2] or "",
+                "type": ptype,
+                "reason": preason,
+                "issued_at": row[8],
+                "expires_at": row[9],
+                "executed": row[10],
+                "evidence": evidence,
+            })
+    except Exception:
+        banned_players = []
+
+    whitelisted_players = []
+    try:
+        for row in guild_settings.get_whitelists(guild_id):
+            whitelisted_players.append({
+                "id": row[0],
+                "player_name": row[1],
+                "player_id": row[2] or "",
+                "reason": row[3] or "",
+                "created_at": row[5],
+                "expires_at": row[6],
+            })
+    except Exception:
+        whitelisted_players = []
+
     return render_template(
         "sections/players.html",
         user=get_current_user(),
         guild_id=guild_id,
         active_section="players",
         players=players,
+        tracked_count=len(players),
         ip_bans=guild_settings.get_ip_bans(guild_id),
+        server_status=server_status,
+        banned_players=banned_players,
+        whitelisted_players=whitelisted_players,
+        notice=notice,
+        notice_type=notice_type,
     )
 
 

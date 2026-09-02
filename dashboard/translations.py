@@ -419,6 +419,10 @@ TRANSLATIONS = {
     "anti_abuse_on": {"ar": "مفعّل", "en": "Enabled"},
     "anti_abuse_off": {"ar": "معطّل", "en": "Disabled"},
     "anti_abuse_toggle": {"ar": "تبديل", "en": "Toggle"},
+    "anti_abuse_alt_channel": {"ar": "قناة تنبيه الحسابات البديلة", "en": "Alt Alert Channel"},
+    "anti_abuse_alt_channel_desc": {"ar": "عندما ينضم لاعب عبر حساب بديل (نفس IP)، أرسل تنبيهًا إلى هذه القناة. ضع معرف القناة (ID).", "en": "When a player joins on an alt (same IP), send an alert to this channel. Paste the channel ID."},
+    "anti_abuse_save": {"ar": "حفظ", "en": "Save"},
+    "anti_abuse_clear": {"ar": "مسح", "en": "Clear"},
 
     "players_title": {"ar": "اللاعبون", "en": "Players"},
     "players_desc": {"ar": "عرض اللاعبين المسجلين، عناوين IP الخاصة بهم، واكتشاف الحسابات البديلة", "en": "View tracked players, their IPs, and alt-account detection"},
@@ -429,6 +433,7 @@ TRANSLATIONS = {
     "players_status": {"ar": "الحالة", "en": "Status"},
     "players_blacklisted": {"ar": "محظور", "en": "Blacklisted"},
     "players_none": {"ar": "لا يوجد لاعبون مسجلون بعد. أضف عناوين IP أو فعّل الحصاد التلقائي.", "en": "No players tracked yet. Add IPs or enable auto-harvesting."},
+    "players_ip_tracking_hint": {"ar": "هنا يتم تتبع عناوين IP لكل لاعب مع اكتشاف الحسابات البديلة تلقائيًا عند ظهور عنوان IP مستخدم من قبل.", "en": "IPs per player are tracked here, and alts are auto-flagged when an IP already used by another player appears."},
 
     "cluster_title": {"ar": "مجموعة الخوادم", "en": "Cluster"},
     "cluster_desc": {"ar": "عيّن القبيلة ألفا لكل خادم في الكلاستر", "en": "Designate the alpha tribe for each cluster server"},
