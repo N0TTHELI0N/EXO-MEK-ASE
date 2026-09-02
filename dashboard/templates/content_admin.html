@@ -204,7 +204,7 @@
         <div id="preview_buttons" class="flex flex-wrap gap-2 mt-4"></div>
       </div>
 
-      <p class="text-xs text-gray-500 mt-3">Placeholders shown in the preview come from the command's current saved overrides. Actual default embed text (used when a field is blank) is only visible when the command runs.</p>
+      <p class="text-xs text-gray-500 mt-3">The preview starts with each command's current display (title, description, color). Typing in the fields shows your override; blank fields keep the current message.</p>
     </div>
   </div>
 
@@ -352,6 +352,8 @@
 </div>
 
 <script>
+const CMD_DEFAULT = {{ cmd_default | tojson }};
+
 function addButtonRow() {
   const container = document.getElementById('buttons_container');
   const row = document.createElement('div');
@@ -371,8 +373,11 @@ function updatePreview() {
   const footer = document.getElementById('f_footer')?.value || '';
   const thumb = document.getElementById('f_thumb')?.value || '';
   const image = document.getElementById('f_image')?.value || '';
-  const color = document.getElementById('f_color')?.value || '#5865F2';
+  const color = document.getElementById('f_color')?.value || '';
   const plain = document.getElementById('f_plain_reply')?.value || '';
+
+  const dfltColor = CMD_DEFAULT.color || '#5865F2';
+  const effectiveColor = color || dfltColor;
 
   const plainBox = document.getElementById('preview_plain');
   if (plain) {
@@ -382,10 +387,12 @@ function updatePreview() {
     plainBox.classList.add('hidden');
   }
 
-  document.getElementById('preview_title').textContent = title || 'Command Output';
-  document.getElementById('preview_desc').textContent = desc || '(no custom description — command uses its default text)';
+  const defaultTitle = CMD_DEFAULT.title || 'Command Output';
+  const defaultDesc = CMD_DEFAULT.description || '(no custom description yet)';
+  document.getElementById('preview_title').textContent = title || defaultTitle;
+  document.getElementById('preview_desc').textContent = desc || defaultDesc;
   document.getElementById('preview_footer').textContent = footer;
-  document.getElementById('preview_color_bar').style.background = color;
+  document.getElementById('preview_color_bar').style.background = effectiveColor;
 
   const thumbWrap = document.getElementById('preview_thumb');
   if (thumb) {
@@ -419,6 +426,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const colorInput = document.getElementById('f_color');
   const picker = document.getElementById('f_color_picker');
   if (colorInput && picker && colorInput.value) picker.value = colorInput.value;
+  else if (picker && CMD_DEFAULT.color) picker.value = CMD_DEFAULT.color;
   updatePreview();
 });
 </script>

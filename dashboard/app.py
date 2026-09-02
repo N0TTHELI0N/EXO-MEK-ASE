@@ -18,6 +18,7 @@ import shop_db
 import nitrado
 import commands_manifest
 import bot_i18n
+import command_defaults
 from security import validate_path, sanitize_rcon_name
 from translations import TRANSLATIONS, DASHBOARD_DEFAULT_LANG, DASHBOARD_LANGS
 
@@ -422,6 +423,11 @@ def admin_content():
     if cmd_name and cmd_name not in commands:
         cmd_name = ""
     cmd_cfg = guild_settings.get_command_display(cmd_name) if cmd_name else {}
+    cmd_default = {}
+    if cmd_name:
+        dflt = command_defaults.get_command_default(cmd_name)
+        dflt["description"] = command_defaults.get_command_default_description(cmd_name)
+        cmd_default = dflt
     return render_template(
         "content_admin.html",
         user=get_current_user(),
@@ -435,6 +441,7 @@ def admin_content():
         commands=commands,
         cmd_name=cmd_name,
         cmd_cfg=cmd_cfg,
+        cmd_default=cmd_default,
     )
 
 
