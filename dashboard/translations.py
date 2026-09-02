@@ -423,6 +423,9 @@ TRANSLATIONS = {
     "anti_abuse_alt_channel_desc": {"ar": "عندما ينضم لاعب عبر حساب بديل (نفس IP)، أرسل تنبيهًا إلى هذه القناة. ضع معرف القناة (ID).", "en": "When a player joins on an alt (same IP), send an alert to this channel. Paste the channel ID."},
     "anti_abuse_save": {"ar": "حفظ", "en": "Save"},
     "anti_abuse_clear": {"ar": "مسح", "en": "Clear"},
+    "anti_abuse_auto_ban": {"ar": "حظر تلقائي عند العودة بحساب بديل", "en": "Auto-Ban on Alt Return"},
+    "anti_abuse_auto_ban_desc": {"ar": "عند تفعيل الحظر التلقائي، يُحظر اللاعب تلقائيًا إذا ظهر بحساب بديل (نفس IP) بعد التنبيه. يمكن ضبط عدد التنبيهات المطلوبة قبل الحظر.", "en": "When enabled, auto-ban a player who keeps returning on alt accounts (same IP). Adjust how many linked alts are needed before auto-banning."},
+    "anti_abuse_alt_threshold": {"ar": "عدد الحسابات البديلة المطلوبة للحظر", "en": "Alts Required to Auto-Ban"},
 
     "players_title": {"ar": "اللاعبون", "en": "Players"},
     "players_desc": {"ar": "عرض اللاعبين المسجلين، عناوين IP الخاصة بهم، واكتشاف الحسابات البديلة", "en": "View tracked players, their IPs, and alt-account detection"},

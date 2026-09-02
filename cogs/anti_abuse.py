@@ -1,6 +1,7 @@
 import re
 import asyncio
-from datetime import datetime, timezone
+import json
+from datetime import datetime, timezone, timedelta
 
 import discord
 from discord.ext import commands, tasks
@@ -119,6 +120,63 @@ class AntiAbuse(commands.Cog):
                     await ch.send(embed=embed)
         except Exception as e:
             print(f"[AntiAbuse] Alt notify error: {e}")
+        # Auto-action on repeated alt joins.
+        try:
+            await self._maybe_auto_ban(guild, player, ip, alt)
+        except Exception as e:
+            print(f"[AntiAbuse] Auto-ban error: {e}")
+
+    async def _maybe_auto_ban(self, guild, player, ip, alt):
+        """Auto-ban players who keep returning on alt accounts (configurable threshold)."""
+        if not guild_settings.get_bool_setting(guild.id, "anti_abuse_auto_ban", False):
+            return
+        try:
+            threshold = int(guild_settings.get_setting(guild.id, "anti_abuse_alt_threshold", 2) or 2)
+        except Exception:
+            threshold = 2
+
+        # Count distinct players sharing an IP with this player (cumulative alts).
+        all_alts = guild_settings.find_alts(guild.id, player)
+        distinct = {a for a in all_alts if a != player}
+        # Reliability: only act if the harvested IP is genuinely shared.
+        if not distinct or len(distinct) < threshold:
+            return
+
+        reason = f"Auto-ban: returned on alt account(s) ({', '.join(sorted(distinct)[:5])})"
+        try:
+            result = nitrado.send_rcon(guild.id, f"Ban {sanitize_rcon_name(player)}")
+        except Exception as e:
+            print(f"[AntiAbuse] Auto-ban RCON failed: {e}")
+            return
+
+        punishment_id = guild_settings.add_punishment(
+            guild.id, player, "ban", reason, 0, player_id=None
+        )
+        if result:
+            guild_settings.mark_punishment_executed(punishment_id)
+            # Also IP-ban every linked address to block the alt escape route.
+            for rec in guild_settings.get_player_ips(guild.id, player_name=player):
+                if not guild_settings.is_ip_banned(guild.id, rec["ip"]):
+                    guild_settings.add_ip_ban(guild.id, rec["ip"], f"Auto IP ban: {reason}", 0, player_name=player)
+
+        try:
+            guild_settings.log_admin_action(
+                guild.id, None, "Auto", "auto_alt_ban", player,
+                details={"ip": ip, "alts": sorted(distinct), "reason": reason},
+            )
+        except Exception:
+            pass
+
+        msg = (f"🔨 **Auto-ban:** `{player}` permanently banned for returning on alt account(s) "
+               f"(linked to {', '.join(sorted(distinct)[:5])}).")
+        ch_id = guild_settings.get_setting(guild.id, "anti_abuse_log_channel_id")
+        if ch_id:
+            ch = guild.get_channel(int(ch_id))
+            if ch:
+                try:
+                    await ch.send(msg)
+                except Exception:
+                    pass
 
     @ip_monitor.before_loop
     async def before_ip_monitor(self):
@@ -181,11 +239,14 @@ class AntiAbuse(commands.Cog):
         count = guild_settings.get_admin_action_count(interaction.guild_id)
         ip_bans = len(guild_settings.get_ip_bans(interaction.guild_id))
         ip_records = len(guild_settings.get_ip_records(interaction.guild_id))
+        auto_ban = guild_settings.get_bool_setting(interaction.guild_id, "anti_abuse_auto_ban", False)
+        threshold = guild_settings.get_setting(interaction.guild_id, "anti_abuse_alt_threshold", 2)
         lines = [
             f"**Auto IP harvesting:** {'✅ On' if auto else '❌ Off'}",
             f"**Admin actions logged:** {count}",
             f"**IP records:** {ip_records}",
             f"**IP bans:** {ip_bans}",
+            f"**Auto-ban alts:** {'✅ On' if auto_ban else '❌ Off'} (threshold: {threshold})",
         ]
         embed = discord.Embed(title="🛡️ Anti-Abuse", description="\n".join(lines), color=discord.Color.blurple())
         await interaction.response.send_message(embed=embed, ephemeral=True)

@@ -1246,6 +1246,13 @@ def section_anti_abuse(guild_id):
                 guild_settings.update_setting(guild_id, "anti_abuse_log_channel_id", ch)
             elif request.form.get("clear_alt_channel"):
                 guild_settings.update_setting(guild_id, "anti_abuse_log_channel_id", "")
+        elif action == "toggle_auto_ban":
+            current = guild_settings.get_bool_setting(guild_id, "anti_abuse_auto_ban", False)
+            guild_settings.update_setting(guild_id, "anti_abuse_auto_ban", not current)
+        elif action == "set_alt_threshold":
+            thr = request.form.get("alt_threshold", "").strip()
+            if thr.isdigit() and int(thr) >= 1:
+                guild_settings.update_setting(guild_id, "anti_abuse_alt_threshold", int(thr))
         return redirect(url_for("section_anti_abuse", guild_id=guild_id))
 
     page = int(request.args.get("page", 1))
@@ -1267,6 +1274,8 @@ def section_anti_abuse(guild_id):
         per_page=per_page,
         ip_auto=guild_settings.get_bool_setting(guild_id, "anti_abuse_ip_auto", False),
         alt_channel=guild_settings.get_setting(guild_id, "anti_abuse_log_channel_id", ""),
+        auto_ban=guild_settings.get_bool_setting(guild_id, "anti_abuse_auto_ban", False),
+        alt_threshold=guild_settings.get_setting(guild_id, "anti_abuse_alt_threshold", 2),
         is_owner=str((get_current_user() or {}).get("id", "")) == str(BOT_OWNER_ID),
     )
 

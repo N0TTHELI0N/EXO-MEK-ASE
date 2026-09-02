@@ -79,6 +79,29 @@
         {% endif %}
       </div>
     </form>
+
+    <h3 class="text-lg font-semibold text-white mt-8 mb-1">{{ t('anti_abuse_auto_ban') }}</h3>
+    <p class="text-xs text-gray-400 mb-4">{{ t('anti_abuse_auto_ban_desc') }}</p>
+    <form method="POST" class="space-y-3">
+      <input type="hidden" name="action" value="toggle_auto_ban">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <div class="flex items-center gap-3">
+        <span class="px-2 py-1 rounded text-xs {{ 'bg-green-900/40 text-green-300' if auto_ban else 'bg-gray-700 text-gray-300' }}">
+          {{ t('anti_abuse_on') if auto_ban else t('anti_abuse_off') }}
+        </span>
+        <button class="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg text-sm">{{ t('anti_abuse_toggle') }}</button>
+      </div>
+    </form>
+    <form method="POST" class="mt-3 flex items-end gap-3">
+      <input type="hidden" name="action" value="set_alt_threshold">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <div class="flex-1 max-w-[120px]">
+        <label class="block text-xs text-gray-400 mb-1">{{ t('anti_abuse_alt_threshold') }}</label>
+        <input name="alt_threshold" type="number" min="1" max="10" value="{{ alt_threshold }}"
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm outline-none">
+      </div>
+      <button class="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg text-sm">{{ t('anti_abuse_save') }}</button>
+    </form>
   </div>
 </div>
 
