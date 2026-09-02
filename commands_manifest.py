@@ -106,7 +106,7 @@ COMMANDS = [
     ('staff-payments', 'admin', 'List staff payments (filter by status)'),
     ('staff-pay-status', 'admin', 'Mark a staff payment as paid or pending'),
     ('staff-pay-delete', 'admin', 'Delete a staff payment record'),
-    ('top-servers', 'general', 'View ARK server rankings on TopServers'),
+
     ('setup-tribe-forum', 'tribelog', 'Create a tribe-logs forum with one post per tribe (Admin only)'),
     ('add-tribe-name', 'tribelog', 'Add a tribe name to monitor (Admin only)'),
     ('set-tribelog-enabled', 'tribelog', 'Enable or disable tribe log monitoring (Admin only)'),

@@ -39,7 +39,7 @@ NAME_CATEGORY = {
     "help": "general",
     "set-help-text": "general",
     "set-language": "general",
-    "top-servers": "general",
+
     "top-players": "general",
     "server-status": "server",
     "server-restart": "server",
@@ -65,7 +65,7 @@ FILE_CATEGORY = {
     "leaderboard.py": "leaderboard",
     "moderation.py": "moderation",
     "server_backup.py": "server",
-    "topservers.py": "general",
+
     "playtime.py": "general",
     "chat_bridge.py": "chat",
     "player_ops.py": "moderation",
