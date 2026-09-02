@@ -8,6 +8,10 @@ STRINGS = {
         "ar": "للإدمن فقط.",
         "en": "Admin only.",
     },
+    "automod_profanity_deleted": {
+        "ar": "تم حذف رسالتك لاحتوائها على كلمة ممنوعة.",
+        "en": "Your message was deleted for containing a banned word.",
+    },
     "help_text_updated": {
         "ar": "تم تحديث نص المساعدة لـ **{key}**.",
         "en": "Help text for **{key}** updated.",

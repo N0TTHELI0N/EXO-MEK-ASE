@@ -68,23 +68,6 @@ class Leaderboard(commands.Cog):
         })
         await interaction.response.send_message(f"✅ Leaderboard will auto-update in {channel.mention} every {interval} min.", ephemeral=True)
 
-    # ── /leaderboard-preview ─────────────────────────────────
-    @app_commands.command(name="leaderboard-preview", description="Preview the leaderboard embed")
-    async def leaderboard_preview(self, interaction: discord.Interaction):
-        board = shop_db.get_leaderboard(interaction.guild_id, limit=10)
-        lines = []
-        medals = ["🥇", "🥈", "🥉"]
-        for i, (name, pts) in enumerate(board):
-            prefix = medals[i] if i < 3 else f"#{i+1}"
-            lines.append(f"{prefix} **{name}** — {pts} pts")
-
-        embed = discord.Embed(
-            title="🏆 Leaderboard Preview",
-            description="\n".join(lines) if lines else "No data yet.",
-            color=discord.Color.gold(),
-        )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-
     # ── /set-tribe-owner ─────────────────────────────────────
     @app_commands.command(name="set-tribe-owner", description="Set the tribe owner for a member (Admin only)")
     @app_commands.describe(member="Discord member", tribe_name="Tribe name")

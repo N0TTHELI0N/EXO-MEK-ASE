@@ -5,30 +5,13 @@ import bot_i18n
 import config
 import guild_settings
 import shop_db
+import commands_manifest
 
 
 # ── Command list for autocomplete ───────────────────────────
+# Derived from commands_manifest.py so it always matches reality.
 
-ALL_COMMANDS = [
-    "activate", "help", "top-servers",
-    "set-nitrado-token",
-    "set-log-channel", "set-license", "set-language", "ban-user", "view-guilds", "force-sync-guild",
-    "set-command-permission", "remove-command-permission", "view-command-permissions", "clear-command-permissions",
-    "shop-add", "shop-remove", "shop-list", "shop-edit",
-    "points-add", "points-remove", "points-check", "points-leaderboard",
-    "whitelist-add", "whitelist-remove", "whitelist-restart", "whitelist-link", "whitelist-unlink",
-    "tribelog-config", "tribelog-test", "setup-tribe-forum", "add-tribe-name", "set-tribe-log-source", "set-tribelog-enabled", "set-tribe-log-channel", "set-tribe-log-config", "view-tribelog",
-    "automod-config", "automod-list", "automod-remove",
-    "automod-add-word", "automod-remove-word", "automod-list-words", "automod-clear-words",
-    "backup-create", "backup-list", "backup-restore", "backup-download",
-    "leaderboard-config", "leaderboard-set-channel", "leaderboard-toggle", "leaderboard-force", "leaderboard-sync",
-    "warn", "tempwarn", "warnings", "clear-warnings", "remove-warning",
-    "punish-ban", "punish-tempban", "punish-wipe",
-    "punishment-history", "set-warning-threshold", "set-warning-punishment",
-    "set-warning-tempban-duration", "set-warning-default-expiry", "set-punishment-log",
-    "add-tribe-member", "server-status", "server-restart", "server-stop",
-    "custom", "custom-list", "custom-add", "custom-remove", "ark-command", "setup-forum-logs", "setup-shop-forum",
-]
+ALL_COMMANDS = [cmd[0] for cmd in commands_manifest.COMMANDS]
 
 
 async def command_autocomplete(interaction: discord.Interaction, current: str):

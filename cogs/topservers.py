@@ -4,10 +4,10 @@ from discord.ext import commands
 from discord import app_commands
 import bot_i18n
 import guild_settings
+import config
 
 
 TOP_SERVERS_URL = "https://topg.org/api/servers"
-TOP_SERVERS_KEY = ""  # Set your TopServers API key here or via env
 
 
 # ── Cog ─────────────────────────────────────────────────────
@@ -31,7 +31,7 @@ class TopServers(commands.Cog):
         try:
             async with aiohttp.ClientSession() as session:
                 params = {
-                    "key": TOP_SERVERS_KEY,
+                    "key": config.TOPSERVERS_API_KEY,
                     "game": game_val,
                     "page": 1,
                 }

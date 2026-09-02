@@ -31,3 +31,6 @@ NITRADO_SERVICE_ID = os.getenv("NITRADO_SERVICE_ID", "")
 
 # ---------- Bot Owner ----------
 BOT_OWNER_ID = int(os.getenv("BOT_OWNER_ID", "852876663617572884"))
+
+# ---------- TopServers ----------
+TOPSERVERS_API_KEY = os.getenv("TOPSERVERS_API_KEY", "")

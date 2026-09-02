@@ -8,7 +8,7 @@ import shop_db
 import nitrado
 
 
-GLOBAL_MIN_LEVEL = 11
+DEFAULT_MIN_LEVEL = 11
 
 
 # ── Delivery view (pending channel buttons) ─────────────────
@@ -247,9 +247,10 @@ class Shop(commands.Cog):
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "dino_not_available"), ephemeral=True)
 
         min_lvl, max_lvl, price = match[2], match[3], match[4]
-        if level < GLOBAL_MIN_LEVEL or level > max_lvl:
+        min_level = guild_settings.get_setting(interaction.guild_id, "min_level", DEFAULT_MIN_LEVEL)
+        if level < min_level or level > max_lvl:
             return await interaction.response.send_message(
-                bot_i18n.t(interaction.guild_id, "level_not_allowed", min_level=GLOBAL_MIN_LEVEL, max_level=max_lvl),
+                bot_i18n.t(interaction.guild_id, "level_not_allowed", min_level=min_level, max_level=max_lvl),
                 ephemeral=True,
             )
 
@@ -368,14 +369,13 @@ class Shop(commands.Cog):
 
     # ── /set-min-level ───────────────────────────────────────
     @app_commands.command(name="set-min-level", description="Set the minimum spawn level (Admin only)")
-    @app_commands.describe(level="Minimum level (global)")
+    @app_commands.describe(level="Minimum level allowed when buying dinos")
     async def set_min_level(self, interaction: discord.Interaction, level: int):
         if not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
 
-        global GLOBAL_MIN_LEVEL
-        GLOBAL_MIN_LEVEL = level
-        await interaction.response.send_message(f"✅ Global minimum level set to **{level}**.", ephemeral=True)
+        guild_settings.update_setting(interaction.guild_id, "min_level", level)
+        await interaction.response.send_message(f"✅ Minimum level set to **{level}** for this server.", ephemeral=True)
 
 
 async def setup(bot):

@@ -45,9 +45,9 @@ def _log(guild_id, log_type, sub_type, user, player, cmd=None, details=None):
     )
 
 
-async def _save_evidence(interaction, punishment_id):
+async def _save_evidence(interaction, punishment_id, attachments):
     """Save attached files as evidence."""
-    for attachment in interaction.message.attachments if interaction.message else []:
+    for attachment in attachments or []:
         ext = os.path.splitext(attachment.filename)[1]
         fname = f"{punishment_id}_{attachment.filename}"
         evidence_dir = os.path.join("evidence", str(interaction.guild_id), str(punishment_id))
@@ -193,13 +193,13 @@ class Moderation(commands.Cog):
     # ============================================================
 
     @app_commands.command(name="punish-ban", description="Ban a player with optional evidence")
-    @app_commands.describe(player="Player name", reason="Reason", scope="Ban player only or whole tribe")
+    @app_commands.describe(player="Player name", reason="Reason", scope="Ban player only or whole tribe", evidence="Optional evidence file")
     @app_commands.choices(scope=[
         app_commands.Choice(name="Player only", value="player"),
         app_commands.Choice(name="Whole tribe", value="tribe"),
     ])
     async def punish_ban(self, interaction: discord.Interaction, player: str, reason: str,
-                         scope: app_commands.Choice[str] = None):
+                         scope: app_commands.Choice[str] = None, evidence: discord.Attachment = None):
         if not interaction.user.guild_permissions.ban_members:
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
 
@@ -215,21 +215,21 @@ class Moderation(commands.Cog):
                 interaction.guild_id, p_name, "ban", reason, interaction.user.id,
                 scope=scope_val, player_id=p_id, tribe_name=player if scope_val == "tribe" else None,
             )
-            if interaction.message and interaction.message.attachments:
-                await _save_evidence(interaction, punishment_id)
+            if evidence:
+                await _save_evidence(interaction, punishment_id, [evidence])
             _log(interaction.guild_id, "punishment", "ban", interaction.user, p_name, details={"reason": reason, "scope": scope_val})
             results.append(f"🔨 **{p_name}** banned." if result else f"❌ Failed to ban **{p_name}** (command error)")
 
         await interaction.followup.send("\n".join(results))
 
     @app_commands.command(name="punish-tempban", description="Temporarily ban a player")
-    @app_commands.describe(player="Player name", duration_hours="Ban duration in hours", reason="Reason", scope="Player or whole tribe")
+    @app_commands.describe(player="Player name", duration_hours="Ban duration in hours", reason="Reason", scope="Player or whole tribe", evidence="Optional evidence file")
     @app_commands.choices(scope=[
         app_commands.Choice(name="Player only", value="player"),
         app_commands.Choice(name="Whole tribe", value="tribe"),
     ])
     async def punish_tempban(self, interaction: discord.Interaction, player: str, duration_hours: int,
-                             reason: str, scope: app_commands.Choice[str] = None):
+                             reason: str, scope: app_commands.Choice[str] = None, evidence: discord.Attachment = None):
         if not interaction.user.guild_permissions.ban_members:
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
 
@@ -247,8 +247,8 @@ class Moderation(commands.Cog):
                 scope=scope_val, player_id=p_id, tribe_name=player if scope_val == "tribe" else None,
                 expires_at=expires_at,
             )
-            if interaction.message and interaction.message.attachments:
-                await _save_evidence(interaction, punishment_id)
+            if evidence:
+                await _save_evidence(interaction, punishment_id, [evidence])
             if result:
                 guild_settings.mark_punishment_executed(punishment_id)
             _log(interaction.guild_id, "punishment", "tempban", interaction.user, p_name, details={"reason": reason, "hours": duration_hours, "scope": scope_val})
@@ -257,7 +257,7 @@ class Moderation(commands.Cog):
         await interaction.followup.send("\n".join(results))
 
     @app_commands.command(name="punish-wipe", description="Wipe a player's structures, dinos, or both")
-    @app_commands.describe(player="Player name", wipe_type="What to wipe", reason="Reason", scope="Player or whole tribe")
+    @app_commands.describe(player="Player name", wipe_type="What to wipe", reason="Reason", scope="Player or whole tribe", evidence="Optional evidence file")
     @app_commands.choices(
         wipe_type=[
             app_commands.Choice(name="Structures only", value="wipe_structures"),
@@ -271,7 +271,7 @@ class Moderation(commands.Cog):
     )
     async def punish_wipe(self, interaction: discord.Interaction, player: str,
                           wipe_type: app_commands.Choice[str], reason: str,
-                          scope: app_commands.Choice[str] = None):
+                          scope: app_commands.Choice[str] = None, evidence: discord.Attachment = None):
         if not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
 
@@ -293,8 +293,8 @@ class Moderation(commands.Cog):
                 interaction.guild_id, p_name, wipe_val, reason, interaction.user.id,
                 scope=scope_val, player_id=p_id, tribe_name=player if scope_val == "tribe" else None,
             )
-            if interaction.message and interaction.message.attachments:
-                await _save_evidence(interaction, punishment_id)
+            if evidence:
+                await _save_evidence(interaction, punishment_id, [evidence])
             _log(interaction.guild_id, "punishment", wipe_val, interaction.user, p_name, details={"reason": reason, "scope": scope_val})
             results.append(f"🗑️ **{p_name}** {wipe_val.replace('_', ' ')} done.")
 
@@ -324,8 +324,8 @@ class Moderation(commands.Cog):
     # ============================================================
 
     @app_commands.command(name="blacklist", description="Permanently blacklist a player (also bans them on the server)")
-    @app_commands.describe(player="Player name", reason="Reason", tribe="Whole tribe (optional)")
-    async def blacklist(self, interaction: discord.Interaction, player: str, reason: str, tribe: str = None):
+    @app_commands.describe(player="Player name", reason="Reason", tribe="Whole tribe (optional)", evidence="Optional evidence file")
+    async def blacklist(self, interaction: discord.Interaction, player: str, reason: str, tribe: str = None, evidence: discord.Attachment = None):
         if not interaction.user.guild_permissions.ban_members:
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
 
@@ -345,12 +345,12 @@ class Moderation(commands.Cog):
                     player_id=p_id, tribe_name=tribe or None,
                     scope="tribe" if tribe else "player",
                 )
-                if interaction.message and interaction.message.attachments:
+                if evidence:
                     pid = guild_settings.add_punishment(
                         interaction.guild_id, p_name, "ban", reason, interaction.user.id,
                         scope="tribe" if tribe else "player", player_id=p_id, tribe_name=tribe or None,
                     )
-                    await _save_evidence(interaction, pid)
+                    await _save_evidence(interaction, pid, [evidence])
                 _log(interaction.guild_id, "punishment", "blacklist", interaction.user, p_name,
                      details={"reason": reason, "scope": "tribe" if tribe else "player"})
                 results.append(f"⛔ **{p_name}** blacklisted.")

@@ -111,7 +111,7 @@ class Automod(commands.Cog):
                 except Exception:
                     pass
                 await message.channel.send(
-                    f"⚠️ {message.author.mention} —违规词汇已删除。",
+                    f"⚠️ {message.author.mention} — {bot_i18n.t(guild_id, 'automod_profanity_deleted')}",
                     delete_after=5,
                 )
                 guild_settings.log_action(

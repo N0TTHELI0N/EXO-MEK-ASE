@@ -50,7 +50,6 @@ COMMANDS = [
     ('set-help-text', 'general', 'Override the description of a slash command (Admin only)'),
     ('leaderboard', 'leaderboard', 'Show the tribe leaderboard'),
     ('setup-leaderboard', 'leaderboard', 'Setup automatic leaderboard announcements (Admin only)'),
-    ('leaderboard-preview', 'leaderboard', 'Preview the leaderboard embed'),
     ('set-tribe-owner', 'leaderboard', 'Set the tribe owner for a member (Admin only)'),
     ('add-tribe-points', 'leaderboard', 'Add points to a tribe (Admin only)'),
     ('remove-tribe-points', 'leaderboard', 'Remove points from a tribe (Admin only)'),
