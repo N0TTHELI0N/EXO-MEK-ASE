@@ -531,6 +531,28 @@ def section_overview(guild_id):
         pass
     finally:
         conn.close()
+
+    # Live status from the connected Nitrado server
+    server_status = {}
+    try:
+        info = nitrado.get_server_info(guild_id)
+        server = info.get("server", info) if isinstance(info, dict) else {}
+        if server:
+            status = str(server.get("status") or "unknown")
+            query = server.get("query", {}) or {}
+            players = query.get("players", {}) or {}
+            server_status = {
+                "configured": True,
+                "online": status.lower() == "started",
+                "status_text": status,
+                "server_name": server.get("name") or settings.get("server_name", ""),
+                "map": server.get("details", {}).get("map") or server.get("game", {}).get("map"),
+                "players": players.get("current", 0),
+                "max_players": players.get("max", 0),
+            }
+    except Exception:
+        server_status = {"configured": False}
+
     return render_template(
         "sections/overview.html",
         user=get_current_user(),
@@ -540,6 +562,7 @@ def section_overview(guild_id):
         settings=settings,
         license_valid=guild_settings.is_license_valid(guild_id),
         stats=stats,
+        server_status=server_status,
     )
 
 
@@ -1908,6 +1931,9 @@ def section_commands(guild_id):
     permissions = _build_permissions_dict(guild_id, guild_roles)
     disabled = set(guild_settings.get_disabled_commands(guild_id))
     descriptions = guild_settings.get_command_descriptions(guild_id)
+    messages = guild_settings.get_command_messages(guild_id)
+    user = get_current_user() or {}
+    is_owner = int(user.get("id", 0)) == BOT_OWNER_ID
     custom_commands = guild_settings.get_custom_commands(guild_id)
 
     if request.method == "POST":
@@ -1926,6 +1952,9 @@ def section_commands(guild_id):
             guild_settings.remove_custom_command(guild_id, command)
         elif cmd_action == "set_description" and command:
             guild_settings.set_command_description(guild_id, command, request.form.get("description", ""))
+        elif cmd_action == "set_message" and command:
+            if is_owner:
+                guild_settings.set_command_message(guild_id, command, request.form.get("message", ""))
         elif cmd_action == "toggle_disabled" and command:
             guild_settings.set_command_disabled(guild_id, command, request.form.get("disabled", "0") == "1")
         elif cmd_action == "add_permission" and command:
@@ -1957,6 +1986,7 @@ def section_commands(guild_id):
             "name": cmd,
             "category": cat,
             "description": descriptions.get(cmd, default_desc),
+            "message": messages.get(cmd, ""),
             "disabled": cmd in disabled,
             "permissions": permissions.get(cmd, []),
         })
@@ -1972,6 +2002,7 @@ def section_commands(guild_id):
         custom_perms_dict=custom_perms_dict,
         guild_roles=guild_roles,
         custom_commands=custom_commands,
+        is_owner=is_owner,
         runner_enabled=guild_settings.get_bool_setting(guild_id, "runner_enabled", False),
         category_order=commands_manifest.CATEGORY_ORDER,
         cat_labels=commands_manifest.CATEGORY_LABELS,

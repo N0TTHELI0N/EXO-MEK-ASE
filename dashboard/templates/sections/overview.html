@@ -5,6 +5,34 @@
   <p class="text-gray-400 mt-1">{{ settings.get('server_name', 'ARK Server') }} &mdash; Guild {{ guild_id }}</p>
 </div>
 
+<!-- Server Status -->
+{% if server_status is defined and server_status.get('configured') %}
+<div class="mb-8 bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6">
+  <div class="flex items-center justify-between mb-4">
+    <h3 class="text-lg font-bold text-white">{{ t('overview_server_status') }}</h3>
+    <span class="inline-flex items-center gap-2 px-3 py-1 rounded-xl text-sm font-medium {% if server_status.online %}bg-green-500/10 border border-green-500/20 text-green-400{% else %}bg-red-500/10 border border-red-500/20 text-red-400{% endif %}">
+      <span class="w-2 h-2 rounded-full {% if server_status.online %}bg-green-400{% else %}bg-red-400{% endif %}"></span>
+      {{ t('server_online') if server_status.online else t('server_offline') }}
+    </span>
+  </div>
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <div>
+      <p class="text-xs text-gray-400 font-semibold uppercase tracking-wider">{{ t('server_name') }}</p>
+      <p class="text-white font-medium mt-1">{{ server_status.server_name or '—' }}</p>
+    </div>
+    <div>
+      <p class="text-xs text-gray-400 font-semibold uppercase tracking-wider">{{ t('server_map') }}</p>
+      <p class="text-white font-medium mt-1">{{ server_status.map or '—' }}</p>
+    </div>
+    <div>
+      <p class="text-xs text-gray-400 font-semibold uppercase tracking-wider">{{ t('server_players') }}</p>
+      <p class="text-white font-medium mt-1">{{ server_status.players }} / {{ server_status.max_players }}</p>
+    </div>
+  </div>
+  <a href="/dashboard/{{ guild_id }}/server-control" class="inline-block mt-4 text-sm text-red-400 hover:text-red-300">{{ t('overview_server_open_control') }}</a>
+</div>
+{% endif %}
+
 <!-- License Status -->
 <div class="mb-8">
   {% if license_valid %}

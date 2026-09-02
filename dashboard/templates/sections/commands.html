@@ -222,6 +222,16 @@
                 <textarea name="description" rows="2" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500">{{ c.description }}</textarea>
                 <button type="submit" class="mt-1 text-xs px-3 py-1 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-lg">Save description</button>
               </form>
+              {% if is_owner %}
+              <form method="POST" action="" class="mt-2 border-t border-gray-700 pt-2">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="cmd_action" value="set_message">
+                <input type="hidden" name="command" value="{{ c.name }}">
+                <label class="block text-[11px] font-semibold text-red-400 mb-1">Message override (owner only, plain-text replies only)</label>
+                <textarea name="message" rows="2" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500" placeholder="{{ c.description }}">{{ c.message }}</textarea>
+                <button type="submit" class="mt-1 text-xs px-3 py-1 bg-red-600/20 hover:bg-red-600/30 text-red-300 rounded-lg">Save message override</button>
+              </form>
+              {% endif %}
             </td>
             <td class="px-6 py-4 text-sm text-gray-300">
               <div class="flex flex-wrap gap-2 mb-2">

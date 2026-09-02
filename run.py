@@ -9,6 +9,9 @@ def run_bot():
     import guild_settings
     import shop_db
     import config
+    import command_overrides
+
+    command_overrides.install()
 
     guild_settings.init_db()
     shop_db.init_shop_db()

@@ -10,6 +10,7 @@ import config
 import guild_settings
 import shop_db
 import bot_i18n
+import command_overrides
 
 
 logger = logging.getLogger("main")
@@ -126,6 +127,7 @@ EXTENSIONS = [
 # ── Main ────────────────────────────────────────────────────
 
 def main():
+    command_overrides.install()
     guild_settings.init_db()
     shop_db.init_shop_db()
     shop_db.init_leaderboard_db()

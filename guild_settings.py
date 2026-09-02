@@ -1747,6 +1747,30 @@ def get_command_description(guild_id: int, command: str, default: str = "") -> s
     return get_command_descriptions(guild_id).get(command, default)
 
 
+# ============================================================
+#  COMMAND MESSAGE OVERRIDES
+# ============================================================
+
+def get_command_messages(guild_id: int) -> dict:
+    """Return per-command message overrides for a guild (owner-set reply text)."""
+    value = get_settings(guild_id).get("command_messages", {})
+    return value if isinstance(value, dict) else {}
+
+
+def set_command_message(guild_id: int, command: str, message: str):
+    overrides = get_command_messages(guild_id)
+    message = (message or "").strip()
+    if message:
+        overrides[command] = message
+    else:
+        overrides.pop(command, None)
+    update_setting(guild_id, "command_messages", overrides)
+
+
+def get_command_message(guild_id: int, command: str, default: str = "") -> str:
+    return get_command_messages(guild_id).get(command, default)
+
+
 def has_command_permission(guild_id: int, command: str, member) -> bool:
     """Check if a member has permission to use a command.
 

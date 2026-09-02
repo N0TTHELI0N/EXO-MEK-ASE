@@ -112,6 +112,8 @@ TRANSLATIONS = {
     "overview_total_backups": {"ar": "إجمالي النسخ الاحتياطية", "en": "Total Backups"},
     "overview_license_active": {"ar": "الترخيص نشط", "en": "License Active"},
     "overview_license_expired": {"ar": "الترخيص منتهي", "en": "License Expired"},
+    "overview_server_status": {"ar": "حالة السيرفر", "en": "Server Status"},
+    "overview_server_open_control": {"ar": "فتح لوحة التحكم بالسيرفر", "en": "Open server control"},
 
     "overview_setup_title": {"ar": "ابدأ هنا", "en": "Get Started"},
     "overview_setup_sub": {"ar": "أكمل هذه الخطوات لتفعيل البوت بشكل كامل", "en": "Complete these steps to fully activate the bot"},
