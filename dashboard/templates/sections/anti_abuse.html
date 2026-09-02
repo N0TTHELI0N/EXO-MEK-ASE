@@ -1,0 +1,160 @@
+{% extends "dashboard.html" %}
+{% block dashboard_content %}
+<div class="mb-6">
+  <h2 class="text-2xl font-bold text-white">{{ t('anti_abuse_title') }}</h2>
+  <p class="text-gray-400 mt-1">{{ t('anti_abuse_desc') }}</p>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+  <!-- Audit log -->
+  <div class="lg:col-span-2 bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-lg font-semibold text-white">{{ t('anti_abuse_log') }}</h3>
+      <span class="text-xs text-gray-400">{{ log_total }} {{ t('anti_abuse_action').lower() }}</span>
+    </div>
+    {% if logs %}
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-gray-400 border-b border-gray-700">
+            <th class="py-2 pr-4">{{ t('anti_abuse_time') }}</th>
+            <th class="py-2 pr-4">{{ t('anti_abuse_actor') }}</th>
+            <th class="py-2 pr-4">{{ t('anti_abuse_action') }}</th>
+            <th class="py-2 pr-4">{{ t('anti_abuse_target') }}</th>
+            <th class="py-2">{{ t('anti_abuse_details') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for lg in logs %}
+          <tr class="border-b border-gray-800 hover:bg-gray-800/40">
+            <td class="py-2 pr-4 text-gray-400 whitespace-nowrap">{{ lg.created_at.strftime('%Y-%m-%d %H:%M') if lg.created_at }}</td>
+            <td class="py-2 pr-4 text-gray-200">{{ lg.admin_name or ('<@%s>'|format(lg.admin_user_id)) }}</td>
+            <td class="py-2 pr-4"><span class="px-2 py-0.5 rounded bg-red-900/40 text-red-300 text-xs">{{ lg.action }}</span></td>
+            <td class="py-2 pr-4 text-gray-300">{{ lg.target or '—' }}</td>
+            <td class="py-2 text-gray-400 text-xs">{{ lg.details }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if (page-1)*per_page + logs|length < log_total %}
+    <div class="mt-4 flex gap-3">
+      {% if page > 1 %}
+      <a href="?page={{ page-1 }}" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm">{{ t('logs_prev') }}</a>
+      {% endif %}
+      <a href="?page={{ page+1 }}" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm">{{ t('logs_next') }}</a>
+    </div>
+    {% endif %}
+    {% else %}
+    <p class="text-gray-500">{{ t('anti_abuse_none') }}</p>
+    {% endif %}
+  </div>
+
+  <!-- IP auto-harvesting -->
+  <div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6">
+    <h3 class="text-lg font-semibold text-white mb-3">{{ t('anti_abuse_ip_auto') }}</h3>
+    <p class="text-xs text-gray-400 mb-4">{{ t('anti_abuse_ip_auto_desc') }}</p>
+    <form method="POST">
+      <input type="hidden" name="action" value="toggle_ip_auto">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <span class="px-2 py-1 rounded text-xs {{ 'bg-green-900/40 text-green-300' if ip_auto else 'bg-gray-700 text-gray-300' }}">
+        {{ t('anti_abuse_on') if ip_auto else t('anti_abuse_off') }}
+      </span>
+      <button class="mt-3 px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg text-sm white">
+        {{ t('anti_abuse_toggle') }}
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- IP records -->
+<div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6 mb-6">
+  <h3 class="text-lg font-semibold text-white mb-4">{{ t('anti_abuse_records') }}</h3>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+    <form method="POST" class="flex flex-wrap gap-2 items-end">
+      <input type="hidden" name="action" value="add_ip">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <div class="flex-1 min-w-[120px]">
+        <label class="block text-xs text-gray-400 mb-1">{{ t('anti_abuse_player') }}</label>
+        <input name="player_name" required class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-500 outline-none" placeholder="Player">
+      </div>
+      <div class="flex-1 min-w-[120px]">
+        <label class="block text-xs text-gray-400 mb-1">{{ t('anti_abuse_ip') }}</label>
+        <input name="ip_address" required class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-500 outline-none" placeholder="1.2.3.4">
+      </div>
+      <button class="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg text-sm">{{ t('anti_abuse_add_ip') }}</button>
+    </form>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead><tr class="text-left text-gray-400 border-b border-gray-700">
+        <th class="py-2 pr-4">{{ t('anti_abuse_player') }}</th><th class="py-2 pr-4">{{ t('anti_abuse_ip') }}</th>
+        <th class="py-2 pr-4">{{ t('anti_abuse_source') }}</th><th class="py-2 pr-4">{{ t('anti_abuse_last_seen') }}</th><th></th>
+      </tr></thead>
+      <tbody>
+        {% for r in ip_records %}
+        <tr class="border-b border-gray-800 hover:bg-gray-800/40">
+          <td class="py-2 pr-4 text-gray-200">{{ r.player_name }}</td>
+          <td class="py-2 pr-4 font-mono text-gray-300">{{ r.ip }}</td>
+          <td class="py-2 pr-4 text-gray-400">{{ r.source }}</td>
+          <td class="py-2 pr-4 text-gray-400">{{ r.last_seen.strftime('%Y-%m-%d %H:%M') if r.last_seen }}</td>
+          <td class="py-2 text-right">
+            <form method="POST" class="inline">
+              <input type="hidden" name="action" value="delete_ip">
+              <input type="hidden" name="record_id" value="{{ r.id }}">
+              <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+              <button class="text-red-400 hover:text-red-300 text-xs">{{ t('anti_abuse_delete') }}</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- IP bans -->
+<div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6">
+  <h3 class="text-lg font-semibold text-white mb-4">{{ t('anti_abuse_bans') }}</h3>
+  <form method="POST" class="flex flex-wrap gap-2 items-end mb-4">
+    <input type="hidden" name="action" value="add_ip_ban">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <div class="flex-1 min-w-[120px]">
+      <label class="block text-xs text-gray-400 mb-1">{{ t('anti_abuse_ip') }}</label>
+      <input name="ip_address" required class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm outline-none">
+    </div>
+    <div class="flex-1 min-w-[120px]">
+      <label class="block text-xs text-gray-400 mb-1">{{ t('anti_abuse_reason') }}</label>
+      <input name="reason" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm outline-none">
+    </div>
+    <button class="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg text-sm">{{ t('anti_abuse_ban_ip') }}</button>
+  </form>
+  {% if ip_bans %}
+  <table class="w-full text-sm">
+    <thead><tr class="text-left text-gray-400 border-b border-gray-700">
+      <th class="py-2 pr-4">{{ t('anti_abuse_ip') }}</th><th class="py-2 pr-4">{{ t('anti_abuse_player') }}</th>
+      <th class="py-2 pr-4">{{ t('anti_abuse_reason') }}</th><th></th>
+    </tr></thead>
+    <tbody>
+      {% for b in ip_bans %}
+      <tr class="border-b border-gray-800">
+        <td class="py-2 pr-4 font-mono text-gray-300">{{ b.ip }}</td>
+        <td class="py-2 pr-4 text-gray-400">{{ b.player_name or '—' }}</td>
+        <td class="py-2 pr-4 text-gray-400">{{ b.reason or '—' }}</td>
+        <td class="py-2 text-right">
+          <form method="POST" class="inline">
+            <input type="hidden" name="action" value="remove_ip_ban">
+            <input type="hidden" name="ban_id" value="{{ b.id }}">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <button class="text-green-400 hover:text-green-300 text-xs">{{ t('anti_abuse_unban') }}</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="text-gray-500">{{ t('anti_abuse_bans') }} — none</p>
+  {% endif %}
+</div>
+{% endblock %}

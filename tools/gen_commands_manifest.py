@@ -68,6 +68,10 @@ FILE_CATEGORY = {
     "topservers.py": "general",
     "playtime.py": "general",
     "chat_bridge.py": "chat",
+    "player_ops.py": "moderation",
+    "anti_abuse.py": "moderation",
+    "cluster.py": "server",
+    "staff.py": "admin",
 }
 
 

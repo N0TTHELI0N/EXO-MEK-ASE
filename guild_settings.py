@@ -420,6 +420,80 @@ def init_db():
             """)
             cur.execute("ALTER TABLE nitrado_services ADD COLUMN IF NOT EXISTS display_name TEXT DEFAULT ''")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_nitrado_services_guild ON nitrado_services(guild_id)")
+
+            # ── Anti-abuse / IP / alt detection ──────────────
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS player_ip_records (
+                    id          SERIAL PRIMARY KEY,
+                    guild_id    BIGINT NOT NULL,
+                    player_id   TEXT,
+                    player_name TEXT NOT NULL,
+                    ip_address  TEXT NOT NULL,
+                    source      TEXT DEFAULT 'manual',
+                    first_seen  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    last_seen   TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    UNIQUE (guild_id, player_name, ip_address)
+                )
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_player_ip_guild ON player_ip_records(guild_id, player_name)")
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS player_ip_bans (
+                    id          SERIAL PRIMARY KEY,
+                    guild_id    BIGINT NOT NULL,
+                    ip_address  TEXT UNIQUE NOT NULL,
+                    player_name TEXT,
+                    reason      TEXT,
+                    issued_by   BIGINT,
+                    created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS admin_action_logs (
+                    id          SERIAL PRIMARY KEY,
+                    guild_id    BIGINT NOT NULL,
+                    admin_user_id BIGINT,
+                    admin_name  TEXT,
+                    action      TEXT NOT NULL,
+                    target      TEXT,
+                    details     JSONB,
+                    created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_admin_logs_guild ON admin_action_logs(guild_id, created_at DESC)")
+
+            # ── Cluster alpha system ─────────────────────────
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS cluster_alphas (
+                    id           SERIAL PRIMARY KEY,
+                    guild_id     BIGINT NOT NULL,
+                    cluster_name TEXT NOT NULL,
+                    tribe_name   TEXT NOT NULL,
+                    disc_channel BIGINT,
+                    created_by   BIGINT,
+                    created_at   TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    UNIQUE (guild_id, cluster_name)
+                )
+            """)
+
+            # ── Staff payment system ─────────────────────────
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS staff_payments (
+                    id           SERIAL PRIMARY KEY,
+                    guild_id     BIGINT NOT NULL,
+                    staff_user_id BIGINT,
+                    staff_name   TEXT,
+                    role         TEXT DEFAULT 'staff',
+                    payment_type TEXT,
+                    amount       NUMERIC(10,2) DEFAULT 0,
+                    currency     TEXT DEFAULT 'USD',
+                    status       TEXT DEFAULT 'pending',
+                    note         TEXT,
+                    issued_by    BIGINT,
+                    issued_at    TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    paid_at      TIMESTAMP WITH TIME ZONE
+                )
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_staff_pay_guild ON staff_payments(guild_id, status)")
         conn.commit()
     finally:
         conn.close()
@@ -741,6 +815,20 @@ def get_all_embed_templates(guild_id: int) -> dict:
         merged.update(default)
         merged.update({k: (v or "") for k, v in custom.items() if k in _EMBED_FIELDS})
         templates[key] = merged
+    return templates
+
+
+def get_custom_embed_templates(guild_id: int) -> dict:
+    """Return embed templates that are NOT one of the built-in DEFAULT_EMBEDS."""
+    builtins = set(DEFAULT_EMBEDS.keys())
+    templates = {}
+    for row in get_embed_templates(guild_id):
+        eid = row["id"]
+        if eid in builtins:
+            continue
+        merged = {f: "" for f in _EMBED_FIELDS}
+        merged.update(row["template"])
+        templates[eid] = merged
     return templates
 
 
@@ -2637,4 +2725,339 @@ def reset_playtime(guild_id: int = None):
                 cur.execute("DELETE FROM player_playtime WHERE guild_id = %s", (guild_id,))
         conn.commit()
     finally:
+        conn.close()
+
+
+# ============================================================
+#  PLAYER IP RECORDS (alt detection + IP ban data source)
+# ============================================================
+
+def add_ip_record(guild_id: int, player_name: str, ip_address: str,
+                  player_id: str = None, source: str = "manual"):
+    if not ip_address:
+        return
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO player_ip_records (guild_id, player_id, player_name, ip_address, source, last_seen)
+                VALUES (%s, %s, %s, %s, %s, NOW())
+                ON CONFLICT (guild_id, player_name, ip_address)
+                DO UPDATE SET last_seen = NOW(), player_id = EXCLUDED.player_id
+            """, (guild_id, player_id, player_name, ip_address, source))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_player_ips(guild_id: int, player_name: str = None, player_id: str = None):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            query = ("SELECT id, player_id, player_name, ip_address, source, first_seen, last_seen "
+                     "FROM player_ip_records WHERE guild_id = %s")
+            params = [guild_id]
+            if player_name:
+                query += " AND player_name = %s"
+                params.append(player_name)
+            if player_id:
+                query += " AND player_id = %s"
+                params.append(player_id)
+            query += " ORDER BY last_seen DESC"
+            cur.execute(query, params)
+            return [
+                {"id": r[0], "player_id": r[1], "player_name": r[2], "ip": r[3],
+                 "source": r[4], "first_seen": r[5], "last_seen": r[6]}
+                for r in cur.fetchall()
+            ]
+    finally:
+        conn.close()
+
+
+def get_ip_records(guild_id: int, limit: int = 200):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, player_id, player_name, ip_address, source, first_seen, last_seen
+                FROM player_ip_records WHERE guild_id = %s
+                ORDER BY last_seen DESC LIMIT %s
+            """, (guild_id, limit))
+            return [
+                {"id": r[0], "player_id": r[1], "player_name": r[2], "ip": r[3],
+                 "source": r[4], "first_seen": r[5], "last_seen": r[6]}
+                for r in cur.fetchall()
+            ]
+    finally:
+        conn.close()
+
+
+def find_alts(guild_id: int, player_name: str) -> list:
+    """Return players sharing an IP with the given player (alt detection)."""
+    ips = get_player_ips(guild_id, player_name=player_name)
+    if not ips:
+        return []
+    ip_set = {r["ip"] for r in ips}
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT DISTINCT player_name FROM player_ip_records
+                WHERE guild_id = %s AND ip_address = ANY(%s) AND player_name <> %s
+            """, (guild_id, list(ip_set), player_name))
+            return [r[0] for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+def delete_ip_record(record_id: int, guild_id: int) -> bool:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM player_ip_records WHERE id = %s AND guild_id = %s", (record_id, guild_id))
+            return cur.rowcount > 0
+    finally:
+        conn.commit()
+        conn.close()
+
+
+# ============================================================
+#  IP BANS
+# ============================================================
+
+def add_ip_ban(guild_id: int, ip_address: str, reason: str, issued_by: int, player_name: str = None):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO player_ip_bans (guild_id, ip_address, player_name, reason, issued_by)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (ip_address) DO NOTHING
+            """, (guild_id, ip_address, player_name, reason, issued_by))
+            return cur.rowcount > 0
+    finally:
+        conn.commit()
+        conn.close()
+
+
+def get_ip_bans(guild_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, guild_id, ip_address, player_name, reason, issued_by, created_at
+                FROM player_ip_bans WHERE guild_id = %s ORDER BY created_at DESC
+            """, (guild_id,))
+            return [
+                {"id": r[0], "guild_id": r[1], "ip": r[2], "player_name": r[3],
+                 "reason": r[4], "issued_by": r[5], "created_at": r[6]}
+                for r in cur.fetchall()
+            ]
+    finally:
+        conn.close()
+
+
+def is_ip_banned(guild_id: int, ip_address: str) -> bool:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT 1 FROM player_ip_bans WHERE guild_id = %s AND ip_address = %s LIMIT 1",
+                (guild_id, ip_address),
+            )
+            return cur.fetchone() is not None
+    finally:
+        conn.close()
+
+
+def remove_ip_ban(ban_id: int, guild_id: int) -> bool:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM player_ip_bans WHERE id = %s AND guild_id = %s", (ban_id, guild_id))
+            return cur.rowcount > 0
+    finally:
+        conn.commit()
+        conn.close()
+
+
+# ============================================================
+#  ADMIN ACTION LOG (anti-abuse)
+# ============================================================
+
+def log_admin_action(guild_id: int, admin_user_id, admin_name, action, target=None, details=None):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO admin_action_logs (guild_id, admin_user_id, admin_name, action, target, details)
+                VALUES (%s, %s, %s, %s, %s, %s::jsonb)
+            """, (guild_id, admin_user_id, admin_name, action, target,
+                  json.dumps(details) if details else None))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_admin_action_logs(guild_id: int, limit: int = 200, offset: int = 0):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, admin_user_id, admin_name, action, target, details, created_at
+                FROM admin_action_logs WHERE guild_id = %s
+                ORDER BY created_at DESC LIMIT %s OFFSET %s
+            """, (guild_id, limit, offset))
+            return [
+                {"id": r[0], "admin_user_id": r[1], "admin_name": r[2], "action": r[3],
+                 "target": r[4],
+                 "details": r[5] if isinstance(r[5], dict) else json.loads(r[5]) if r[5] else None,
+                 "created_at": r[6]}
+                for r in cur.fetchall()
+            ]
+    finally:
+        conn.close()
+
+
+def get_admin_action_count(guild_id: int) -> int:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM admin_action_logs WHERE guild_id = %s", (guild_id,))
+            return cur.fetchone()[0]
+    finally:
+        conn.close()
+
+
+# ============================================================
+#  CLUSTER ALPHA SYSTEM
+# ============================================================
+
+def add_cluster(guild_id: int, cluster_name: str, tribe_name: str, disc_channel=None, created_by=None):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO cluster_alphas (guild_id, cluster_name, tribe_name, disc_channel, created_by)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (guild_id, cluster_name)
+                DO UPDATE SET tribe_name = EXCLUDED.tribe_name,
+                              disc_channel = EXCLUDED.disc_channel,
+                              created_by = EXCLUDED.created_by
+            """, (guild_id, cluster_name, tribe_name, disc_channel, created_by))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_clusters(guild_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, guild_id, cluster_name, tribe_name, disc_channel, created_by, created_at
+                FROM cluster_alphas WHERE guild_id = %s ORDER BY created_at
+            """, (guild_id,))
+            return [
+                {"id": r[0], "guild_id": r[1], "cluster_name": r[2], "tribe_name": r[3],
+                 "disc_channel": r[4], "created_by": r[5], "created_at": r[6]}
+                for r in cur.fetchall()
+            ]
+    finally:
+        conn.close()
+
+
+def remove_cluster(cluster_id: int, guild_id: int) -> bool:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM cluster_alphas WHERE id = %s AND guild_id = %s", (cluster_id, guild_id))
+            return cur.rowcount > 0
+    finally:
+        conn.commit()
+        conn.close()
+
+
+def is_cluster_alpha(guild_id: int, tribe_name: str) -> bool:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT 1 FROM cluster_alphas WHERE guild_id = %s AND tribe_name = %s LIMIT 1",
+                (guild_id, tribe_name),
+            )
+            return cur.fetchone() is not None
+    finally:
+        conn.close()
+
+
+# ============================================================
+#  STAFF PAYMENT SYSTEM
+# ============================================================
+
+def add_staff_payment(guild_id: int, staff_user_id, staff_name, role, payment_type,
+                      amount, currency="USD", note=None, issued_by=None):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO staff_payments (guild_id, staff_user_id, staff_name, role, payment_type,
+                                            amount, currency, note, issued_by)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+            """, (guild_id, staff_user_id, staff_name, role, payment_type,
+                  amount, currency, note, issued_by))
+            return cur.fetchone()[0]
+    finally:
+        conn.commit()
+        conn.close()
+
+
+def get_staff_payments(guild_id: int, status=None):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            query = ("SELECT id, guild_id, staff_user_id, staff_name, role, payment_type, amount, "
+                     "currency, status, note, issued_by, issued_at, paid_at "
+                     "FROM staff_payments WHERE guild_id = %s")
+            params = [guild_id]
+            if status:
+                query += " AND status = %s"
+                params.append(status)
+            query += " ORDER BY issued_at DESC"
+            cur.execute(query, params)
+            return [
+                {"id": r[0], "guild_id": r[1], "staff_user_id": r[2], "staff_name": r[3],
+                 "role": r[4], "payment_type": r[5], "amount": float(r[6]), "currency": r[7],
+                 "status": r[8], "note": r[9], "issued_by": r[10],
+                 "issued_at": r[11], "paid_at": r[12]}
+                for r in cur.fetchall()
+            ]
+    finally:
+        conn.close()
+
+
+def set_staff_payment_status(payment_id: int, guild_id: int, status: str):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE staff_payments SET status = %s,
+                    paid_at = CASE WHEN %s = 'paid' THEN NOW() WHEN %s = 'pending' THEN NULL ELSE paid_at END
+                WHERE id = %s AND guild_id = %s
+            """, (status, status, status, payment_id, guild_id))
+            return cur.rowcount > 0
+    finally:
+        conn.commit()
+        conn.close()
+
+
+def delete_staff_payment(payment_id: int, guild_id: int) -> bool:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM staff_payments WHERE id = %s AND guild_id = %s", (payment_id, guild_id))
+            return cur.rowcount > 0
+    finally:
+        conn.commit()
         conn.close()

@@ -192,6 +192,39 @@ def get_guild_roles(guild_id):
     return [{"id": int(r["id"]), "name": r["name"]} for r in roles if r.get("name") != "@everyone"]
 
 
+def get_guild_channels(guild_id):
+    if not BOT_TOKEN:
+        return []
+    resp = requests.get(
+        f"{DISCORD_API_BASE}/guilds/{guild_id}/channels",
+        headers={"Authorization": f"Bot {BOT_TOKEN}"},
+        timeout=10,
+    )
+    if resp.status_code != 200:
+        return []
+    return [{"id": int(ch["id"]), "name": ch.get("name", ""), "type": ch.get("type", 0)}
+            for ch in resp.json() if ch.get("type", 0) in (0, 5)]
+
+
+def get_guild_members(guild_id, limit=100):
+    if not BOT_TOKEN:
+        return []
+    resp = requests.get(
+        f"{DISCORD_API_BASE}/guilds/{guild_id}/members?limit={limit}",
+        headers={"Authorization": f"Bot {BOT_TOKEN}"},
+        timeout=10,
+    )
+    if resp.status_code != 200:
+        return []
+    members = resp.json()
+    if not isinstance(members, list):
+        return []
+    return [{"id": int(m["user"]["id"]), "name": m["user"].get("username", ""),
+             "avatar": m["user"].get("avatar", ""), "nick": m.get("nick")}
+            for m in members if m.get("user")]
+
+
+
 def get_guild_name(guild_id):
     bot_guilds = get_bot_guilds()
     for g in bot_guilds:
@@ -1133,8 +1166,26 @@ def section_punishments(guild_id):
 @validate_csrf
 def section_embeds(guild_id):
     if request.method == "POST":
-        embed_key = request.form.get("embed_key")
-        if embed_key:
+        embed_key = request.form.get("embed_key") or request.form.get("embed_type")
+        action = request.form.get("action", "")
+        if action == "create_custom":
+            name = request.form.get("new_embed_name", "").strip().lower().replace(" ", "_")
+            if name:
+                guild_settings.set_embed_template(
+                    guild_id,
+                    name,
+                    title=request.form.get("title", ""),
+                    description=request.form.get("description", ""),
+                    color=request.form.get("color", "#FFD700"),
+                    image_url=request.form.get("image_url", ""),
+                    thumbnail_url=request.form.get("thumbnail_url", ""),
+                    footer_text=request.form.get("footer_text", ""),
+                    author_name=request.form.get("author_name", ""),
+                )
+        elif action == "delete":
+            if embed_key and embed_key not in guild_settings.DEFAULT_EMBEDS:
+                guild_settings.delete_embed_template(guild_id, embed_key)
+        elif embed_key:
             guild_settings.set_embed_template(
                 guild_id,
                 embed_key,
@@ -1154,6 +1205,192 @@ def section_embeds(guild_id):
         active_section="embeds",
         embeds=guild_settings.get_all_embed_templates(guild_id) or {},
         embed_keys=list(guild_settings.DEFAULT_EMBEDS.keys()),
+        custom_embeds=guild_settings.get_custom_embed_templates(guild_id),
+    )
+
+
+# ── Anti-Abuse (admin abuse logs + IP management) ────────────
+@app.route("/dashboard/<int:guild_id>/anti-abuse", methods=["GET", "POST"])
+@login_required
+@guild_admin_required
+@validate_csrf
+def section_anti_abuse(guild_id):
+    if request.method == "POST":
+        action = request.form.get("action")
+        if action == "toggle_ip_auto":
+            current = guild_settings.get_bool_setting(guild_id, "anti_abuse_ip_auto", False)
+            guild_settings.update_setting(guild_id, "anti_abuse_ip_auto", not current)
+        elif action == "add_ip":
+            name = request.form.get("player_name", "").strip()
+            ip = request.form.get("ip_address", "").strip()
+            pid = request.form.get("player_id", "").strip() or None
+            if name and ip:
+                guild_settings.add_ip_record(guild_id, name, ip, player_id=pid, source="manual")
+        elif action == "delete_ip":
+            rid = request.form.get("record_id")
+            if rid and rid.isdigit():
+                guild_settings.delete_ip_record(int(rid), guild_id)
+        elif action == "add_ip_ban":
+            ip = request.form.get("ip_address", "").strip()
+            reason = request.form.get("reason", "").strip() or "IP ban"
+            pname = request.form.get("player_name", "").strip() or None
+            if ip:
+                guild_settings.add_ip_ban(guild_id, ip, reason, int(get_current_user().get("id", 0)), player_name=pname)
+        elif action == "remove_ip_ban":
+            bid = request.form.get("ban_id")
+            if bid and bid.isdigit():
+                guild_settings.remove_ip_ban(int(bid), guild_id)
+        return redirect(url_for("section_anti_abuse", guild_id=guild_id))
+
+    page = int(request.args.get("page", 1))
+    per_page = 50
+    offset = (page - 1) * per_page
+    logs = guild_settings.get_admin_action_logs(guild_id, limit=200)
+    paged_logs = logs[offset:offset + per_page]
+    return render_template(
+        "sections/anti_abuse.html",
+        user=get_current_user(),
+        guild_id=guild_id,
+        active_section="anti-abuse",
+        settings=guild_settings.get_settings(guild_id),
+        logs=paged_logs,
+        log_total=len(logs),
+        ip_records=guild_settings.get_ip_records(guild_id, limit=200),
+        ip_bans=guild_settings.get_ip_bans(guild_id),
+        page=page,
+        per_page=per_page,
+        ip_auto=guild_settings.get_bool_setting(guild_id, "anti_abuse_ip_auto", False),
+        is_owner=str((get_current_user() or {}).get("id", "")) == str(BOT_OWNER_ID),
+    )
+
+
+@app.route("/dashboard/<int:guild_id>/players", methods=["GET", "POST"])
+@login_required
+@guild_admin_required
+@validate_csrf
+def section_players(guild_id):
+    if request.method == "POST":
+        action = request.form.get("action")
+        if action == "add_ip":
+            name = request.form.get("player_name", "").strip()
+            ip = request.form.get("ip_address", "").strip()
+            pid = request.form.get("player_id", "").strip() or None
+            if name and ip:
+                guild_settings.add_ip_record(guild_id, name, ip, player_id=pid, source="manual")
+        elif action == "delete_ip":
+            rid = request.form.get("record_id")
+            if rid and rid.isdigit():
+                guild_settings.delete_ip_record(int(rid), guild_id)
+        return redirect(url_for("section_players", guild_id=guild_id))
+
+    # Group IP records by player for an at-a-glance view.
+    records = guild_settings.get_ip_records(guild_id, limit=500)
+    by_player = {}
+    for r in records:
+        by_player.setdefault(r["player_name"], []).append(r)
+
+    players = []
+    for name, recs in sorted(by_player.items()):
+        alts = set()
+        for rec in recs:
+            for alt in guild_settings.find_alts(guild_id, name):
+                if alt != name:
+                    alts.add(alt)
+        punishments = guild_settings.get_punishments(guild_id, name)
+        players.append({
+            "name": name,
+            "ips": recs,
+            "alts": sorted(alts),
+            "has_alts": bool(alts),
+            "punishment_count": len(punishments),
+            "blacklisted": guild_settings.is_blacklisted(guild_id, name),
+        })
+
+    return render_template(
+        "sections/players.html",
+        user=get_current_user(),
+        guild_id=guild_id,
+        active_section="players",
+        players=players,
+        ip_bans=guild_settings.get_ip_bans(guild_id),
+    )
+
+
+# ── Cluster Alpha ─────────────────────────────────────────────
+@app.route("/dashboard/<int:guild_id>/cluster", methods=["GET", "POST"])
+@login_required
+@guild_admin_required
+@validate_csrf
+def section_cluster(guild_id):
+    if request.method == "POST":
+        action = request.form.get("action")
+        if action == "add":
+            cluster_name = request.form.get("cluster_name", "").strip()
+            tribe_name = request.form.get("tribe_name", "").strip()
+            ch_id = request.form.get("disc_channel", "").strip()
+            if cluster_name and tribe_name:
+                guild_settings.add_cluster(
+                    guild_id, cluster_name, tribe_name,
+                    disc_channel=int(ch_id) if ch_id.isdigit() else None,
+                    created_by=int(get_current_user().get("id", 0)),
+                )
+        elif action == "delete":
+            cid = request.form.get("cluster_id")
+            if cid and cid.isdigit():
+                guild_settings.remove_cluster(int(cid), guild_id)
+        return redirect(url_for("section_cluster", guild_id=guild_id))
+    return render_template(
+        "sections/cluster.html",
+        user=get_current_user(),
+        guild_id=guild_id,
+        active_section="cluster",
+        clusters=guild_settings.get_clusters(guild_id),
+        guild_channels=get_guild_channels(guild_id),
+    )
+
+
+# ── Staff Payments ───────────────────────────────────────────
+@app.route("/dashboard/<int:guild_id>/staff-payments", methods=["GET", "POST"])
+@login_required
+@guild_admin_required
+@validate_csrf
+def section_staff_payments(guild_id):
+    if request.method == "POST":
+        action = request.form.get("action")
+        if action == "add":
+            member_id = request.form.get("staff_user_id", "").strip()
+            name = request.form.get("staff_name", "").strip()
+            role = request.form.get("role", "staff").strip() or "staff"
+            ptype = request.form.get("payment_type", "payment").strip() or "payment"
+            amount = request.form.get("amount", "0").strip()
+            currency = request.form.get("currency", "USD").strip() or "USD"
+            note = request.form.get("note", "").strip() or None
+            try:
+                amount = float(amount)
+            except ValueError:
+                amount = 0
+            guild_settings.add_staff_payment(
+                guild_id, int(member_id) if member_id.isdigit() else None,
+                name, role, ptype, amount, currency=currency, note=note,
+                issued_by=int(get_current_user().get("id", 0)),
+            )
+        elif action == "set_status":
+            pid = request.form.get("payment_id")
+            status = request.form.get("status")
+            if pid and pid.isdigit() and status in ("pending", "paid"):
+                guild_settings.set_staff_payment_status(int(pid), guild_id, status)
+        elif action == "delete":
+            pid = request.form.get("payment_id")
+            if pid and pid.isdigit():
+                guild_settings.delete_staff_payment(int(pid), guild_id)
+        return redirect(url_for("section_staff_payments", guild_id=guild_id))
+    return render_template(
+        "sections/staff_payments.html",
+        user=get_current_user(),
+        guild_id=guild_id,
+        active_section="staff-payments",
+        payments=guild_settings.get_staff_payments(guild_id),
+        guild_members=get_guild_members(guild_id),
     )
 
 

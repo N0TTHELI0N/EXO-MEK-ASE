@@ -192,13 +192,21 @@ class Moderation(commands.Cog):
     #  PUNISHMENTS
     # ============================================================
 
-    @app_commands.command(name="punish-ban", description="Ban a player with optional evidence")
-    @app_commands.describe(player="Player name", reason="Reason", scope="Ban player only or whole tribe", evidence="Optional evidence file")
+    @app_commands.command(name="punish-ban", description="Ban (or temp-ban) a player with optional evidence and IP ban")
+    @app_commands.describe(
+        player="Player name",
+        reason="Reason",
+        duration_hours="Ban duration in hours. Leave empty for a permanent ban",
+        ip_ban="Also ban the player's recorded IP addresses (kicks + bans account)",
+        scope="Ban player only or whole tribe",
+        evidence="Optional evidence file",
+    )
     @app_commands.choices(scope=[
         app_commands.Choice(name="Player only", value="player"),
         app_commands.Choice(name="Whole tribe", value="tribe"),
     ])
     async def punish_ban(self, interaction: discord.Interaction, player: str, reason: str,
+                         duration_hours: int = None, ip_ban: bool = False,
                          scope: app_commands.Choice[str] = None, evidence: discord.Attachment = None):
         if not interaction.user.guild_permissions.ban_members:
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
@@ -206,44 +214,17 @@ class Moderation(commands.Cog):
         await interaction.response.defer()
         scope_val = scope.value if scope else "player"
         players = await self._get_scope_players(interaction.guild_id, player, scope_val)
+        punishment_type = "tempban" if duration_hours else "ban"
+        expires_at = None
+        if duration_hours:
+            expires_at = datetime.now(timezone.utc) + timedelta(hours=duration_hours)
 
         results = []
         for p_name, p_id in players:
             safe_name = sanitize_rcon_name(p_name)
             result = await _send_rcon(interaction.guild_id, f"Ban {safe_name}")
             punishment_id = guild_settings.add_punishment(
-                interaction.guild_id, p_name, "ban", reason, interaction.user.id,
-                scope=scope_val, player_id=p_id, tribe_name=player if scope_val == "tribe" else None,
-            )
-            if evidence:
-                await _save_evidence(interaction, punishment_id, [evidence])
-            _log(interaction.guild_id, "punishment", "ban", interaction.user, p_name, details={"reason": reason, "scope": scope_val})
-            results.append(f"🔨 **{p_name}** banned." if result else f"❌ Failed to ban **{p_name}** (command error)")
-
-        await interaction.followup.send("\n".join(results))
-
-    @app_commands.command(name="punish-tempban", description="Temporarily ban a player")
-    @app_commands.describe(player="Player name", duration_hours="Ban duration in hours", reason="Reason", scope="Player or whole tribe", evidence="Optional evidence file")
-    @app_commands.choices(scope=[
-        app_commands.Choice(name="Player only", value="player"),
-        app_commands.Choice(name="Whole tribe", value="tribe"),
-    ])
-    async def punish_tempban(self, interaction: discord.Interaction, player: str, duration_hours: int,
-                             reason: str, scope: app_commands.Choice[str] = None, evidence: discord.Attachment = None):
-        if not interaction.user.guild_permissions.ban_members:
-            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
-
-        await interaction.response.defer()
-        scope_val = scope.value if scope else "player"
-        players = await self._get_scope_players(interaction.guild_id, player, scope_val)
-        expires_at = datetime.now(timezone.utc) + timedelta(hours=duration_hours)
-
-        results = []
-        for p_name, p_id in players:
-            safe_name = sanitize_rcon_name(p_name)
-            result = await _send_rcon(interaction.guild_id, f"Ban {safe_name}")
-            punishment_id = guild_settings.add_punishment(
-                interaction.guild_id, p_name, "tempban", reason, interaction.user.id,
+                interaction.guild_id, p_name, punishment_type, reason, interaction.user.id,
                 scope=scope_val, player_id=p_id, tribe_name=player if scope_val == "tribe" else None,
                 expires_at=expires_at,
             )
@@ -251,8 +232,28 @@ class Moderation(commands.Cog):
                 await _save_evidence(interaction, punishment_id, [evidence])
             if result:
                 guild_settings.mark_punishment_executed(punishment_id)
-            _log(interaction.guild_id, "punishment", "tempban", interaction.user, p_name, details={"reason": reason, "hours": duration_hours, "scope": scope_val})
-            results.append(f"🔨 **{p_name}** temp-banned for **{duration_hours}h**." if result else f"❌ Failed to ban **{p_name}**")
+
+            msg = f"🔨 **{p_name}** banned."
+            if punishment_type == "tempban":
+                msg = f"🔨 **{p_name}** temp-banned for **{duration_hours}h**."
+
+            if ip_ban:
+                ips = guild_settings.get_player_ips(interaction.guild_id, player_name=p_name)
+                ip_results = []
+                for rec in ips:
+                    ip = rec["ip"]
+                    if guild_settings.is_ip_banned(interaction.guild_id, ip):
+                        continue
+                    guild_settings.add_ip_ban(interaction.guild_id, ip, f"IP ban: {reason}", interaction.user.id, player_name=p_name)
+                    ip_results.append(ip)
+                if ip_results:
+                    msg += f"\n📡 Banned {len(ip_results)} IP address(es)."
+                else:
+                    msg += "\nℹ️ No recorded IPs to ban (add IPs in dashboard Anti-Abuse tab)."
+                _log(interaction.guild_id, "punishment", "ip_ban", interaction.user, p_name, details={"ips": ip_results, "reason": reason})
+
+            _log(interaction.guild_id, "punishment", punishment_type, interaction.user, p_name, details={"reason": reason, "scope": scope_val, "hours": duration_hours})
+            results.append(msg if result else f"❌ Failed to ban **{p_name}** (command error)")
 
         await interaction.followup.send("\n".join(results))
 

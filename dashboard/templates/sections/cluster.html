@@ -1,0 +1,56 @@
+{% extends "dashboard.html" %}
+{% block dashboard_content %}
+<div class="mb-6">
+  <h2 class="text-2xl font-bold text-white">{{ t('cluster_title') }}</h2>
+  <p class="text-gray-400 mt-1">{{ t('cluster_desc') }}</p>
+</div>
+
+<div class="mb-6 bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6">
+  <h3 class="text-lg font-semibold text-white mb-4">{{ t('cluster_add') }}</h3>
+  <form method="POST" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
+    <input type="hidden" name="action" value="add">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <div>
+      <label class="block text-xs text-gray-400 mb-1">{{ t('cluster_name') }}</label>
+      <input name="cluster_name" required placeholder="{{ t('cluster_ph_name') }}"
+             class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm outline-none">
+    </div>
+    <div>
+      <label class="block text-xs text-gray-400 mb-1">{{ t('cluster_tribe') }}</label>
+      <input name="tribe_name" required placeholder="{{ t('cluster_ph_tribe') }}"
+             class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm outline-none">
+    </div>
+    <div>
+      <label class="block text-xs text-gray-400 mb-1">{{ t('cluster_channel') }}</label>
+      <select name="disc_channel" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm outline-none">
+        <option value="">—</option>
+        {% for ch in guild_channels %}
+        <option value="{{ ch.id }}">{{ ch.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button class="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg text-sm text-white">{{ t('cluster_add') }}</button>
+  </form>
+</div>
+
+{% if clusters %}
+<div class="space-y-3">
+  {% for c in clusters %}
+  <div class="flex items-center justify-between bg-gray-800/50 border border-gray-700/50 rounded-2xl p-5">
+    <div>
+      <div class="text-white font-semibold">🌐 {{ c.cluster_name }}</div>
+      <div class="text-sm text-gray-400 mt-1">⭐ {{ c.tribe_name }} {% if c.disc_channel %}· <#{{ c.disc_channel }}>{% endif %}</div>
+    </div>
+    <form method="POST">
+      <input type="hidden" name="action" value="delete">
+      <input type="hidden" name="cluster_id" value="{{ c.id }}">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <button class="text-red-400 hover:text-red-300 text-sm">{{ t('cluster_delete') }}</button>
+    </form>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<p class="text-gray-500">{{ t('cluster_none') }}</p>
+{% endif %}
+{% endblock %}

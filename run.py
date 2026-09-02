@@ -41,6 +41,10 @@ def run_bot():
         "cogs.topservers",
         "cogs.help",
         "cogs.playtime",
+        "cogs.player_ops",
+        "cogs.anti_abuse",
+        "cogs.cluster",
+        "cogs.staff",
     ]
 
     @bot.event

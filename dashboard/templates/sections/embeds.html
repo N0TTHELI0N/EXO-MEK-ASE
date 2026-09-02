@@ -5,6 +5,60 @@
   <p class="text-gray-400 mt-1">{{ t('embeds_desc') }}</p>
 </div>
 
+<!-- Create Custom Embed -->
+<div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-5 mb-6">
+  <h3 class="text-sm font-semibold text-white mb-1">➕ Custom Embed Creator</h3>
+  <p class="text-xs text-gray-400 mb-4">Design a new custom embed template and give it a name. It will appear in the grid below.</p>
+  <form method="POST" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
+    <input type="hidden" name="action" value="create_custom">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <div>
+      <label class="block text-xs text-gray-300 mb-1">{{ t('embeds_title_f') }}</label>
+      <input type="text" name="new_embed_name" required placeholder="embed_name"
+             class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none">
+    </div>
+    <div>
+      <label class="block text-xs text-gray-300 mb-1">{{ t('embeds_title_f') }}</label>
+      <input type="text" name="title" placeholder="Title"
+             class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none">
+    </div>
+    <div>
+      <label class="block text-xs text-gray-300 mb-1">{{ t('embeds_color') }}</label>
+      <input type="color" name="color" value="#5865F2"
+             class="w-full h-10 bg-gray-700 border border-gray-600 rounded-lg cursor-pointer">
+    </div>
+    <button class="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg text-sm text-white">{{ t('save') }}</button>
+  </form>
+</div>
+
+<!-- Custom Embeds grid -->
+{% if custom_embeds %}
+<div class="mb-6">
+  <h3 class="text-sm font-semibold text-gray-400 uppercase mb-3">Custom Embeds</h3>
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    {% for key, embed in custom_embeds.items() %}
+    <div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-5">
+      <div class="flex items-start gap-3 mb-2">
+        <div class="w-1 h-10 rounded-full flex-shrink-0" style="background-color: {{ embed.color or '#5865F2' }};"></div>
+        <div class="min-w-0 flex-1">
+          <h4 class="text-sm font-semibold text-white">⭐ {{ key | replace('_', ' ') | title }}</h4>
+          <p class="text-xs text-gray-400 truncate">{{ embed.title or '' }}</p>
+          <p class="text-xs text-gray-500 line-clamp-1 mt-1">{{ (embed.description or '')[:60] }}</p>
+        </div>
+      </div>
+      <form method="POST" class="mt-2">
+        <input type="hidden" name="action" value="delete">
+        <input type="hidden" name="embed_key" value="{{ key }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <button class="text-red-400 hover:text-red-300 text-xs"
+                onclick="return confirm('Delete custom embed {{ key }}?')">Delete</button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
 <!-- Embed Grid -->
 <div id="embed-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
   {% for key, embed in embeds.items() %}
