@@ -42,9 +42,8 @@
               {% if oc is defined and oc %}
               <div class="text-green-400/80">{{ t('servers_online') }} : {{ '{:,}'.format(oc) }}</div>
               {% endif %}
-              {% set off = (mc - oc) if (mc is defined and mc and oc is defined and oc) else none %}
-              {% if off is defined and off is not none and off >= 0 %}
-              <div class="text-gray-600">{{ t('servers_offline') }} : {{ '{:,}'.format(off) }}</div>
+              {% if mc is defined and mc %}
+              <div class="text-gray-600">{{ t('servers_total') }} : {{ '{:,}'.format(mc) }}</div>
               {% endif %}
             </div>
           </div>
@@ -76,9 +75,9 @@
               {% if oc is defined and oc %}
               <div class="text-green-400/80">{{ t('servers_online') }} : {{ '{:,}'.format(oc) }}</div>
               {% endif %}
-              {% set off = (mc - oc) if (mc is defined and mc and oc is defined and oc) else none %}
-              {% if off is defined and off is not none and off >= 0 %}
-              <div class="text-gray-600">{{ t('servers_offline') }} : {{ '{:,}'.format(off) }}</div>
+              {% set mc = guild.approximate_member_count | default(guild.member_count, true) %}
+              {% if mc is defined and mc %}
+              <div class="text-gray-600">{{ t('servers_total') }} : {{ '{:,}'.format(mc) }}</div>
               {% endif %}
             </div>
           </div>
