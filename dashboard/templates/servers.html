@@ -36,8 +36,17 @@
               {% set mc = guild.approximate_member_count | default(guild.member_count, true) %}
               {% set oc = guild.approximate_presence_count %}
               {% if mc is defined and mc %}{{ '{:,}'.format(mc) }}{% else %}?{% endif %} {{ t('servers_members') }}
-              {% if oc is defined and oc %}· {{ '{:,}'.format(oc) }} {{ t('servers_online') }}{% endif %}
             </p>
+            <div class="text-xs text-gray-500 mt-1 space-y-0.5">
+              {% set oc = guild.approximate_presence_count %}
+              {% if oc is defined and oc %}
+              <div class="text-green-400/80">{{ t('servers_online') }} : {{ '{:,}'.format(oc) }}</div>
+              {% endif %}
+              {% set off = (mc - oc) if (mc is defined and mc and oc is defined and oc) else none %}
+              {% if off is defined and off is not none and off >= 0 %}
+              <div class="text-gray-600">{{ t('servers_offline') }} : {{ '{:,}'.format(off) }}</div>
+              {% endif %}
+            </div>
           </div>
           <svg class="w-5 h-5 text-gray-600 group-hover:text-red-400 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
         </div>
@@ -61,8 +70,17 @@
               {% set mc = guild.approximate_member_count | default(guild.member_count, true) %}
               {% set oc = guild.approximate_presence_count %}
               {% if mc is defined and mc %}{{ '{:,}'.format(mc) }}{% else %}?{% endif %} {{ t('servers_members') }}
-              {% if oc is defined and oc %}· {{ '{:,}'.format(oc) }} {{ t('servers_online') }}{% endif %}
             </p>
+            <div class="text-xs text-gray-500 mt-1 space-y-0.5">
+              {% set oc = guild.approximate_presence_count %}
+              {% if oc is defined and oc %}
+              <div class="text-green-400/80">{{ t('servers_online') }} : {{ '{:,}'.format(oc) }}</div>
+              {% endif %}
+              {% set off = (mc - oc) if (mc is defined and mc and oc is defined and oc) else none %}
+              {% if off is defined and off is not none and off >= 0 %}
+              <div class="text-gray-600">{{ t('servers_offline') }} : {{ '{:,}'.format(off) }}</div>
+              {% endif %}
+            </div>
           </div>
         </div>
         <a href="{{ bot_invite_base }}&guild_id={{ guild.id }}&disable_guild_select=true"
