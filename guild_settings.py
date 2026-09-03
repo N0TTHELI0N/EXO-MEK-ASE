@@ -38,7 +38,9 @@ def _decrypt(value: str) -> str:
 def get_conn():
     if not DATABASE_URL:
         raise RuntimeError("DATABASE_URL not set")
-    return psycopg2.connect(DATABASE_URL)
+    # Short connect timeout so an unreachable Postgres can't hang startup/requests
+    # (this was causing Render "Port scan timeout" deploys).
+    return psycopg2.connect(DATABASE_URL, connect_timeout=5)
 
 
 def init_db():
