@@ -577,14 +577,14 @@ def dashboard():
     guilds = get_user_admin_guilds()
     for g in guilds:
         g["bot_in"] = g["id"] in bot_guild_ids
-        # Prefer the user guild list's own count (works for all servers the user
+        # Prefer the user guild list's own counts (works for all servers the user
         # administers, whether or not the bot is in them).
-        count = g.get("approximate_member_count")
-        if count is None:
-            # Fallback: the bot can only query guilds it's in.
-            count = (bot_guilds.get(g["id"]) or {}).get("approximate_member_count")
-        if count is not None:
-            g["approximate_member_count"] = count
+        for f in ("approximate_member_count", "approximate_presence_count"):
+            val = g.get(f)
+            if val is None:
+                val = (bot_guilds.get(g["id"]) or {}).get(f)
+            if val is not None:
+                g[f] = val
     guilds.sort(key=lambda g: not g.get("bot_in", False))
     return render_template(
         "servers.html",
