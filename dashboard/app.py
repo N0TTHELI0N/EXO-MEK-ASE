@@ -138,7 +138,7 @@ def get_user_guilds():
     if not token:
         return []
     resp = requests.get(
-        f"{DISCORD_API_BASE}/users/@me/guilds",
+        f"{DISCORD_API_BASE}/users/@me/guilds?with_counts=true",
         headers={"Authorization": f"Bearer {token}"},
         timeout=10,
     )
@@ -575,29 +575,14 @@ def dashboard():
     bot_guild_ids = get_bot_guild_ids()
     bot_guilds = {g["id"]: g for g in get_bot_guilds()}
     guilds = get_user_admin_guilds()
-    user_token = session.get("access_token")
     for g in guilds:
         g["bot_in"] = g["id"] in bot_guild_ids
-        count = (bot_guilds.get(g["id"]) or {}).get("approximate_member_count")
+        # Prefer the user guild list's own count (works for all servers the user
+        # administers, whether or not the bot is in them).
+        count = g.get("approximate_member_count")
         if count is None:
-            # Bot can only query guilds it's in; use user's OAuth2 token for others.
-            if g["bot_in"] and BOT_TOKEN:
-                hdr = {"Authorization": f"Bot {BOT_TOKEN}"}
-            elif user_token:
-                hdr = {"Authorization": f"Bearer {user_token}"}
-            else:
-                hdr = None
-            if hdr:
-                try:
-                    rg = requests.get(
-                        f"{DISCORD_API_BASE}/guilds/{g['id']}?with_counts=true",
-                        headers=hdr,
-                        timeout=10,
-                    )
-                    if rg.status_code == 200:
-                        count = rg.json().get("approximate_member_count")
-                except requests.RequestException:
-                    count = None
+            # Fallback: the bot can only query guilds it's in.
+            count = (bot_guilds.get(g["id"]) or {}).get("approximate_member_count")
         if count is not None:
             g["approximate_member_count"] = count
     guilds.sort(key=lambda g: not g.get("bot_in", False))
