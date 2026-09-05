@@ -180,7 +180,7 @@ class ChatBridge(commands.Cog):
                 self._post_guard.append((1, time.time()))
                 try:
                     await target.send(
-                        f"💬 **{channel}** · **{player}**: {message[:1900]}"
+                        bot_i18n.t(guild.id, "chat_forward_line", channel=channel, player=player, message=message[:1900])
                     )
                     posts_this_tick += 1
                 except Exception:
@@ -233,12 +233,12 @@ class ChatBridge(commands.Cog):
         try:
             if punishment == "warn":
                 guild_settings.add_warning(guild_id, player, reason, 0)
-                await self._send_punish_alert(guild_id, f"⚠️ **{player}** auto-**warned** ({reason})")
+                await self._send_punish_alert(guild_id, bot_i18n.t(guild_id, "auto_warned_chat", player=player, reason=reason))
             elif punishment == "blacklist":
                 await asyncio_to_thread(nitrado.send_rcon, guild_id, f"Ban {safe}")
                 guild_settings.add_blacklist(guild_id, player, reason, 0, scope="player")
                 guild_settings.add_punishment(guild_id, player, "ban", reason, 0, scope="player")
-                await self._send_punish_alert(guild_id, f"⛔ **{player}** auto-**blacklisted** ({reason})")
+                await self._send_punish_alert(guild_id, bot_i18n.t(guild_id, "auto_blacklisted_chat", player=player, reason=reason))
             elif punishment == "tempban":
                 hours = int(rule.get("tempban_hours") or guild_settings.get_setting(guild_id, "warning_tempban_hours", 24) or 24)
                 expires = datetime.now(timezone.utc) + timedelta(hours=hours)
@@ -246,11 +246,11 @@ class ChatBridge(commands.Cog):
                 pid = guild_settings.add_punishment(guild_id, player, "tempban", reason, 0, expires_at=expires)
                 if resp:
                     guild_settings.mark_punishment_executed(pid)
-                await self._send_punish_alert(guild_id, f"🔨 **{player}** auto **temp-banned** for {hours}h ({reason})")
+                await self._send_punish_alert(guild_id, bot_i18n.t(guild_id, "auto_tempbanned_chat", player=player, hours=hours, reason=reason))
             elif punishment == "ban":
                 await asyncio_to_thread(nitrado.send_rcon, guild_id, f"Ban {safe}")
                 guild_settings.add_punishment(guild_id, player, "ban", reason, 0)
-                await self._send_punish_alert(guild_id, f"🔨 **{player}** auto-**banned** ({reason})")
+                await self._send_punish_alert(guild_id, bot_i18n.t(guild_id, "auto_banned_chat", player=player, reason=reason))
         except Exception:
             pass
 
@@ -303,7 +303,8 @@ class ChatBridge(commands.Cog):
         if not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
         guild_settings.update_chat_bridge_config(interaction.guild_id, enabled=enabled)
-        await interaction.response.send_message(f"✅ In-game chat bridge **{'enabled' if enabled else 'disabled'}.**", ephemeral=True)
+        state = bot_i18n.t(interaction.guild_id, "enabled_word") if enabled else bot_i18n.t(interaction.guild_id, "disabled_word")
+        await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "chat_bridge_toggled", state=state), ephemeral=True)
 
     @app_commands.command(name="chat-bridge-channel", description="Set the one-way in-game chat log channel (Admin)")
     @app_commands.describe(channel="Channel for in-game chat log")
@@ -311,7 +312,7 @@ class ChatBridge(commands.Cog):
         if not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
         guild_settings.update_chat_bridge_config(interaction.guild_id, log_channel_id=channel.id)
-        await interaction.response.send_message(f"✅ One-way chat log channel set to {channel.mention}", ephemeral=True)
+        await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "chat_log_channel_set", channel=channel.mention), ephemeral=True)
 
     @app_commands.command(name="chat-bridge-relay", description="Set the two-way Discord<->game relay channel (Admin)")
     @app_commands.describe(channel="Channel to relay game chat both ways")
@@ -319,7 +320,7 @@ class ChatBridge(commands.Cog):
         if not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
         guild_settings.update_chat_bridge_config(interaction.guild_id, relay_channel_id=channel.id)
-        await interaction.response.send_message(f"✅ Two-way relay channel set to {channel.mention}", ephemeral=True)
+        await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "relay_channel_set", channel=channel.mention), ephemeral=True)
 
     @app_commands.command(name="chat-bridge-toggle", description="Control chat bridge direction (Admin)")
     @app_commands.describe(
@@ -339,7 +340,7 @@ class ChatBridge(commands.Cog):
             guild_settings.update_chat_bridge_config(interaction.guild_id, **kwargs)
         cfg = guild_settings.get_chat_bridge_config(interaction.guild_id)
         await interaction.response.send_message(
-            f"⚙️ Chat bridge: in→discord: **{cfg.get('relay_out')}**, discord→game: **{cfg.get('relay_in')}**", ephemeral=True,
+            bot_i18n.t(interaction.guild_id, "chat_bridge_state", relay_out=cfg.get('relay_out'), relay_in=cfg.get('relay_in')), ephemeral=True,
         )
 
     @app_commands.command(name="chat-bridge-send", description="Send a message into the game chat as Discord (Admin)")
@@ -351,19 +352,21 @@ class ChatBridge(commands.Cog):
         if ok:
             self._remember_sent("game", f"[Discord] {interaction.user.display_name}".lower(), message)
             guild_settings.add_chat_log(interaction.guild_id, "outgoing", interaction.user.display_name, message, raw_line=message, direction="out")
-        await interaction.response.send_message("✅ Message sent into game chat." if ok else "❌ Failed — server not reachable.", ephemeral=True)
+        await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "chat_bridge_sent") if ok else bot_i18n.t(interaction.guild_id, "chat_bridge_failed"), ephemeral=True)
 
     @app_commands.command(name="chat-bridge-status", description="Show chat bridge status")
     async def chat_bridge_status(self, interaction: discord.Interaction):
         cfg = guild_settings.get_chat_bridge_config(interaction.guild_id)
+        on = bot_i18n.t(interaction.guild_id, "on_state")
+        off = bot_i18n.t(interaction.guild_id, "off_state")
         lines = [
-            f"**Enabled:** {cfg.get('enabled')}",
-            f"**Log channel:** <#{cfg.get('log_channel_id')}>" if cfg.get("log_channel_id") else "**Log channel:** not set",
-            f"**Relay channel:** <#{cfg.get('relay_channel_id')}>" if cfg.get("relay_channel_id") else "**Relay channel:** not set",
-            f"**In→Discord (relay_out):** {cfg.get('relay_out')}",
-            f"**Discord→Game (relay_in):** {cfg.get('relay_in')}",
+            bot_i18n.t(interaction.guild_id, "status_enabled_field", state=on if cfg.get('enabled') else off),
+            bot_i18n.t(interaction.guild_id, "status_log_channel_field", channel=f"<#{cfg.get('log_channel_id')}>") if cfg.get("log_channel_id") else bot_i18n.t(interaction.guild_id, "status_log_channel_not_set"),
+            bot_i18n.t(interaction.guild_id, "status_relay_channel_field", channel=f"<#{cfg.get('relay_channel_id')}>") if cfg.get("relay_channel_id") else bot_i18n.t(interaction.guild_id, "status_relay_channel_not_set"),
+            bot_i18n.t(interaction.guild_id, "status_relay_out_field", state=on if cfg.get('relay_out') else off),
+            bot_i18n.t(interaction.guild_id, "status_relay_in_field", state=on if cfg.get('relay_in') else off),
         ]
-        embed = discord.Embed(title="💬 Chat Bridge", description="\n".join(lines), color=discord.Color.blurple())
+        embed = discord.Embed(title=bot_i18n.t(interaction.guild_id, "chat_bridge_title"), description="\n".join(lines), color=discord.Color.blurple())
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     # ── auto-detection rule commands ─────────────────────────
@@ -388,8 +391,9 @@ class ChatBridge(commands.Cog):
         except ValueError as e:
             return await interaction.response.send_message(f"❌ {e}", ephemeral=True)
         self._auto_rules_cache.pop(interaction.guild_id, None)
+        suffix = bot_i18n.t(interaction.guild_id, "hours_suffix", hours=tempban_hours) if punishment.value == "tempban" else ""
         await interaction.response.send_message(
-            f"✅ Trigger **{word}** added → **{punishment.value}**" + (f" ({tempban_hours}h)" if punishment.value == "tempban" else "") + ".", ephemeral=True,
+            bot_i18n.t(interaction.guild_id, "trigger_added", word=word, punishment=punishment.value, suffix=suffix), ephemeral=True,
         )
 
     @app_commands.command(name="auto-chat-remove", description="Remove an in-game chat trigger word (Admin)")
@@ -404,7 +408,7 @@ class ChatBridge(commands.Cog):
                 removed = True
         self._auto_rules_cache.pop(interaction.guild_id, None)
         await interaction.response.send_message(
-            f"✅ Removed trigger **{word}**." if removed else f"❌ Trigger **{word}** not found.", ephemeral=True,
+            bot_i18n.t(interaction.guild_id, "trigger_removed", word=word) if removed else bot_i18n.t(interaction.guild_id, "trigger_not_found", word=word), ephemeral=True,
         )
 
     @app_commands.command(name="auto-chat-list", description="List all in-game chat trigger words (Admin)")
@@ -413,13 +417,13 @@ class ChatBridge(commands.Cog):
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
         rules = guild_settings.get_chat_auto_rules(interaction.guild_id)
         if not rules:
-            return await interaction.response.send_message("No auto-detection triggers yet.", ephemeral=True)
+            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "no_auto_triggers"), ephemeral=True)
         lines = []
         for r in rules:
-            extra = f" ({r['tempban_hours']}h)" if r["punishment"] == "tempban" else ""
+            extra = bot_i18n.t(interaction.guild_id, "hours_suffix", hours=r['tempban_hours']) if r["punishment"] == "tempban" else ""
             state = '✅' if r['enabled'] else '⛔'
             lines.append(f"#{r['id']} {state} **{r['word']}** → `{r['punishment']}{extra}`")
-        embed = discord.Embed(title="In-Game Chat Triggers", description="\n".join(lines[:20]), color=discord.Color.dark_red())
+        embed = discord.Embed(title=bot_i18n.t(interaction.guild_id, "triggers_title"), description="\n".join(lines[:20]), color=discord.Color.dark_red())
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @app_commands.command(name="auto-chat-toggle", description="Enable or disable a trigger word (Admin)")
@@ -429,7 +433,8 @@ class ChatBridge(commands.Cog):
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
         guild_settings.set_chat_auto_rule_enabled(word_id, interaction.guild_id, enabled)
         self._auto_rules_cache.pop(interaction.guild_id, None)
-        await interaction.response.send_message(f"✅ Rule #{word_id} **{'enabled' if enabled else 'disabled'}.**", ephemeral=True)
+        state = bot_i18n.t(interaction.guild_id, "enabled_word") if enabled else bot_i18n.t(interaction.guild_id, "disabled_word")
+        await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "trigger_toggled", word_id=word_id, state=state), ephemeral=True)
 
     @app_commands.command(name="auto-chat-clear", description="Remove all in-game chat trigger words (Admin)")
     async def auto_chat_clear(self, interaction: discord.Interaction):
@@ -437,7 +442,7 @@ class ChatBridge(commands.Cog):
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
         guild_settings.clear_chat_auto_rules(interaction.guild_id)
         self._auto_rules_cache.pop(interaction.guild_id, None)
-        await interaction.response.send_message("🗑️ All in-game chat triggers removed.", ephemeral=True)
+        await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "triggers_cleared"), ephemeral=True)
 
     @app_commands.command(name="auto-chat-cooldown", description="Set minutes between repeated auto-punishments per player+word (Admin)")
     @app_commands.describe(minutes="Cooldown in minutes")
@@ -445,7 +450,7 @@ class ChatBridge(commands.Cog):
         if not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
         guild_settings.update_setting(interaction.guild_id, "chat_auto_cooldown_minutes", max(0, minutes))
-        await interaction.response.send_message(f"⏱️ Auto-punishment cooldown set to **{max(0, minutes)}** minutes.", ephemeral=True)
+        await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "cooldown_set", minutes=max(0, minutes)), ephemeral=True)
 
 
 async def asyncio_to_thread(fn, *args, **kwargs):

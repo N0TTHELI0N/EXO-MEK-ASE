@@ -204,7 +204,7 @@ class Tribelog(commands.Cog):
                     reason="Tribe log forum - created by setup-tribe-forum",
                 )
             except Exception as e:
-                return await interaction.followup.send(f"❌ Could not create forum: {e}", ephemeral=True)
+                return await interaction.followup.send(bot_i18n.t(interaction.guild_id, "forum_error", error=e), ephemeral=True)
 
         guild_settings.set_tribe_forum_config(interaction.guild_id, forum.id)
 
@@ -220,7 +220,8 @@ class Tribelog(commands.Cog):
             lines = bot_i18n.t(interaction.guild_id, "tribe_forum_no_tribes")
 
         await interaction.followup.send(
-            f"✅ Tribe-logs forum ready.\nForum: {forum.mention}\nMonitored tribes ({len(created)}):\n{lines}",
+            bot_i18n.t(interaction.guild_id, "tribelog_forum_ready",
+                       forum=forum.mention, count=len(created), lines=lines),
             ephemeral=True,
         )
 
@@ -233,7 +234,7 @@ class Tribelog(commands.Cog):
 
         name = tribe_name.strip()
         if not name:
-            return await interaction.response.send_message("❌ Empty tribe name.", ephemeral=True)
+            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "tribe_empty_name"), ephemeral=True)
         _add_known_tribe(interaction.guild_id, name)
         self.known_tribes_cache.setdefault(interaction.guild_id, set()).add(name)
         # create a thread right away if forum is set
@@ -242,7 +243,7 @@ class Tribelog(commands.Cog):
             forum = interaction.guild.get_channel(cfg["forum_id"])
             if isinstance(forum, discord.ForumChannel):
                 await self._ensure_tribe_thread(interaction.guild, forum, name)
-        await interaction.response.send_message(f"✅ **{name}** added to monitoring list.", ephemeral=True)
+        await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "tribe_name_added", name=name), ephemeral=True)
 
     async def _ensure_tribe_thread(self, guild: discord.Guild, forum: discord.ForumChannel, tribe: str) -> int | None:
         """Reuse or create the forum thread for a tribe. Returns thread id."""
@@ -345,8 +346,8 @@ class Tribelog(commands.Cog):
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
 
         _update_tribelog_config(interaction.guild_id, enabled=enabled)
-        status = "enabled" if enabled else "disabled"
-        await interaction.response.send_message(f"✅ Tribe log monitoring **{status}**.", ephemeral=True)
+        status = bot_i18n.t(interaction.guild_id, "enabled_word" if enabled else "disabled_word")
+        await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "tribelog_toggled", status=status), ephemeral=True)
 
     # ── /set-tribe-log-channel ───────────────────────────────
     @app_commands.command(name="set-tribe-log-channel", description="Set the channel for tribe log alerts (Admin only)")
@@ -356,7 +357,7 @@ class Tribelog(commands.Cog):
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
 
         _update_tribelog_config(interaction.guild_id, channel_id=channel.id)
-        await interaction.response.send_message(f"✅ Tribe log channel set to {channel.mention}", ephemeral=True)
+        await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "tribelog_channel_set", channel=channel.mention), ephemeral=True)
 
     # ── /set-tribe-log-source ────────────────────────────────
     @app_commands.command(name="set-tribe-log-source", description="Configure tribe log source (Admin only)")
@@ -370,7 +371,7 @@ class Tribelog(commands.Cog):
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
 
         _update_tribelog_config(interaction.guild_id, log_source=source.value, log_path=log_path)
-        await interaction.response.send_message(f"✅ Tribe log source set to **{source.value}**.", ephemeral=True)
+        await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "tribelog_source_set", source=source.value), ephemeral=True)
 
     # ── /set-tribe-log-config ────────────────────────────────
     @app_commands.command(name="set-tribe-log-config", description="Set Nitrado credentials for tribe log (Admin only)")
@@ -387,7 +388,7 @@ class Tribelog(commands.Cog):
         if service_id:
             kwargs["nitrado_service_id"] = service_id
         _update_tribelog_config(interaction.guild_id, **kwargs)
-        await interaction.response.send_message("✅ Tribe log Nitrado config saved.", ephemeral=True)
+        await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "tribelog_config_saved"), ephemeral=True)
 
     # ── /view-tribelog ───────────────────────────────────────
     @app_commands.command(name="view-tribelog", description="View monitored tribes and log config")
@@ -414,7 +415,7 @@ class Tribelog(commands.Cog):
         if tribe_name:
             lines.append(f"\n**Tribe '{tribe_name}' status:** Monitored ({counts.get(tribe_name, 0)} events)")
 
-        embed = discord.Embed(title="📋 Tribe Log Config", description="\n".join(lines), color=discord.Color.blurple())
+        embed = discord.Embed(title=bot_i18n.t(interaction.guild_id, "tribelog_config_title"), description="\n".join(lines), color=discord.Color.blurple())
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
 

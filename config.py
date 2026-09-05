@@ -12,6 +12,18 @@ DISCORD_CLIENT_ID = os.getenv("DISCORD_CLIENT_ID", "")
 DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET", "")
 DASHBOARD_SECRET = os.getenv("DASHBOARD_SECRET", "change-me")
 
+# Public URL of the web dashboard (used by /help). Set via env DASHBOARD_BASE_URL.
+DASHBOARD_BASE_URL = os.getenv(
+    "DASHBOARD_BASE_URL", "https://exo-mek-dashboard.onrender.com"
+).rstrip("/")
+
+BOT_INVITE_URL = os.getenv(
+    "BOT_INVITE_URL",
+    "https://discord.com/oauth2/authorize"
+    f"?client_id={DISCORD_CLIENT_ID}&scope=bot%20applications.commands"
+    "&permissions=268443647",
+)
+
 # ---------- Logging channel ----------
 LOG_CHANNEL_ID = int(os.getenv("LOG_CHANNEL_ID", "1533171396547575859"))
 AUTOMOD_LOG_CHANNEL_ID = int(os.getenv("AUTOMOD_LOG_CHANNEL_ID", "1533171396547575859"))

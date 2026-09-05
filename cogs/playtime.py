@@ -69,7 +69,7 @@ class Playtime(commands.Cog):
             prefix = medals[i] if i < 3 else f"#{i+1}"
             lines.append(f"{prefix} **{p['player_name']}** — {_fmt(p['seconds'])}")
         embed = discord.Embed(
-            title="🏆 Top Players",
+            title=bot_i18n.t(interaction.guild_id, "top_players_title"),
             description="\n".join(lines) if lines else bot_i18n.t(interaction.guild_id, "playtime_no_data"),
             color=discord.Color.gold(),
         )

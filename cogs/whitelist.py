@@ -176,7 +176,7 @@ class Whitelist(commands.Cog):
                     if ch_id:
                         ch = guild.get_channel(ch_id)
                         if ch:
-                            await ch.send(f"🔄 Server restarted. Whitelist updated at {now.strftime('%H:%M')} UTC.")
+                            await ch.send(bot_i18n.t(gid, "server_restarted_whitelist", time=now.strftime('%H:%M')))
 
     @daily_restart_check.before_loop
     async def before_daily_restart(self):
@@ -190,7 +190,7 @@ class Whitelist(commands.Cog):
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
 
         guild_settings.update_setting(interaction.guild_id, "whitelist_path", path)
-        await interaction.response.send_message(f"✅ Whitelist directory set to:\n`{path}`", ephemeral=True)
+        await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "whitelist_path_set", path=path), ephemeral=True)
 
     # ── /set-restart-time ────────────────────────────────────
     @app_commands.command(name="set-restart-time", description="Set the daily restart time for whitelist activation (Admin only)")
@@ -217,9 +217,10 @@ class Whitelist(commands.Cog):
             member = interaction.guild.get_member(disc_id)
             name = member.display_name if member else f"User#{disc_id}"
             status_emoji = "✅" if status == "active" else "⏳"
-            lines.append(f"{status_emoji} **{name}** → `{psn}` [{status}]")
+            status_word = bot_i18n.t(interaction.guild_id, "whitelist_status_active_word") if status == "active" else bot_i18n.t(interaction.guild_id, "whitelist_status_pending_word")
+            lines.append(f"{status_emoji} **{name}** → `{psn}` [{status_word}]")
 
-        embed = discord.Embed(title="📋 Whitelist", description="\n".join(lines), color=discord.Color.blurple())
+        embed = discord.Embed(title=bot_i18n.t(interaction.guild_id, "whitelist_title"), description="\n".join(lines), color=discord.Color.blurple())
         await interaction.response.send_message(embed=embed)
 
     # ── /wl-list ─────────────────────────────────────────────
@@ -230,7 +231,7 @@ class Whitelist(commands.Cog):
 
         players = _get_linked_players(interaction.guild_id)
         lines = [f"<@{p[0]}> → `{p[1]}` [{p[2]}]" for p in players]
-        await interaction.response.send_message("\n".join(lines) or "No linked players.", ephemeral=True)
+        await interaction.response.send_message("\n".join(lines) or bot_i18n.t(interaction.guild_id, "whitelist_none_linked"), ephemeral=True)
 
     # ── /linkpsn ─────────────────────────────────────────────
     @app_commands.command(name="linkpsn", description="Link your PSN ID to your Discord account for whitelist")
@@ -266,7 +267,7 @@ class Whitelist(commands.Cog):
         status = player[1]
         status_text = bot_i18n.t(interaction.guild_id, "whitelist_active") if status == "active" else bot_i18n.t(interaction.guild_id, "whitelist_pending_restart")
         await interaction.response.send_message(
-            f"**PSN:** `{player[0]}`\n**Status:** {status_text}",
+            bot_i18n.t(interaction.guild_id, "wl_status_body", psn=player[0], status=status_text),
             ephemeral=True,
         )
 

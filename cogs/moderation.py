@@ -89,7 +89,7 @@ class Moderation(commands.Cog):
                     if log_ch:
                         ch = guild.get_channel(log_ch)
                         if ch:
-                            await ch.send(f"✅ **{player_name}** automatically unbanned (tempban expired).")
+                            await ch.send(bot_i18n.t(guild_id, "auto_unbanned", player=player_name))
                 _log(guild_id, "punishment", "tempban_unban", None, player_name)
 
     @check_tempbans.before_loop
@@ -122,7 +122,7 @@ class Moderation(commands.Cog):
         threshold = guild_settings.get_setting(interaction.guild_id, "warning_threshold", 3)
         auto_punishment = guild_settings.get_setting(interaction.guild_id, "warning_punishment", "ban")
 
-        msg = f"⚠️ **{player}** warned. Reason: {reason}\nActive warnings: **{count}/{threshold}**"
+        msg = bot_i18n.t(interaction.guild_id, "warning_msg", player=player, reason=reason, count=count, threshold=threshold)
 
         if count >= threshold:
             punishment_result = await self._execute_auto_punishment(interaction, player, auto_punishment)
@@ -143,7 +143,7 @@ class Moderation(commands.Cog):
         _log(interaction.guild_id, "punishment", "warn", interaction.user, player, details={"reason": reason, "expires_hours": duration_hours, "warning_count": count})
 
         threshold = guild_settings.get_setting(interaction.guild_id, "warning_threshold", 3)
-        msg = f"⚠️ **{player}** temp-warned for **{duration_hours}h**. Reason: {reason}\nActive warnings: **{count}/{threshold}**"
+        msg = bot_i18n.t(interaction.guild_id, "tempwarn_msg", player=player, hours=duration_hours, reason=reason, count=count, threshold=threshold)
 
         if count >= threshold:
             auto_punishment = guild_settings.get_setting(interaction.guild_id, "warning_punishment", "ban")
@@ -158,7 +158,7 @@ class Moderation(commands.Cog):
     async def warnings(self, interaction: discord.Interaction, player: str):
         rows = guild_settings.get_warnings(interaction.guild_id, player)
         if not rows:
-            return await interaction.response.send_message(f"No warnings found for **{player}**.", ephemeral=True)
+            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "no_warnings", player=player), ephemeral=True)
 
         lines = []
         for wid, reason, warned_by, warned_at, expires_at, active in rows:
@@ -166,7 +166,7 @@ class Moderation(commands.Cog):
             exp = f" (expires {expires_at.strftime('%Y-%m-%d %H:%M')})" if expires_at else ""
             lines.append(f"#{wid} | {status}{exp} | {reason} | <@{warned_by}> | {warned_at.strftime('%Y-%m-%d %H:%M')}")
 
-        embed = discord.Embed(title=f"Warnings for {player}", description="\n".join(lines[:20]), color=discord.Color.orange())
+        embed = discord.Embed(title=bot_i18n.t(interaction.guild_id, "warnings_title", player=player), description="\n".join(lines[:20]), color=discord.Color.orange())
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @app_commands.command(name="clear-warnings", description="Clear all warnings for a player")
@@ -177,7 +177,7 @@ class Moderation(commands.Cog):
 
         guild_settings.clear_warnings(interaction.guild_id, player)
         _log(interaction.guild_id, "punishment", "warn", interaction.user, player, details={"action": "clear_all"})
-        await interaction.response.send_message(f"✅ All warnings cleared for **{player}**.")
+        await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "warnings_cleared", player=player))
 
     @app_commands.command(name="remove-warning", description="Remove a specific warning by ID")
     @app_commands.describe(warning_id="Warning ID from /warnings")
@@ -186,7 +186,7 @@ class Moderation(commands.Cog):
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
 
         guild_settings.remove_warning(warning_id)
-        await interaction.response.send_message(f"✅ Warning #{warning_id} removed.")
+        await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "warning_removed", warning_id=warning_id))
 
     # ============================================================
     #  PUNISHMENTS
@@ -233,9 +233,9 @@ class Moderation(commands.Cog):
             if result:
                 guild_settings.mark_punishment_executed(punishment_id)
 
-            msg = f"🔨 **{p_name}** banned."
+            msg = bot_i18n.t(interaction.guild_id, "punishment_banned", player=p_name)
             if punishment_type == "tempban":
-                msg = f"🔨 **{p_name}** temp-banned for **{duration_hours}h**."
+                msg = bot_i18n.t(interaction.guild_id, "punishment_tempbanned", player=p_name, hours=duration_hours)
 
             if ip_ban:
                 ips = guild_settings.get_player_ips(interaction.guild_id, player_name=p_name)
@@ -247,13 +247,13 @@ class Moderation(commands.Cog):
                     guild_settings.add_ip_ban(interaction.guild_id, ip, f"IP ban: {reason}", interaction.user.id, player_name=p_name)
                     ip_results.append(ip)
                 if ip_results:
-                    msg += f"\n📡 Banned {len(ip_results)} IP address(es)."
+                    msg += f"\n{bot_i18n.t(interaction.guild_id, 'ips_banned_count', count=len(ip_results))}"
                 else:
-                    msg += "\nℹ️ No recorded IPs to ban (add IPs in dashboard Anti-Abuse tab)."
+                    msg += f"\n{bot_i18n.t(interaction.guild_id, 'no_ips_to_ban')}"
                 _log(interaction.guild_id, "punishment", "ip_ban", interaction.user, p_name, details={"ips": ip_results, "reason": reason})
 
             _log(interaction.guild_id, "punishment", punishment_type, interaction.user, p_name, details={"reason": reason, "scope": scope_val, "hours": duration_hours})
-            results.append(msg if result else f"❌ Failed to ban **{p_name}** (command error)")
+            results.append(msg if result else bot_i18n.t(interaction.guild_id, "ban_failed", player=p_name))
 
         await interaction.followup.send("\n".join(results))
 
@@ -297,7 +297,7 @@ class Moderation(commands.Cog):
             if evidence:
                 await _save_evidence(interaction, punishment_id, [evidence])
             _log(interaction.guild_id, "punishment", wipe_val, interaction.user, p_name, details={"reason": reason, "scope": scope_val})
-            results.append(f"🗑️ **{p_name}** {wipe_val.replace('_', ' ')} done.")
+            results.append(bot_i18n.t(interaction.guild_id, "wipe_done", player=p_name, wipe=wipe_val.replace('_', ' ')))
 
         await interaction.followup.send("\n".join(results))
 
@@ -306,7 +306,7 @@ class Moderation(commands.Cog):
     async def punishment_history(self, interaction: discord.Interaction, player: str):
         rows = guild_settings.get_punishments(interaction.guild_id, player)
         if not rows:
-            return await interaction.response.send_message(f"No punishments found for **{player}**.", ephemeral=True)
+            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "no_punishments", player=player), ephemeral=True)
 
         lines = []
         for r in rows:
@@ -317,7 +317,7 @@ class Moderation(commands.Cog):
             exp_str = f" (expires {exp.strftime('%Y-%m-%d %H:%M')})" if exp else ""
             lines.append(f"#{pid} | {ptype} | {status}{exp_str} | {reason} | <@{issued_by}> | {issued_at.strftime('%Y-%m-%d %H:%M')}")
 
-        embed = discord.Embed(title=f"Punishment History: {player}", description="\n".join(lines[:20]), color=discord.Color.red())
+        embed = discord.Embed(title=bot_i18n.t(interaction.guild_id, "punishment_history_title", player=player), description="\n".join(lines[:20]), color=discord.Color.red())
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     # ============================================================
@@ -354,9 +354,9 @@ class Moderation(commands.Cog):
                     await _save_evidence(interaction, pid, [evidence])
                 _log(interaction.guild_id, "punishment", "blacklist", interaction.user, p_name,
                      details={"reason": reason, "scope": "tribe" if tribe else "player"})
-                results.append(f"⛔ **{p_name}** blacklisted.")
+                results.append(bot_i18n.t(interaction.guild_id, "blacklisted", player=p_name))
             else:
-                results.append(f"ℹ️ **{p_name}** is already blacklisted.")
+                results.append(bot_i18n.t(interaction.guild_id, "already_blacklisted", player=p_name))
 
         await interaction.followup.send("\n".join(results))
 
@@ -374,9 +374,10 @@ class Moderation(commands.Cog):
             if guild_settings.remove_blacklist(row[0], interaction.guild_id):
                 removed += 1
         _log(interaction.guild_id, "punishment", "unblacklist", interaction.user, player)
-        msg = f"✅ **{player}** removed from blacklist ({removed} record{'s' if removed != 1 else ''})."
+        suffix = "" if removed == 1 else "s"
+        msg = bot_i18n.t(interaction.guild_id, "unblacklisted", player=player, count=removed, suffix=suffix)
         if result is None:
-            msg += "\n`UnBan` failed (server not reachable / not configured) — record still removed."
+            msg += bot_i18n.t(interaction.guild_id, "unban_failed_note")
         await interaction.response.send_message(msg)
 
     @app_commands.command(name="blacklist-list", description="List all blacklisted players")
@@ -386,7 +387,7 @@ class Moderation(commands.Cog):
 
         rows = guild_settings.get_blacklists(interaction.guild_id)
         if not rows:
-            return await interaction.response.send_message("No players are blacklisted.", ephemeral=True)
+            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "no_blacklists"), ephemeral=True)
 
         lines = []
         for r in rows:
@@ -394,7 +395,7 @@ class Moderation(commands.Cog):
             tribe_str = f" (tribe: {tribe})" if tribe else ""
             lines.append(f"#{bid} | {pname}{tribe_str} | {reason} | by <@{issued_by}> | {issued_at.strftime('%Y-%m-%d %H:%M')}")
 
-        embed = discord.Embed(title="Blacklisted Players", description="\n".join(lines[:20]), color=discord.Color.dark_red())
+        embed = discord.Embed(title=bot_i18n.t(interaction.guild_id, "blacklisted_title"), description="\n".join(lines[:20]), color=discord.Color.dark_red())
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     # ============================================================
@@ -407,7 +408,7 @@ class Moderation(commands.Cog):
         if not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
         guild_settings.update_setting(interaction.guild_id, "warning_threshold", count)
-        await interaction.response.send_message(f"✅ Warning threshold set to **{count}**.")
+        await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "warning_threshold_set", count=count))
 
     @app_commands.command(name="set-warning-punishment", description="Set auto-punishment type when threshold reached")
     @app_commands.choices(punishment_type=[
@@ -421,7 +422,7 @@ class Moderation(commands.Cog):
         if not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
         guild_settings.update_setting(interaction.guild_id, "warning_punishment", punishment_type.value)
-        await interaction.response.send_message(f"✅ Auto-punishment set to **{punishment_type.name}**.")
+        await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "auto_punishment_set", type=punishment_type.name))
 
     @app_commands.command(name="set-warning-tempban-duration", description="Set tempban duration for auto-punishment")
     @app_commands.describe(hours="Duration in hours")
@@ -429,7 +430,7 @@ class Moderation(commands.Cog):
         if not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
         guild_settings.update_setting(interaction.guild_id, "warning_tempban_hours", hours)
-        await interaction.response.send_message(f"✅ Auto-tempban duration set to **{hours}h**.")
+        await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "auto_tempban_duration_set", hours=hours))
 
     @app_commands.command(name="set-warning-default-expiry", description="Set default expiry for tempwarn")
     @app_commands.describe(hours="Default expiry in hours (default 72)")
@@ -437,7 +438,7 @@ class Moderation(commands.Cog):
         if not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
         guild_settings.update_setting(interaction.guild_id, "warning_default_expiry_hours", hours)
-        await interaction.response.send_message(f"✅ Default tempwarn expiry set to **{hours}h**.")
+        await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "tempwarn_expiry_set", hours=hours))
 
     @app_commands.command(name="set-punishment-log", description="Set channel for punishment log messages")
     @app_commands.describe(channel="Channel for punishment logs")
@@ -445,7 +446,7 @@ class Moderation(commands.Cog):
         if not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
         guild_settings.update_setting(interaction.guild_id, "punishment_log_channel_id", channel.id)
-        await interaction.response.send_message(f"✅ Punishment log channel set to {channel.mention}")
+        await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "punishment_log_set", channel=channel.mention))
 
     @app_commands.command(name="add-tribe-member", description="Manually add a player to a tribe")
     @app_commands.describe(player="Player name", tribe="Tribe name")
@@ -454,7 +455,7 @@ class Moderation(commands.Cog):
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
         guild_settings.add_tribe_member(interaction.guild_id, tribe, player)
         _log(interaction.guild_id, "tribe", "member_added", interaction.user, player, details={"tribe": tribe})
-        await interaction.response.send_message(f"✅ **{player}** added to tribe **{tribe}**.")
+        await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "tribe_member_added", player=player, tribe=tribe))
 
     # ============================================================
     #  SERVER MANAGEMENT
@@ -466,7 +467,7 @@ class Moderation(commands.Cog):
 
         headers, service_id = _get_nitrado_headers(interaction.guild_id)
         if not headers or not service_id:
-            return await interaction.followup.send("❌ Nitrado API not configured. Use `/set-nitrado-token`.", ephemeral=True)
+            return await interaction.followup.send(bot_i18n.t(interaction.guild_id, "nitrado_not_configured"), ephemeral=True)
 
         try:
             async with aiohttp.ClientSession() as session:
@@ -483,17 +484,17 @@ class Moderation(commands.Cog):
             player_max = players.get("max", 0)
             player_list = players.get("player", [])
 
-            embed = discord.Embed(title="🖥️ Server Status", color=discord.Color.green() if status == "started" else discord.Color.red())
-            embed.add_field(name="Status", value=f"{'🟢' if status == 'started' else '🔴'} {status}", inline=True)
-            embed.add_field(name="Players", value=f"{player_current}/{player_max}", inline=True)
+            embed = discord.Embed(title=bot_i18n.t(interaction.guild_id, "server_status_title"), color=discord.Color.green() if status == "started" else discord.Color.red())
+            embed.add_field(name=bot_i18n.t(interaction.guild_id, "field_status"), value=f"{'🟢' if status == 'started' else '🔴'} {status}", inline=True)
+            embed.add_field(name=bot_i18n.t(interaction.guild_id, "field_players"), value=f"{player_current}/{player_max}", inline=True)
             if player_list:
                 names = [p.get("name", "Unknown") for p in player_list[:20]]
-                embed.add_field(name="Player List", value="\n".join(names) or "None", inline=False)
+                embed.add_field(name=bot_i18n.t(interaction.guild_id, "field_player_list"), value="\n".join(names) or "None", inline=False)
 
             _log(interaction.guild_id, "server", "status_check", interaction.user, None)
             await interaction.followup.send(embed=embed)
         except Exception as e:
-            await interaction.followup.send(f"❌ Error fetching status: `{e}`", ephemeral=True)
+            await interaction.followup.send(bot_i18n.t(interaction.guild_id, "server_status_error", error=e), ephemeral=True)
 
     @app_commands.command(name="server-restart", description="Restart the ARK server")
     async def server_restart(self, interaction: discord.Interaction):
@@ -505,7 +506,7 @@ class Moderation(commands.Cog):
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "nitrado_not_configured"), ephemeral=True)
         result = client.restart_server()
         _log(interaction.guild_id, "server", "restart", interaction.user, None)
-        await interaction.response.send_message("🔄 Server restart triggered." if result else "❌ Failed to trigger restart.")
+        await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "server_restart_triggered") if result else bot_i18n.t(interaction.guild_id, "server_restart_failed"))
 
     @app_commands.command(name="server-stop", description="Stop the ARK server")
     async def server_stop(self, interaction: discord.Interaction):
@@ -517,7 +518,7 @@ class Moderation(commands.Cog):
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "nitrado_not_configured"), ephemeral=True)
         result = client.stop_server()
         _log(interaction.guild_id, "server", "stop", interaction.user, None)
-        await interaction.response.send_message("⏹️ Server stop triggered." if result else "❌ Failed to trigger stop.")
+        await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "server_stop_triggered") if result else bot_i18n.t(interaction.guild_id, "server_stop_failed"))
 
     # ============================================================
     #  INTERNAL HELPERS
@@ -540,7 +541,7 @@ class Moderation(commands.Cog):
         if punishment_type == "ban":
             result = await _send_rcon(guild_id, f"Ban {safe_player}")
             guild_settings.add_punishment(guild_id, player, "ban", "Auto-punishment: warning threshold reached", interaction.user.id)
-            return f"🔨 **{player}** auto-banned." if result else "❌ Auto-ban failed."
+            return bot_i18n.t(guild_id, "auto_banned", player=player) if result else bot_i18n.t(guild_id, "auto_ban_failed")
 
         elif punishment_type == "tempban":
             result = await _send_rcon(guild_id, f"Ban {safe_player}")
@@ -548,7 +549,7 @@ class Moderation(commands.Cog):
             pid = guild_settings.add_punishment(guild_id, player, "tempban", "Auto-punishment: warning threshold reached", interaction.user.id, expires_at=expires_at)
             if result:
                 guild_settings.mark_punishment_executed(pid)
-            return f"🔨 **{player}** auto temp-banned for **{tempban_hours}h**." if result else "❌ Auto-tempban failed."
+            return bot_i18n.t(guild_id, "auto_tempbanned", player=player, hours=tempban_hours) if result else bot_i18n.t(guild_id, "auto_tempban_failed")
 
         elif punishment_type in ("wipe_structures", "wipe_dinos", "wipe_both"):
             if punishment_type in ("wipe_dinos", "wipe_both"):
@@ -557,7 +558,7 @@ class Moderation(commands.Cog):
                 await _send_rcon(guild_id, f"BanPlayer {safe_player}")
                 await _send_rcon(guild_id, f"UnBanPlayer {safe_player}")
             guild_settings.add_punishment(guild_id, player, punishment_type, "Auto-punishment: warning threshold reached", interaction.user.id)
-            return f"🗑️ **{player}** auto-{punishment_type.replace('_', ' ')}."
+            return bot_i18n.t(guild_id, "auto_wipe_done", player=player, wipe=punishment_type.replace('_', ' '))
 
         return None
 

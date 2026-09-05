@@ -19,7 +19,6 @@ COMMANDS = [
     ('ban-user', 'admin', 'Ban a user from the bot in this guild (Admin only)'),
     ('view-guilds', 'admin', 'View all guilds the bot is in (Admin only)'),
     ('force-sync-guild', 'admin', 'Force sync slash commands for this guild (Admin only)'),
-    ('set-command-permission', 'admin', 'Allow a role to use a specific command (Admin only)'),
     ('remove-command-permission', 'admin', 'Remove a role from a command (Admin only)'),
     ('view-command-permissions', 'admin', 'View all command permission settings (Admin only)'),
     ('clear-command-permissions', 'admin', 'Reset a command to default permissions (Admin only)'),
@@ -54,7 +53,6 @@ COMMANDS = [
     ('setup-forum-logs', 'custom', 'Create the server-log forum channel with 4 category threads (Admin only)'),
     ('setup-shop-forum', 'custom', 'Create the shop-logs forum with Done + Pending threads (Admin only)'),
     ('help', 'general', 'Show all available commands'),
-    ('set-help-text', 'general', 'Override the description of a slash command (Admin only)'),
     ('leaderboard', 'leaderboard', 'Show the tribe leaderboard'),
     ('setup-leaderboard', 'leaderboard', 'Setup automatic leaderboard announcements (Admin only)'),
     ('set-tribe-owner', 'leaderboard', 'Set the tribe owner for a member (Admin only)'),
@@ -106,7 +104,6 @@ COMMANDS = [
     ('staff-payments', 'admin', 'List staff payments (filter by status)'),
     ('staff-pay-status', 'admin', 'Mark a staff payment as paid or pending'),
     ('staff-pay-delete', 'admin', 'Delete a staff payment record'),
-
     ('setup-tribe-forum', 'tribelog', 'Create a tribe-logs forum with one post per tribe (Admin only)'),
     ('add-tribe-name', 'tribelog', 'Add a tribe name to monitor (Admin only)'),
     ('set-tribelog-enabled', 'tribelog', 'Enable or disable tribe log monitoring (Admin only)'),

@@ -128,7 +128,7 @@ class ServerBackup(commands.Cog):
             else:
                 lines.append(f"• **{b}**")
 
-        embed = discord.Embed(title="📦 Nitrado Backups", description="\n".join(lines), color=discord.Color.blurple())
+        embed = discord.Embed(title=bot_i18n.t(interaction.guild_id, "backup_title"), description="\n".join(lines), color=discord.Color.blurple())
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     # ── /backup-rollback ─────────────────────────────────────

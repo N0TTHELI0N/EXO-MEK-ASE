@@ -48,7 +48,7 @@ class Leaderboard(commands.Cog):
             lines.append(f"{prefix} **{name}** — {pts} pts")
 
         embed = discord.Embed(
-            title="🏆 Leaderboard",
+            title=bot_i18n.t(interaction.guild_id, "leaderboard_title"),
             description="\n".join(lines),
             color=discord.Color.gold(),
         )
@@ -66,7 +66,7 @@ class Leaderboard(commands.Cog):
             "channel_id": channel.id,
             "interval": interval,
         })
-        await interaction.response.send_message(f"✅ Leaderboard will auto-update in {channel.mention} every {interval} min.", ephemeral=True)
+        await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "leaderboard_setup", channel=channel.mention, interval=interval), ephemeral=True)
 
     # ── /set-tribe-owner ─────────────────────────────────────
     @app_commands.command(name="set-tribe-owner", description="Set the tribe owner for a member (Admin only)")
@@ -76,7 +76,7 @@ class Leaderboard(commands.Cog):
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
 
         guild_settings.update_setting(interaction.guild_id, f"tribe_owner_{member.id}", tribe_name)
-        await interaction.response.send_message(f"✅ {member.mention} is now the owner of **{tribe_name}**.", ephemeral=True)
+        await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "tribe_owner_set", member=member.mention, tribe=tribe_name), ephemeral=True)
 
     # ── /add-tribe-points ────────────────────────────────────
     @app_commands.command(name="add-tribe-points", description="Add points to a tribe (Admin only)")
@@ -88,7 +88,7 @@ class Leaderboard(commands.Cog):
         shop_db.add_points(interaction.guild_id, tribe_name, amount)
         guild_settings.log_action(interaction.guild_id, "leaderboard", interaction.user.id, str(interaction.user), tribe_name, sub_type="points_added", details={"amount": amount})
         balance = shop_db.get_points(interaction.guild_id, tribe_name)
-        await interaction.response.send_message(f"✅ Added **{amount}** to **{tribe_name}**. New balance: **{balance}**.")
+        await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "tribe_points_added", amount=amount, tribe=tribe_name, balance=balance))
 
     # ── /remove-tribe-points ─────────────────────────────────
     @app_commands.command(name="remove-tribe-points", description="Remove points from a tribe (Admin only)")
@@ -100,7 +100,7 @@ class Leaderboard(commands.Cog):
         shop_db.remove_points(interaction.guild_id, tribe_name, amount)
         guild_settings.log_action(interaction.guild_id, "leaderboard", interaction.user.id, str(interaction.user), tribe_name, sub_type="points_removed", details={"amount": amount})
         balance = shop_db.get_points(interaction.guild_id, tribe_name)
-        await interaction.response.send_message(f"✅ Removed **{amount}** from **{tribe_name}**. New balance: **{balance}**.")
+        await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "tribe_points_removed", amount=amount, tribe=tribe_name, balance=balance))
 
 
 async def setup(bot):

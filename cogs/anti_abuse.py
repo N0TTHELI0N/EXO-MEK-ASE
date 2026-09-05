@@ -109,14 +109,11 @@ class AntiAbuse(commands.Cog):
                 ch = guild.get_channel(int(ch_id))
                 if ch:
                     embed = discord.Embed(
-                        title="🚨 Possible Alt Account Detected",
-                        description=(
-                            f"**{player}** joined from IP `{ip}` which is also linked to "
-                            f"**{alt}**.\n\nPossibly the same person playing on an alt account."
-                        ),
+                        title=bot_i18n.t(guild.id, "alt_detected_title"),
+                        description=bot_i18n.t(guild.id, "alt_detected_body", player=player, ip=ip, alt=alt),
                         color=discord.Color.yellow(),
                     )
-                    embed.set_footer(text="Anti-Abuse auto-detection")
+                    embed.set_footer(text=bot_i18n.t(guild.id, "alt_detected_footer"))
                     await ch.send(embed=embed)
         except Exception as e:
             print(f"[AntiAbuse] Alt notify error: {e}")
@@ -167,8 +164,7 @@ class AntiAbuse(commands.Cog):
         except Exception:
             pass
 
-        msg = (f"🔨 **Auto-ban:** `{player}` permanently banned for returning on alt account(s) "
-               f"(linked to {', '.join(sorted(distinct)[:5])}).")
+        msg = bot_i18n.t(guild.id, "auto_ban_msg", player=player, alts=', '.join(sorted(distinct)[:5]))
         ch_id = guild_settings.get_setting(guild.id, "anti_abuse_log_channel_id")
         if ch_id:
             ch = guild.get_channel(int(ch_id))
@@ -211,7 +207,7 @@ class AntiAbuse(commands.Cog):
 
         logs = guild_settings.get_admin_action_logs(interaction.guild_id, limit=min(max(limit, 1), 50))
         if not logs:
-            return await interaction.response.send_message("No admin actions logged yet.", ephemeral=True)
+            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "no_admin_actions"), ephemeral=True)
 
         lines = []
         for lg in logs:
@@ -219,7 +215,7 @@ class AntiAbuse(commands.Cog):
             target = lg["target"] or ""
             ts = lg["created_at"].strftime("%Y-%m-%d %H:%M") if lg["created_at"] else "?"
             lines.append(f"`{ts}` **{lg['action']}** by {actor} {f'on **{target}**' if target else ''}")
-        embed = discord.Embed(title="🛡️ Anti-Abuse Audit Log", description="\n".join(lines[:25]), color=discord.Color.dark_red())
+        embed = discord.Embed(title=bot_i18n.t(interaction.guild_id, "audit_log_title"), description="\n".join(lines[:25]), color=discord.Color.dark_red())
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @app_commands.command(name="anti-abuse-set-ip-auto", description="Enable/disable automatic IP harvesting from server logs")
@@ -228,8 +224,9 @@ class AntiAbuse(commands.Cog):
         if not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
         guild_settings.update_setting(interaction.guild_id, "anti_abuse_ip_auto", enabled)
+        state = bot_i18n.t(interaction.guild_id, "on_state") if enabled else bot_i18n.t(interaction.guild_id, "off_state")
         await interaction.response.send_message(
-            f"📡 Automatic IP harvesting **{'enabled' if enabled else 'disabled'}.**",
+            bot_i18n.t(interaction.guild_id, "ip_harvest_toggled", state=state),
             ephemeral=True,
         )
 
@@ -241,14 +238,16 @@ class AntiAbuse(commands.Cog):
         ip_records = len(guild_settings.get_ip_records(interaction.guild_id))
         auto_ban = guild_settings.get_bool_setting(interaction.guild_id, "anti_abuse_auto_ban", False)
         threshold = guild_settings.get_setting(interaction.guild_id, "anti_abuse_alt_threshold", 2)
+        on = bot_i18n.t(interaction.guild_id, "on_state")
+        off = bot_i18n.t(interaction.guild_id, "off_state")
         lines = [
-            f"**Auto IP harvesting:** {'✅ On' if auto else '❌ Off'}",
-            f"**Admin actions logged:** {count}",
-            f"**IP records:** {ip_records}",
-            f"**IP bans:** {ip_bans}",
-            f"**Auto-ban alts:** {'✅ On' if auto_ban else '❌ Off'} (threshold: {threshold})",
+            bot_i18n.t(interaction.guild_id, "auto_ip_harvest", state=on if auto else off),
+            bot_i18n.t(interaction.guild_id, "admin_actions_logged", count=count),
+            bot_i18n.t(interaction.guild_id, "ip_records_count", count=ip_records),
+            bot_i18n.t(interaction.guild_id, "ip_bans_count", count=ip_bans),
+            bot_i18n.t(interaction.guild_id, "auto_ban_alts", state=on if auto_ban else off, threshold=threshold),
         ]
-        embed = discord.Embed(title="🛡️ Anti-Abuse", description="\n".join(lines), color=discord.Color.blurple())
+        embed = discord.Embed(title=bot_i18n.t(interaction.guild_id, "anti_abuse_title"), description="\n".join(lines), color=discord.Color.blurple())
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
 

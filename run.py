@@ -84,7 +84,7 @@ def run_bot():
         banned_users = guild_settings.get_setting(interaction.guild_id, "banned_users", [])
         if member.id in banned_users:
             await interaction.response.send_message(
-                "❌ You are banned from using this bot.", ephemeral=True
+                bot_i18n.t(interaction.guild_id, "user_banned_from_bot"), ephemeral=True
             )
             return False
         # Owner always has full access (bypass license gate)
@@ -95,7 +95,7 @@ def run_bot():
         if command_name not in ("set-license",):
             if not guild_settings.is_license_valid(interaction.guild_id):
                 await interaction.response.send_message(
-                    "❌ This server has no valid license. Activate one with /set-license.",
+                    bot_i18n.t(interaction.guild_id, "license_gate_required"),
                     ephemeral=True,
                 )
                 return False
@@ -110,7 +110,7 @@ def run_bot():
         if member_role_ids & set(allowed_roles):
             return True
         await interaction.response.send_message(
-            "❌ You don't have permission to use this command.", ephemeral=True
+            bot_i18n.t(interaction.guild_id, "custom_permission_denied"), ephemeral=True
         )
         return False
 

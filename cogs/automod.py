@@ -80,7 +80,7 @@ class Automod(commands.Cog):
                             if ch_id:
                                 ch = guild.get_channel(ch_id)
                                 if ch:
-                                    await ch.send(f"🚨 **Automod Alert**\n```\n{line.strip()[:1900]}\n```")
+                                    await ch.send(bot_i18n.t(guild.id, "automod_log_alert", line=line.strip()[:1900]))
                             break
         except Exception as e:
             print(f"[Automod] Log read error: {e}")
@@ -140,7 +140,7 @@ class Automod(commands.Cog):
 
                 await message.author.add_roles(mute_role, reason="Automod: spam")
                 await message.channel.send(
-                    f"🔇 {message.author.mention} muted for {MUTE_DURATION_MINUTES} min (spam).",
+                    bot_i18n.t(guild_id, "automod_muted_spam", user=message.author.mention, minutes=MUTE_DURATION_MINUTES),
                     delete_after=10,
                 )
                 guild_settings.log_action(

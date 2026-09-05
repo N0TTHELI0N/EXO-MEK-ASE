@@ -37,7 +37,6 @@ CATEGORY_LABELS = {
 # Explicit category override per command name (highest priority).
 NAME_CATEGORY = {
     "help": "general",
-    "set-help-text": "general",
     "set-language": "general",
 
     "top-players": "general",

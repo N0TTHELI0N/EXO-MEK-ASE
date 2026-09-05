@@ -19,6 +19,8 @@ class PendingPurchaseView(discord.ui.View):
         self.cog = cog
         self.guild_id = guild_id
         self.purchase_id = purchase_id
+        self.deliver_button.label = bot_i18n.t(guild_id, "deliver_button_label")
+        self.cancel_button.label = bot_i18n.t(guild_id, "cancel_button_label")
 
     @discord.ui.button(label="Deliver", style=discord.ButtonStyle.success)
     async def deliver_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -100,7 +102,7 @@ class Shop(commands.Cog):
     def _pending_embed(self, guild_id: int, p: dict) -> discord.Embed:
         mine = bot_i18n.t(guild_id, "pending_embed")
         return discord.Embed(
-            title=f"#{p['id']} · {p['dino_name']} Lvl {p['level']}",
+            title=bot_i18n.t(guild_id, "pending_embed_title", purchase_id=p['id'], dino=p['dino_name'], level=p['level']),
             description=mine.format(
                 buyer=p["user_name"],
                 dino=p["dino_name"],
@@ -109,7 +111,7 @@ class Shop(commands.Cog):
                 blueprint=p["blueprint"],
             ),
             color=discord.Color.orange(),
-        ).set_footer(text=f"Purchase #{p['id']}")
+        ).set_footer(text=bot_i18n.t(guild_id, "purchase_footer", purchase_id=p['id']))
 
     def _done_channel(self, guild) -> discord.TextChannel | None:
         ch_id = guild_settings.get_setting(guild.id, "shop_done_channel", 0)
@@ -186,7 +188,7 @@ class Shop(commands.Cog):
         if not ch:
             return
         embed = discord.Embed(
-            title=f"✅ {purchase['dino_name']} Lvl {purchase['level']}",
+            title=bot_i18n.t(guild_id, "done_embed_title", dino=purchase['dino_name'], level=purchase['level']),
             description=bot_i18n.t(guild_id, "done_embed").format(
                 buyer=purchase["user_name"],
                 dino=purchase["dino_name"],
@@ -195,7 +197,7 @@ class Shop(commands.Cog):
                 delivered_by=actor.mention if hasattr(actor, "mention") else str(actor),
             ),
             color=discord.Color.green(),
-        ).set_footer(text=f"Purchase #{purchase['id']}")
+        ).set_footer(text=bot_i18n.t(guild_id, "purchase_footer", purchase_id=purchase['id']))
         try:
             await ch.send(embed=embed)
         except Exception:
@@ -210,7 +212,7 @@ class Shop(commands.Cog):
 
         shop_db.add_shop_dino(interaction.guild_id, name, blueprint, min_level, max_level, price, category)
         guild_settings.log_action(interaction.guild_id, "admin_command", interaction.user.id, str(interaction.user), name, sub_type="dino_spawn", details={"blueprint": blueprint, "price": price})
-        await interaction.response.send_message(f"✅ **{name}** added to the shop.")
+        await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "dino_added", name=name))
 
     # ── /remove-shop-dino ────────────────────────────────────
     @app_commands.command(name="remove-shop-dino", description="Remove a dinosaur from the shop (Admin only)")
@@ -221,7 +223,7 @@ class Shop(commands.Cog):
 
         shop_db.remove_shop_dino(interaction.guild_id, name)
         guild_settings.log_action(interaction.guild_id, "admin_command", interaction.user.id, str(interaction.user), name, sub_type="other")
-        await interaction.response.send_message(f"✅ **{name}** removed from the shop.")
+        await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "dino_removed", name=name))
 
     # ── /list-dinos ──────────────────────────────────────────
     @app_commands.command(name="list-dinos", description="List all dinosaurs in the shop")
@@ -232,9 +234,9 @@ class Shop(commands.Cog):
 
         lines = []
         for d in dinos:
-            lines.append(f"**{d[0]}** — Lvl {d[2]}-{d[3]} — {d[4]} pts")
+            lines.append(bot_i18n.t(interaction.guild_id, "shop_dino_line", name=d[0], min=d[2], max=d[3], price=d[4]))
 
-        embed = discord.Embed(title="🦕 Shop Dinosaurs", description="\n".join(lines), color=discord.Color.green())
+        embed = discord.Embed(title=bot_i18n.t(interaction.guild_id, "shop_dinos_title"), description="\n".join(lines), color=discord.Color.green())
         await interaction.response.send_message(embed=embed)
 
     # ── /buy-dino ────────────────────────────────────────────
@@ -310,7 +312,7 @@ class Shop(commands.Cog):
         guild_settings.update_setting(interaction.guild_id, "shop_pending_channel", pending_channel.id)
         guild_settings.update_setting(interaction.guild_id, "shop_done_channel", done_channel.id)
         await interaction.response.send_message(
-            f"✅ Pending deliveries → {pending_channel.mention}\n✅ Delivered purchases → {done_channel.mention}",
+            bot_i18n.t(interaction.guild_id, "shop_channels_set", pending_channel=pending_channel.mention, done_channel=done_channel.mention),
             ephemeral=True,
         )
 
@@ -375,7 +377,7 @@ class Shop(commands.Cog):
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
 
         guild_settings.update_setting(interaction.guild_id, "min_level", level)
-        await interaction.response.send_message(f"✅ Minimum level set to **{level}** for this server.", ephemeral=True)
+        await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "min_level_set", level=level), ephemeral=True)
 
 
 async def setup(bot):

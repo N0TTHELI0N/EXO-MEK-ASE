@@ -59,20 +59,20 @@ class CustomCommands(commands.Cog):
         )
         return resp
 
-    async def _log_forum_message(self, log_entry: dict) -> discord.Embed:
+    async def _log_forum_message(self, guild_id: int, log_entry: dict) -> discord.Embed:
         meta = CATEGORY_META.get(log_entry.get("log_category"), CATEGORY_META["gcm"])
         who = log_entry.get("user_name") or f"User#{log_entry.get('user_id')}"
         cmd = (log_entry.get("details") or {}).get("command") or log_entry.get("command") or ""
         embed = discord.Embed(
-            title=f"{meta['emoji']} {meta['label']}",
-            description=f"**{who}** ran:\n```{cmd}```",
+            title=bot_i18n.t(guild_id, "forum_log_title", emoji=meta['emoji'], label=meta['label']),
+            description=bot_i18n.t(guild_id, "forum_log_body", who=who, cmd=cmd),
             color=discord.Color.blue(),
             timestamp=log_entry.get("created_at") or discord.utils.utcnow(),
         )
         embed.set_footer(text=f"log #{log_entry.get('id')}")
         return embed
 
-    async def _shop_forum_message(self, entry: dict) -> discord.Embed:
+    async def _shop_forum_message(self, guild_id: int, entry: dict) -> discord.Embed:
         sub = entry.get("sub_type")
         details = entry.get("details") or {}
         buyer = entry.get("user_name") or entry.get("player_name") or "?"
@@ -81,11 +81,17 @@ class CustomCommands(commands.Cog):
         price = details.get("price")
         pid = details.get("purchase_id", entry.get("id"))
         if sub == "purchase_delivered":
-            title, desc, color = "✅ Delivery Done", f"**{buyer}** received **{dino}** (Lvl {level})", discord.Color.green()
+            title = bot_i18n.t(guild_id, "shop_delivery_done_title")
+            desc = bot_i18n.t(guild_id, "shop_delivery_done_body", buyer=buyer, dino=dino, level=level)
+            color = discord.Color.green()
         elif sub == "purchase_cancelled":
-            title, desc, color = "❌ Delivery Cancelled", f"**{buyer}** - **{dino}** cancelled (refund {price})", discord.Color.red()
+            title = bot_i18n.t(guild_id, "shop_delivery_cancelled_title")
+            desc = bot_i18n.t(guild_id, "shop_delivery_cancelled_body", buyer=buyer, dino=dino, price=price)
+            color = discord.Color.red()
         else:
-            title, desc, color = "⏳ Purchase Queued", f"**{buyer}** ordered **{dino}** (Lvl {level}, {price} pts)", discord.Color.blurple()
+            title = bot_i18n.t(guild_id, "shop_purchase_queued_title")
+            desc = bot_i18n.t(guild_id, "shop_purchase_queued_body", buyer=buyer, dino=dino, level=level, price=price)
+            color = discord.Color.blurple()
         embed = discord.Embed(
             title=title,
             description=desc,
@@ -114,7 +120,7 @@ class CustomCommands(commands.Cog):
                         if not target:
                             continue
                         try:
-                            embed = await self._log_forum_message(entry)
+                            embed = await self._log_forum_message(guild.id, entry)
                             await target.send(embed=embed)
                             guild_settings.mark_log_posted(entry["id"])
                         except Exception:
@@ -132,7 +138,7 @@ class CustomCommands(commands.Cog):
                         if not target:
                             continue
                         try:
-                            embed = await self._shop_forum_message(entry)
+                            embed = await self._shop_forum_message(guild.id, entry)
                             await target.send(embed=embed)
                             guild_settings.mark_shop_log_posted(entry["id"])
                         except Exception:
@@ -160,12 +166,12 @@ class CustomCommands(commands.Cog):
         if not interaction.user.guild_permissions.administrator:
             if not cmd.get("enabled", True):
                 return await interaction.response.send_message(
-                    "❌ This command is disabled.", ephemeral=True
+                    bot_i18n.t(interaction.guild_id, "command_disabled"), ephemeral=True
                 )
             allowed_roles = guild_settings.get_command_permissions(interaction.guild_id, name)
             if allowed_roles and not ({r.id for r in interaction.user.roles} & set(allowed_roles)):
                 return await interaction.response.send_message(
-                    "❌ You don't have permission to use this command.", ephemeral=True
+                    bot_i18n.t(interaction.guild_id, "custom_permission_denied"), ephemeral=True
                 )
         final = await self._build_command(cmd["command_string"], interaction.user)
         await interaction.response.defer(ephemeral=False)
@@ -187,9 +193,9 @@ class CustomCommands(commands.Cog):
         lines = []
         for c in cmds:
             m = meta.get(c["category"], CATEGORY_META["gcm"])
-            enabled = "" if c["enabled"] else " (disabled)"
+            enabled = bot_i18n.t(interaction.guild_id, "custom_disabled_suffix") if not c["enabled"] else ""
             lines.append(f"{m['emoji']} **/{c['name']}** → `{c['command_string']}`{enabled}")
-        embed = discord.Embed(title="⚙️ Custom Commands", description="\n".join(lines), color=discord.Color.blurple())
+        embed = discord.Embed(title=bot_i18n.t(interaction.guild_id, "custom_commands_title"), description="\n".join(lines), color=discord.Color.blurple())
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     # ── /custom-add ─────────────────────────────────────────
@@ -206,10 +212,10 @@ class CustomCommands(commands.Cog):
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
         clean = name.strip().lower().replace(" ", "-")
         if not clean:
-            return await interaction.response.send_message("❌ Invalid command name.", ephemeral=True)
+            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "invalid_command_name"), ephemeral=True)
         res = guild_settings.add_custom_command(interaction.guild_id, clean, command_string, category, interaction.user.id)
         await interaction.response.send_message(
-            f"✅ Custom command `/{clean}` created.\nUse `/custom name:{clean}` to run it.",
+            bot_i18n.t(interaction.guild_id, "custom_created", name=clean),
             ephemeral=True,
         )
 
@@ -222,9 +228,9 @@ class CustomCommands(commands.Cog):
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
         removed = guild_settings.remove_custom_command(interaction.guild_id, name)
         if removed:
-            await interaction.response.send_message(f"✅ Custom command `/{name}` deleted.", ephemeral=True)
+            await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "custom_deleted", name=name), ephemeral=True)
         else:
-            await interaction.response.send_message(f"❌ Custom command `/{name}` not found.", ephemeral=True)
+            await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "custom_not_found", name=name), ephemeral=True)
 
     # ── /ark-command (generic runner, off by default) ───────
     @app_commands.command(name="ark-command", description="Run a raw ARK console command (Admin, if enabled)")
@@ -263,7 +269,7 @@ class CustomCommands(commands.Cog):
                     reason="Server log forum - created by setup-forum-logs",
                 )
             except Exception as e:
-                return await interaction.followup.send(f"❌ Could not create forum: {e}", ephemeral=True)
+                return await interaction.followup.send(bot_i18n.t(interaction.guild_id, "forum_error", error=e), ephemeral=True)
 
         # ensure 4 threads exist (one per category)
         thread_ids = {}
@@ -289,8 +295,8 @@ class CustomCommands(commands.Cog):
             missing = [CATEGORY_META[c]["label"] for c in CATEGORY_META if CATEGORY_META[c]["thread"] not in thread_ids]
             errors_note = (" (" + "; ".join(errors) + ")") if errors else ""
             return await interaction.followup.send(
-                f"⚠️ Only {len(thread_ids)}/4 threads were created. Missing: {', '.join(missing)}.{errors_note} "
-                "Run the command again to retry.", ephemeral=True,
+                bot_i18n.t(interaction.guild_id, "forums_partial", created=len(thread_ids), missing=', '.join(missing), errors=errors_note),
+                ephemeral=True,
             )
 
         guild_settings.set_forum_log_config(
@@ -302,9 +308,9 @@ class CustomCommands(commands.Cog):
             thread_ids.get("thread_gcm"),
         )
         await interaction.followup.send(
-            f"✅ Server-log forum ready.\nForum: {forum.mention}\n"
-            f"Threads: 🦖 <#{thread_ids.get('thread_dino')}> · 🎁 <#{thread_ids.get('thread_gfi')}> · "
-            f"🧍 <#{thread_ids.get('thread_player')}> · 🎮 <#{thread_ids.get('thread_gcm')}>",
+            bot_i18n.t(interaction.guild_id, "forum_ready", forum=forum.mention,
+                       thread_dino=thread_ids.get('thread_dino'), thread_gfi=thread_ids.get('thread_gfi'),
+                       thread_player=thread_ids.get('thread_player'), thread_gcm=thread_ids.get('thread_gcm')),
             ephemeral=True,
         )
 
@@ -325,7 +331,7 @@ class CustomCommands(commands.Cog):
                     reason="Shop log forum - created by setup-shop-forum",
                 )
             except Exception as e:
-                return await interaction.followup.send(f"❌ Could not create forum: {e}", ephemeral=True)
+                return await interaction.followup.send(bot_i18n.t(interaction.guild_id, "forum_error", error=e), ephemeral=True)
 
         thread_map = {"✅ Done Deliveries": "thread_done", "⏳ Pending Deliveries": "thread_pending"}
         thread_ids = {}
@@ -348,16 +354,16 @@ class CustomCommands(commands.Cog):
             missing = [t for t, k in thread_map.items() if k not in thread_ids]
             errors_note = (" (" + "; ".join(errors) + ")") if errors else ""
             return await interaction.followup.send(
-                f"⚠️ Could not create all shop threads. Missing: {', '.join(missing)}.{errors_note} "
-                "Run the command again to retry.", ephemeral=True,
+                bot_i18n.t(interaction.guild_id, "shop_forum_partial", missing=', '.join(missing), errors=errors_note),
+                ephemeral=True,
             )
 
         guild_settings.set_shop_forum_config(
             interaction.guild_id, forum.id, thread_ids.get("thread_done"), thread_ids.get("thread_pending")
         )
         await interaction.followup.send(
-            f"✅ Shop-logs forum ready.\nForum: {forum.mention}\n"
-            f"Threads: ✅ <#{thread_ids.get('thread_done')}> · ⏳ <#{thread_ids.get('thread_pending')}>",
+            bot_i18n.t(interaction.guild_id, "shop_forum_ready", forum=forum.mention,
+                       thread_done=thread_ids.get('thread_done'), thread_pending=thread_ids.get('thread_pending')),
             ephemeral=True,
         )
 

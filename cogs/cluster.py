@@ -34,18 +34,21 @@ class Cluster(commands.Cog):
         )
         _log(interaction.guild_id, "cluster_set", interaction.user, tribe_name, details={"cluster": cluster_name})
         ch = f" <#{disc_channel.id}>" if disc_channel else ""
-        await interaction.response.send_message(f"⭐ Alpha tribe for cluster **{cluster_name}** set to **{tribe_name}**{ch}.", ephemeral=True)
+        await interaction.response.send_message(
+            bot_i18n.t(interaction.guild_id, "cluster_alpha_set", cluster=cluster_name, tribe=tribe_name, channel=ch),
+            ephemeral=True,
+        )
 
     @app_commands.command(name="cluster-list", description="List all clusters and their alpha tribes")
     async def cluster_list(self, interaction: discord.Interaction):
         clusters = guild_settings.get_clusters(interaction.guild_id)
         if not clusters:
-            return await interaction.response.send_message("No clusters configured yet.", ephemeral=True)
+            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "cluster_empty"), ephemeral=True)
         lines = []
         for c in clusters:
             ch = f" <#{c['disc_channel']}>" if c['disc_channel'] else ""
             lines.append(f"🌐 **{c['cluster_name']}** → ⭐ **{c['tribe_name']}**{ch}")
-        embed = discord.Embed(title="Cluster Alphas", description="\n".join(lines), color=discord.Color.gold())
+        embed = discord.Embed(title=bot_i18n.t(interaction.guild_id, "cluster_alpha_title"), description="\n".join(lines), color=discord.Color.gold())
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @app_commands.command(name="cluster-remove", description="Remove a cluster entry")
@@ -55,17 +58,17 @@ class Cluster(commands.Cog):
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
         if guild_settings.remove_cluster(cluster_id, interaction.guild_id):
             _log(interaction.guild_id, "cluster_remove", interaction.user, None, details={"cluster_id": cluster_id})
-            await interaction.response.send_message(f"✅ Cluster #{cluster_id} removed.", ephemeral=True)
+            await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "cluster_removed", cluster_id=cluster_id), ephemeral=True)
         else:
-            await interaction.response.send_message(f"❌ Cluster #{cluster_id} not found.", ephemeral=True)
+            await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "cluster_not_found", cluster_id=cluster_id), ephemeral=True)
 
     @app_commands.command(name="cluster-status", description="Show cluster alpha status")
     async def cluster_status(self, interaction: discord.Interaction):
         clusters = guild_settings.get_clusters(interaction.guild_id)
-        lines = [f"🌐 Active clusters: **{len(clusters)}**"]
+        lines = [bot_i18n.t(interaction.guild_id, "cluster_active_count", count=len(clusters))]
         for c in clusters:
             lines.append(f"• **{c['cluster_name']}** → **{c['tribe_name']}**")
-        embed = discord.Embed(title="Cluster Status", description="\n".join(lines), color=discord.Color.blurple())
+        embed = discord.Embed(title=bot_i18n.t(interaction.guild_id, "cluster_status_title"), description="\n".join(lines), color=discord.Color.blurple())
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
 

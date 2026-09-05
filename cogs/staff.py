@@ -43,8 +43,10 @@ class Staff(commands.Cog):
         _log(interaction.guild_id, "staff_pay", interaction.user, str(member),
              details={"amount": amount, "type": payment_type, "note": note})
         await interaction.response.send_message(
-            f"💳 Recorded **{currency} {amount:,.2f}** for {member.mention} "
-            f"(*{role}*, {payment_type}). Payment ID `#{payment_id}`.", ephemeral=True,
+            bot_i18n.t(interaction.guild_id, "staff_payment_recorded",
+                       currency=currency, amount=amount, member=member.mention,
+                       role=role, payment_type=payment_type, payment_id=payment_id),
+            ephemeral=True,
         )
 
     @app_commands.command(name="staff-payments", description="List staff payments (filter by status)")
@@ -59,14 +61,14 @@ class Staff(commands.Cog):
 
         payments = guild_settings.get_staff_payments(interaction.guild_id, status=status.value if status else None)
         if not payments:
-            return await interaction.response.send_message("No staff payments found.", ephemeral=True)
+            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "staff_no_payments"), ephemeral=True)
 
         lines = []
         for p in payments[:25]:
             st = "✅" if p["status"] == "paid" else "⏳"
             who = f"<@{p['staff_user_id']}>" if p['staff_user_id'] else p["staff_name"]
             lines.append(f"{st} #{p['id']} **{p['currency']} {p['amount']:,.2f}** → {who} ({p['role']}, {p['payment_type']})")
-        title = "Staff Payments" + (f" — {status.name}" if status else "")
+        title = bot_i18n.t(interaction.guild_id, "staff_payments_title")
         embed = discord.Embed(title=title, description="\n".join(lines), color=discord.Color.green())
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -81,9 +83,9 @@ class Staff(commands.Cog):
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
         if guild_settings.set_staff_payment_status(payment_id, interaction.guild_id, status.value):
             _log(interaction.guild_id, "staff_pay_status", interaction.user, None, details={"payment_id": payment_id, "status": status.value})
-            await interaction.response.send_message(f"✅ Payment #{payment_id} marked **{status.name}**.", ephemeral=True)
+            await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "staff_payment_status_set", payment_id=payment_id, status=status.name), ephemeral=True)
         else:
-            await interaction.response.send_message(f"❌ Payment #{payment_id} not found.", ephemeral=True)
+            await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "staff_payment_not_found", payment_id=payment_id), ephemeral=True)
 
     @app_commands.command(name="staff-pay-delete", description="Delete a staff payment record")
     @app_commands.describe(payment_id="Payment ID")
@@ -92,9 +94,9 @@ class Staff(commands.Cog):
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
         if guild_settings.delete_staff_payment(payment_id, interaction.guild_id):
             _log(interaction.guild_id, "staff_pay_delete", interaction.user, None, details={"payment_id": payment_id})
-            await interaction.response.send_message(f"🗑️ Payment #{payment_id} deleted.", ephemeral=True)
+            await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "staff_payment_deleted", payment_id=payment_id), ephemeral=True)
         else:
-            await interaction.response.send_message(f"❌ Payment #{payment_id} not found.", ephemeral=True)
+            await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "staff_payment_not_found", payment_id=payment_id), ephemeral=True)
 
 
 async def setup(bot):

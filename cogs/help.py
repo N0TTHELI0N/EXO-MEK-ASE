@@ -4,6 +4,7 @@ from discord import app_commands
 import bot_i18n
 import guild_settings
 import commands_manifest
+import config
 
 
 # ── Category definitions ────────────────────────────────────
@@ -40,54 +41,123 @@ def _build_command_categories():
 COMMAND_CATEGORIES = _build_command_categories()
 
 
-# ── Help View ───────────────────────────────────────────────
+# ── Help View (dropdown) ────────────────────────────────────
 
 class HelpView(discord.ui.View):
     def __init__(self, bot, guild_id: int):
-        super().__init__(timeout=120)
+        super().__init__(timeout=180)
         self.bot = bot
         self.guild_id = guild_id
-        self.lang = bot_i18n.t(guild_id, "help_title") and guild_settings.get_setting(guild_id, "bot_language", "ar")
-        self.current_category = CATEGORY_ORDER[0]
-        self._build_buttons()
+        self.lang = guild_settings.get_setting(guild_id, "bot_language", "ar")
 
-    def _build_buttons(self):
-        self.clear_items()
+        select = discord.ui.Select(
+            placeholder=bot_i18n.t(guild_id, "help_placeholder"),
+            min_values=1,
+            max_values=1,
+        )
+        options = []
+        options.append(discord.SelectOption(
+            label=bot_i18n.t(guild_id, "help_about_label"),
+            description=bot_i18n.t(guild_id, "help_about_desc"),
+            value="about",
+        ))
+        options.append(discord.SelectOption(
+            label=bot_i18n.t(guild_id, "help_setup_label"),
+            description=bot_i18n.t(guild_id, "help_setup_desc"),
+            value="setup",
+        ))
         for cat in CATEGORY_ORDER:
             label = CATEGORY_LABELS.get(cat, {}).get(self.lang, cat.title())
-            btn = discord.ui.Button(label=label, style=discord.ButtonStyle.secondary, custom_id=f"cat_{cat}")
-            btn.callback = self._make_callback(cat)
-            self.add_item(btn)
+            options.append(discord.SelectOption(label=label, value=f"cat_{cat}"))
+        select.options = options
+        select.callback = self._select_callback
+        self.add_item(select)
 
-    def _make_callback(self, category):
-        async def callback(interaction: discord.Interaction):
-            self.current_category = category
-            embed = self._build_embed()
-            await interaction.response.edit_message(embed=embed, view=self)
-        return callback
+    async def _select_callback(self, interaction: discord.Interaction):
+        value = interaction.data.get("values", ["about"])[0]
+        if value.startswith("cat_"):
+            self.current_category = value[4:]
+            embed = self._build_category_embed()
+        elif value == "setup":
+            self.current_category = None
+            embed = self._build_setup_embed()
+        else:
+            self.current_category = None
+            embed = self._build_about_embed()
+        await interaction.response.edit_message(embed=embed, view=self)
 
-    def _build_embed(self):
+    # ── embed builders ───────────────────────────────────────
+    def _build_about_embed(self):
+        guild_id = self.guild_id
         lang = self.lang
-        cat_label = CATEGORY_LABELS.get(self.current_category, {}).get(lang, self.current_category.title())
-        title = f"📖 {cat_label}"
+        lang_name = "العربية" if lang == "ar" else "English"
+        body = bot_i18n.t(guild_id, "help_about_body", lang_name=lang_name)
 
-        commands_in_cat = COMMAND_CATEGORIES.get(self.current_category, [])
+        embed = discord.Embed(
+            title=bot_i18n.t(guild_id, "help_welcome_title"),
+            description=body,
+            color=discord.Color.red(),
+        )
+
+        links = []
+        if config.DASHBOARD_BASE_URL:
+            links.append(f"• [🌐 {bot_i18n.t(guild_id, 'help_about_dashboard')}]({config.DASHBOARD_BASE_URL}) — {bot_i18n.t(guild_id, 'help_about_dashboard_url')}")
+        if config.BOT_INVITE_URL:
+            links.append(f"• [🤖 {bot_i18n.t(guild_id, 'help_about_invite')}]({config.BOT_INVITE_URL}) — {bot_i18n.t(guild_id, 'help_about_invite_url')}")
+        if links:
+            embed.add_field(
+                name=bot_i18n.t(guild_id, "help_about_field_links"),
+                value="\n".join(links),
+                inline=False,
+            )
+            embed.add_field(
+                name=bot_i18n.t(guild_id, "help_about_field_how"),
+                value=bot_i18n.t(guild_id, "help_setup_body", license_hint=bot_i18n.t(guild_id, "help_license_inactive")),
+                inline=False,
+            )
+        embed.set_footer(text=bot_i18n.t(guild_id, "help_footer_hint"))
+        return embed
+
+    def _build_setup_embed(self):
+        guild_id = self.guild_id
+        if guild_settings.is_license_valid(guild_id):
+            license_hint = bot_i18n.t(guild_id, "help_license_active")
+        else:
+            license_hint = bot_i18n.t(guild_id, "help_license_inactive")
+
+        embed = discord.Embed(
+            title=bot_i18n.t(guild_id, "help_setup_label"),
+            description=bot_i18n.t(guild_id, "help_setup_body", license_hint=license_hint),
+            color=discord.Color.red(),
+        )
+        embed.set_footer(text=bot_i18n.t(guild_id, "help_footer_hint"))
+        return embed
+
+    def _build_category_embed(self):
+        lang = self.lang
+        cat = self.current_category
+        cat_label = CATEGORY_LABELS.get(cat, {}).get(lang, cat.title())
+        title = bot_i18n.t(self.guild_id, "help_category_header", label=cat_label)
+
+        commands_in_cat = COMMAND_CATEGORIES.get(cat, [])
         lines = []
         for cmd_name in commands_in_cat:
             cmd = self.bot.tree.get_command(cmd_name)
             if cmd:
-                default = cmd.description or "No description"
+                default = cmd.description or bot_i18n.t(self.guild_id, "help_no_description")
                 desc = guild_settings.get_command_description(self.guild_id, cmd_name, default)
                 lines.append(f"`/{cmd_name}` — {desc}")
             else:
                 lines.append(f"`/{cmd_name}`")
 
         if not lines:
-            desc = "لا توجد أوامر في هذا التصنيف" if lang == "ar" else "No commands in this category."
+            desc = bot_i18n.t(self.guild_id, "help_category_empty")
         else:
             desc = "\n".join(lines)
 
-        return discord.Embed(title=title, description=desc, color=discord.Color.blurple())
+        embed = discord.Embed(title=title, description=desc, color=discord.Color.red())
+        embed.set_footer(text=bot_i18n.t(self.guild_id, "help_footer_hint"))
+        return embed
 
 
 # ── Cog ─────────────────────────────────────────────────────
@@ -99,19 +169,9 @@ class Help(commands.Cog):
     @app_commands.command(name="help", description="Show all available commands")
     async def help_command(self, interaction: discord.Interaction):
         guild_id = interaction.guild_id
-        lang = guild_settings.get_setting(guild_id, "bot_language", "ar")
         view = HelpView(self.bot, guild_id)
-        embed = view._build_embed()
+        embed = view._build_about_embed()
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-
-    @app_commands.command(name="set-help-text", description="Override the description of a slash command (Admin only)")
-    @app_commands.describe(command="Command name (e.g. buy-dino)", description="New description text")
-    async def set_help_text(self, interaction: discord.Interaction, command: str, description: str):
-        if not interaction.user.guild_permissions.administrator:
-            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
-
-        guild_settings.set_command_description(interaction.guild_id, command, description)
-        await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "help_text_updated", key=command), ephemeral=True)
 
 
 async def setup(bot):

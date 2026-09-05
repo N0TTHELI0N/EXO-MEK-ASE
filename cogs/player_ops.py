@@ -81,30 +81,35 @@ class PlayerOps(commands.Cog):
         ips = guild_settings.get_player_ips(guild_id, player_name=player)
 
         embed = discord.Embed(title=f"🧍 {player}", color=discord.Color.blurple())
-        status = "🟢 Online" if online else ("🔴 Offline" if online is False else "⚪ Unknown")
-        embed.add_field(name="In-game status", value=f"{status}", inline=True)
-        embed.add_field(name="Tribe", value=tribe or "None", inline=True)
-        embed.add_field(name="Active warnings", value=str(warn_count), inline=True)
+        if online is True:
+            status = bot_i18n.t(guild_id, "player_online")
+        elif online is False:
+            status = bot_i18n.t(guild_id, "player_offline")
+        else:
+            status = bot_i18n.t(guild_id, "player_unknown")
+        embed.add_field(name=bot_i18n.t(guild_id, "field_in_game_status"), value=f"{status}", inline=True)
+        embed.add_field(name=bot_i18n.t(guild_id, "field_tribe"), value=tribe or bot_i18n.t(guild_id, "none_value"), inline=True)
+        embed.add_field(name=bot_i18n.t(guild_id, "field_active_warnings"), value=str(warn_count), inline=True)
 
         if player_obj:
-            embed.add_field(name="Player ID", value=str(player_obj.get("id", "?")), inline=True)
-            embed.add_field(name="Ping", value=f"{player_obj.get('ping', 0)}ms", inline=True)
+            embed.add_field(name=bot_i18n.t(guild_id, "field_player_id"), value=str(player_obj.get("id", "?")), inline=True)
+            embed.add_field(name=bot_i18n.t(guild_id, "field_ping"), value=f"{player_obj.get('ping', 0)}ms", inline=True)
 
         if punishments:
             recent = "\n".join(
                 f"#{r[0]} {r[4]} ({'✅' if r[10] else '⏳'}{' 🚫' if r[11] else ''})"
                 for r in punishments[:8]
             )
-            embed.add_field(name=f"Punishments ({len(punishments)})", value=recent or "None", inline=False)
+            embed.add_field(name=bot_i18n.t(guild_id, "field_punishments", count=len(punishments)), value=recent or bot_i18n.t(guild_id, "none_value"), inline=False)
 
         if ips:
             ip_list = "\n".join(f"{r['ip']} • {r['source']}" for r in ips[:8])
-            embed.add_field(name="Recorded IPs", value=ip_list or "None", inline=False)
+            embed.add_field(name=bot_i18n.t(guild_id, "field_recorded_ips"), value=ip_list or bot_i18n.t(guild_id, "none_value"), inline=False)
 
         if discord_user:
-            embed.add_field(name="Discord account", value=f"{discord_user.mention} (`{discord_user.id}`)", inline=False)
+            embed.add_field(name=bot_i18n.t(guild_id, "field_discord_account"), value=f"{discord_user.mention} (`{discord_user.id}`)", inline=False)
 
-        embed.set_footer(text="Basic premium features require a valid license.")
+        embed.set_footer(text=bot_i18n.t(guild_id, "footer_premium_license"))
         await interaction.followup.send(embed=embed, ephemeral=True)
 
     # ============================================================
@@ -120,13 +125,13 @@ class PlayerOps(commands.Cog):
         alts = guild_settings.find_alts(interaction.guild_id, player)
         if not alts:
             return await interaction.response.send_message(
-                f"✅ No alt accounts detected for **{player}**. (Add more IP data on the dashboard to improve detection)",
+                bot_i18n.t(interaction.guild_id, "no_alts_detected", player=player),
                 ephemeral=True,
             )
 
-        lines = [f"⚠️ Possible alt account(s) for **{player}** (shared IP):"]
+        lines = [bot_i18n.t(interaction.guild_id, "alts_detected", player=player)]
         for name in alts:
-            banned = "⛔ banned" if (guild_settings.is_blacklisted(interaction.guild_id, name) or guild_settings.get_punishments(interaction.guild_id, name)) else "✅ clean"
+            banned = bot_i18n.t(interaction.guild_id, "alt_banned") if (guild_settings.is_blacklisted(interaction.guild_id, name) or guild_settings.get_punishments(interaction.guild_id, name)) else bot_i18n.t(interaction.guild_id, "alt_clean")
             lines.append(f"• **{name}** — {banned}")
         await interaction.response.send_message("\n".join(lines), ephemeral=True)
 
@@ -143,7 +148,7 @@ class PlayerOps(commands.Cog):
         await interaction.response.defer(ephemeral=True)
         ip = ip.strip()
         added = guild_settings.add_ip_ban(interaction.guild_id, ip, reason, interaction.user.id, player_name=player)
-        msg = f"📡 IP **{ip}** banned." if added else f"ℹ️ IP **{ip}** was already banned."
+        msg = bot_i18n.t(interaction.guild_id, "ip_banned", ip=ip) if added else bot_i18n.t(interaction.guild_id, "ip_already_banned", ip=ip)
 
         # If a linked player name is given, also kick + ban their account via RCON
         if player:
@@ -152,7 +157,7 @@ class PlayerOps(commands.Cog):
             ban = await _asyncio_to_thread(nitrado.send_rcon, interaction.guild_id, f"Ban {safe}")
             guild_settings.add_punishment(interaction.guild_id, player, "ban", f"IP ban: {reason}", interaction.user.id)
             if kick or ban is not None:
-                msg += f"\n🔨 Kicked/banned linked account **{player}** in-game."
+                msg += bot_i18n.t(interaction.guild_id, "ip_linked_account_kicked", player=player)
 
         _log(interaction.guild_id, "ip_ban", "ip_ban", interaction.user, player, details={"ip": ip, "reason": reason})
         await interaction.followup.send(msg)
@@ -169,7 +174,7 @@ class PlayerOps(commands.Cog):
             if ban["ip"] == ip:
                 removed = guild_settings.remove_ip_ban(ban["id"], interaction.guild_id) or removed
         await interaction.response.send_message(
-            f"✅ IP **{ip}** unbanned." if removed else f"ℹ️ IP **{ip}** was not in the ban list.", ephemeral=True,
+            bot_i18n.t(interaction.guild_id, "ip_unbanned", ip=ip) if removed else bot_i18n.t(interaction.guild_id, "ip_not_banned", ip=ip), ephemeral=True,
         )
 
     @app_commands.command(name="ip-ban-list", description="List all banned IP addresses")
@@ -179,12 +184,12 @@ class PlayerOps(commands.Cog):
 
         bans = guild_settings.get_ip_bans(interaction.guild_id)
         if not bans:
-            return await interaction.response.send_message("No IP addresses are banned.", ephemeral=True)
+            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "no_ip_bans"), ephemeral=True)
         lines = []
         for b in bans:
             pname = f" ({b['player_name']})" if b.get("player_name") else ""
             lines.append(f"#{b['id']} `{b['ip']}`{pname} • {b['reason'] or ''}")
-        embed = discord.Embed(title="Banned IPs", description="\n".join(lines[:20]), color=discord.Color.dark_red())
+        embed = discord.Embed(title=bot_i18n.t(interaction.guild_id, "banned_ips_title"), description="\n".join(lines[:20]), color=discord.Color.dark_red())
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @app_commands.command(name="add-ip", description="Manually record a player's IP address for alt detection")
@@ -194,7 +199,7 @@ class PlayerOps(commands.Cog):
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
         guild_settings.add_ip_record(interaction.guild_id, player.strip(), ip.strip(), player_id=player_id, source="manual")
         _log(interaction.guild_id, "ip", "add_ip", interaction.user, player, details={"ip": ip})
-        await interaction.response.send_message(f"✅ IP **{ip}** recorded for **{player}**.", ephemeral=True)
+        await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "ip_recorded", ip=ip, player=player), ephemeral=True)
 
 
 async def setup(bot):
