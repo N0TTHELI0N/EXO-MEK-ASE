@@ -20,6 +20,43 @@ _LICENSE_SIGN_KEY = (os.getenv("LICENSE_SIGN_KEY", "") or _ENCRYPTION_KEY).encod
 
 ENCRYPTED_FIELDS = {"nitrado_api_token", "ftp_password"}
 
+# ---------------------------------------------------------------------------
+# Small in-process TTL caches for the hot read paths.
+# Every t() / interaction check / send hook used to open a fresh Postgres
+# connection, which blew past Discord's 3s response window and produced
+# "The application did not respond" / Unknown interaction (10062).
+# ---------------------------------------------------------------------------
+
+import threading as _threading
+import time as _clock
+
+_CACHE_TTL = 20  # seconds; keeps dashboard edits visible within ~20s
+
+_cache_lock = _threading.Lock()
+_settings_cache = {}   # guild_id -> (monotonic_expiry, decrypted settings dict)
+_perms_cache = {}      # (guild_id, command) -> (expiry, list of role ids)
+_display_cache = {}    # command_name -> (expiry, display cfg dict)
+
+
+def _cache_get(cache, key):
+    with _cache_lock:
+        item = cache.get(key)
+        if item is not None:
+            if item[0] > _clock.monotonic():
+                return item[1]
+            cache.pop(key, None)
+    return None
+
+
+def _cache_set(cache, key, value, ttl=_CACHE_TTL):
+    with _cache_lock:
+        cache[key] = (_clock.monotonic() + ttl, value)
+
+
+def _cache_drop(cache, key):
+    with _cache_lock:
+        cache.pop(key, None)
+
 
 def _encrypt(value: str) -> str:
     if not _fernet or not value:
@@ -506,12 +543,16 @@ def init_db():
 # ============================================================
 
 def get_settings(guild_id: int) -> dict:
+    cached = _cache_get(_settings_cache, guild_id)
+    if cached is not None:
+        return cached
     conn = get_conn()
     try:
         with conn.cursor() as cur:
             cur.execute("SELECT settings FROM guild_settings WHERE guild_id = %s", (guild_id,))
             row = cur.fetchone()
             if row is None:
+                _cache_set(_settings_cache, guild_id, {})
                 return {}
             raw = row[0] if isinstance(row[0], dict) else json.loads(row[0])
             decrypted = {}
@@ -520,6 +561,7 @@ def get_settings(guild_id: int) -> dict:
                     decrypted[k] = _decrypt(v)
                 else:
                     decrypted[k] = v
+            _cache_set(_settings_cache, guild_id, decrypted)
             return decrypted
     finally:
         conn.close()
@@ -557,6 +599,7 @@ def update_setting(guild_id: int, key: str, value):
         conn.commit()
     finally:
         conn.close()
+    _cache_drop(_settings_cache, guild_id)
 
 
 def remove_setting(guild_id: int, key: str):
@@ -574,6 +617,7 @@ def remove_setting(guild_id: int, key: str):
             conn.commit()
         finally:
             conn.close()
+        _cache_drop(_settings_cache, guild_id)
 
 
 def get_all_settings(guild_id: int = None) -> dict:
@@ -1749,6 +1793,7 @@ def set_command_permission(guild_id: int, command: str, role_id: int):
         conn.commit()
     finally:
         conn.close()
+    _cache_drop(_perms_cache, (guild_id, command))
 
 
 def remove_command_permission(guild_id: int, command: str, role_id: int):
@@ -1762,9 +1807,14 @@ def remove_command_permission(guild_id: int, command: str, role_id: int):
         conn.commit()
     finally:
         conn.close()
+    _cache_drop(_perms_cache, (guild_id, command))
 
 
 def get_command_permissions(guild_id: int, command: str) -> list:
+    key = (guild_id, command)
+    cached = _cache_get(_perms_cache, key)
+    if cached is not None:
+        return cached
     conn = get_conn()
     try:
         with conn.cursor() as cur:
@@ -1772,9 +1822,11 @@ def get_command_permissions(guild_id: int, command: str) -> list:
                 "SELECT role_id FROM command_permissions WHERE guild_id = %s AND command = %s",
                 (guild_id, command),
             )
-            return [row[0] for row in cur.fetchall()]
+            result = [row[0] for row in cur.fetchall()]
     finally:
         conn.close()
+    _cache_set(_perms_cache, key, result)
+    return result
 
 
 def get_all_command_permissions(guild_id: int) -> dict:
@@ -1804,6 +1856,7 @@ def clear_command_permissions(guild_id: int, command: str):
         conn.commit()
     finally:
         conn.close()
+    _cache_drop(_perms_cache, (guild_id, command))
 
 
 def set_command_disabled(guild_id: int, command: str, disabled: bool):
@@ -2020,7 +2073,9 @@ def get_content_override(content_key: str, lang: str) -> str:
 
 
 def get_command_display(command_name: str) -> dict:
-    """Return the global display override for a command (or {} if none)."""
+    cached = _cache_get(_display_cache, command_name)
+    if cached is not None:
+        return cached
     conn = get_conn()
     try:
         with conn.cursor() as cur:
@@ -2032,6 +2087,7 @@ def get_command_display(command_name: str) -> dict:
             )
             row = cur.fetchone()
         if not row:
+            _cache_set(_display_cache, command_name, {})
             return {}
         plain_reply, title, description, color, footer_text, thumbnail_url, image_url, help_description, buttons = row
         cfg = {}
@@ -2053,6 +2109,7 @@ def get_command_display(command_name: str) -> dict:
             cfg["help_description"] = help_description
         if buttons:
             cfg["buttons"] = buttons
+        _cache_set(_display_cache, command_name, cfg)
         return cfg
     finally:
         conn.close()
@@ -2122,6 +2179,7 @@ def set_command_display(command_name: str, **fields) -> None:
         conn.commit()
     finally:
         conn.close()
+    _cache_drop(_display_cache, command_name)
 
 
 def delete_command_display(command_name: str) -> None:
@@ -2135,6 +2193,7 @@ def delete_command_display(command_name: str) -> None:
         conn.commit()
     finally:
         conn.close()
+    _cache_drop(_display_cache, command_name)
 
 
 # ============================================================
