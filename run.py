@@ -43,9 +43,28 @@ def run_bot():
         "cogs.playtime",
         "cogs.player_ops",
         "cogs.anti_abuse",
-        "cogs.cluster",
-        "cogs.staff",
     ]
+
+    # Discord allows max 100 global slash commands. These cogs hold the
+    # commands that spill over the limit, so they are registered per-guild
+    # instead (guild scope has its own separate limit of 100).
+    GUILD_SCOPED_EXTENSIONS = [
+        ("cogs.cluster", "Cluster"),
+        ("cogs.staff", "Staff"),
+    ]
+
+    async def _register_guild_scoped(bot):
+        """Build commands for cogs that exceed the global slash limit and
+        register them per-guild (the tree's guild scope has its own limit)."""
+        scoped = []
+        for mod_name, cls_name in GUILD_SCOPED_EXTENSIONS:
+            try:
+                mod = __import__(mod_name, fromlist=[cls_name])
+                cog = getattr(mod, cls_name)(bot)
+                scoped.extend(cog.get_app_commands())
+            except Exception as e:
+                print(f"[Bot] ERROR building guild-scoped {mod_name}: {e}", flush=True)
+        return scoped
 
     @bot.event
     async def on_ready():
@@ -63,15 +82,36 @@ def run_bot():
             print(f"[Bot] Synced {len(synced)} slash commands globally", flush=True)
         except Exception as e:
             print(f"[Bot] Global sync error: {e}", flush=True)
-        # Remove stale per-guild copies left from earlier testing so commands do not duplicate.
-        # Commands live globally only; the global sync above already registered them.
+        guild_scoped = await _register_guild_scoped(bot)
+        print(f"[Bot] Guild-scoped commands ready: {len(guild_scoped)}", flush=True)
+        # Commands over the global limit live in guild scope. Syncing a guild
+        # replaces its whole slash-command list server-side, which also drops
+        # any stale per-guild copies left from earlier testing.
         for guild in bot.guilds:
+            for cmd in guild_scoped:
+                try:
+                    bot.tree.add_command(cmd, guild=guild, override=True)
+                except Exception as e:
+                    print(f"[Bot] Guild-scoped add error {cmd.name} in {guild.name}: {e}", flush=True)
             try:
-                bot.tree.clear_commands(guild=guild)
-                cleared = await bot.tree.sync(guild=guild)
-                print(f"[Bot] Cleaned {len(cleared)} guild copies from {guild.name}", flush=True)
+                synced = await bot.tree.sync(guild=guild)
+                print(f"[Bot] Synced {len(synced)} guild commands for {guild.name}", flush=True)
             except Exception as e:
                 print(f"[Bot] Guild cleanup error for {guild.name}: {e}", flush=True)
+
+    @bot.event
+    async def on_guild_join(guild):
+        print(f"[Bot] Joined guild {guild.name}", flush=True)
+        try:
+            for mod_name, cls_name in GUILD_SCOPED_EXTENSIONS:
+                mod = __import__(mod_name, fromlist=[cls_name])
+                cog = getattr(mod, cls_name)(bot)
+                for cmd in cog.get_app_commands():
+                    bot.tree.add_command(cmd, guild=guild, override=True)
+            synced = await bot.tree.sync(guild=guild)
+            print(f"[Bot] Synced {len(synced)} guild commands for {guild.name}", flush=True)
+        except Exception as e:
+            print(f"[Bot] on_guild_join sync error for {guild.name}: {e}", flush=True)
 
     @bot.tree.interaction_check
     async def global_permission_check(interaction: discord.Interaction) -> bool:
