@@ -4,9 +4,6 @@ import os
 # ---------- Discord ----------
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN", "")
 
-# ---------- Gemini ----------
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-
 # ---------- Dashboard OAuth2 ----------
 DISCORD_CLIENT_ID = os.getenv("DISCORD_CLIENT_ID", "")
 DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET", "")
