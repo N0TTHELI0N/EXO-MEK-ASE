@@ -59,7 +59,6 @@ TRANSLATIONS = {
     "servers_sub": {"ar": "اختر السيرفرات التي لديك فيها صلاحية إدارة (أدمن). إذا لم يكن البوت فيها بعد، ادعوه لإضافته.", "en": "Choose a server where you have Administrator access. If the bot isn't there yet, invite it to join."},
     "servers_members": {"ar": "عضو", "en": "members"},
     "servers_online": {"ar": "متصل", "en": "online"},
-    "servers_total": {"ar": "الإجمالي", "en": "total"},
     "servers_empty_title": {"ar": "لا توجد سيرفرات", "en": "No servers found"},
     "servers_empty_desc": {"ar": "لا نجد سيرفرات لديك فيها صلاحية إدارة (أدمن).", "en": "We couldn't find any servers where you have Administrator access."},
     "servers_invite": {"ar": "دعوة البوت للسيرفر", "en": "Invite Bot to Server"},
