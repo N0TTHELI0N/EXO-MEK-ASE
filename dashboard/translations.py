@@ -76,7 +76,7 @@ TRANSLATIONS = {
     "dash_automod": {"ar": "الحماية التلقائية", "en": "AutoMod"},
     "dash_punish": {"ar": "العقوبات", "en": "Punishments"},
     "dash_embeds": {"ar": "التنسيقات", "en": "Embeds"},
-    "dash_anti_abuse": {"ar": "مكافحة الإساءة", "en": "Anti-Abuse"},
+    "dash_anti_abuse": {"ar": "تتبّع العناوين", "en": "IP-Tracking"},
     "dash_players": {"ar": "اللاعبون", "en": "Players"},
     "dash_cluster": {"ar": "مجموعة الخوادم", "en": "Cluster"},
     "dash_staff": {"ar": "مدفوعات الطاقم", "en": "Staff Payments"},
