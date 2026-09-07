@@ -394,7 +394,7 @@ TRANSLATIONS = {
     "embeds_author": {"ar": "المؤلف", "en": "Author"},
     "embeds_no_title": {"ar": "(بدون عنوان)", "en": "(No title)"},
 
-    "anti_abuse_title": {"ar": "مكافحة الإساءة", "en": "Anti-Abuse"},
+    "anti_abuse_title": {"ar": "تتبّع العناوين", "en": "IP-Tracking"},
     "anti_abuse_desc": {"ar": "سجل تدقيق إجراءات الإدمن وإدارة عناوين IP وكشف الحسابات البديلة", "en": "Admin-action audit log, IP management, and alt-account detection"},
     "anti_abuse_log": {"ar": "سجل التدقيق", "en": "Audit Log"},
     "anti_abuse_actor": {"ar": "المُستخدم", "en": "User"},
