@@ -181,6 +181,8 @@
          class="px-3 py-1 rounded-full bg-gray-700 hover:bg-gray-600 border border-gray-600 text-xs text-gray-300">{{ t('tribelog_search_joined') }}</a>
       <a href="{{ url_for('section_tribelog', guild_id=guild_id, q='removed a member', tribe=search_tribe or '') }}"
          class="px-3 py-1 rounded-full bg-gray-700 hover:bg-gray-600 border border-gray-600 text-xs text-gray-300">{{ t('tribelog_search_left') }}</a>
+      <a href="{{ url_for('section_tribelog', guild_id=guild_id, q='destroyed structure', tribe=search_tribe or '') }}"
+         class="px-3 py-1 rounded-full bg-gray-700 hover:bg-gray-600 border border-gray-600 text-xs text-gray-300">{{ t('tribelog_search_destroyed') }}</a>
     </div>
   </form>
 

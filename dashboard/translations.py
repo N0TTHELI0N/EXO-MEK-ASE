@@ -568,6 +568,7 @@ TRANSLATIONS = {
     "tribelog_search_quick": {"ar": "فلترة سريعة", "en": "Quick filters"},
     "tribelog_search_joined": {"ar": "انضم للقبيلة", "en": "Joined tribe"},
     "tribelog_search_left": {"ar": "غادر القبيلة", "en": "Left tribe"},
+    "tribelog_search_destroyed": {"ar": "البنايات المدمرة", "en": "Destroyed structures"},
     "tribelog_all_tribes": {"ar": "كل القبائل", "en": "All tribes"},
     "tribelog_filtering": {"ar": "نتائج الفلترة", "en": "Filtered results"},
     "tribe_log_tribe": {"ar": "القبيلة", "en": "Tribe"},
