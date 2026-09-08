@@ -2535,7 +2535,7 @@ def add_tribe_log_event(guild_id: int, tribe_name: str, content: str):
     try:
         with conn.cursor() as cur:
             cur.execute(
-                "INSERT INTO tribe_log_events (guild_id, tribe_name, content) VALUES (%s, %s, %s)",
+                "INSERT INTO tribe_log_events (guild_id, tribe_name, content) VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
                 (guild_id, tribe_name, content),
             )
         conn.commit()

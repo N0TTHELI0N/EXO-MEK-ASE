@@ -52,6 +52,16 @@ def _init_tribelog_db():
                     PRIMARY KEY (guild_id, tribe_name)
                 )
             """)
+            # Dedupe events that were re-ingested after bot restarts, then guard
+            # against duplicates forever (auto-discovered tribes stay clean).
+            cur.execute("""
+                DELETE FROM tribe_log_events a
+                USING tribe_log_events b
+                WHERE a.guild_id = b.guild_id
+                  AND a.content = b.content
+                  AND a.id > b.id
+            """)
+            cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_tribe_log_events_content ON tribe_log_events (guild_id, md5(content))")
         conn.commit()
     finally:
         conn.close()
