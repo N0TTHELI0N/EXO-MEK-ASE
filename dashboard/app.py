@@ -940,7 +940,19 @@ def section_tribelog(guild_id):
     }
     forum_cfg = guild_settings.get_tribe_forum_config(guild_id) or {}
     tribe_counts = guild_settings.get_tribe_event_counts(guild_id)
-    tribe_events = guild_settings.get_tribe_log_events(guild_id, limit=200)
+    search_q = (request.args.get("q") or "").strip()
+    search_tribe = (request.args.get("tribe") or "").strip() or None
+    tribe_events = guild_settings.get_tribe_log_events(
+        guild_id,
+        tribe_name=search_tribe,
+        limit=200,
+        search=search_q or None,
+    )
+    tribe_event_total = guild_settings.get_tribe_log_event_count(
+        guild_id,
+        tribe_name=search_tribe,
+        search=search_q or None,
+    )
     return render_template(
         "sections/tribelog.html",
         user=get_current_user(),
@@ -952,6 +964,9 @@ def section_tribelog(guild_id):
         tribe_threads=forum_cfg.get("threads", {}),
         tribe_counts=tribe_counts,
         tribe_events=tribe_events,
+        tribe_event_total=tribe_event_total,
+        search_q=search_q,
+        search_tribe=search_tribe,
         is_owner=(get_current_user() or {}).get("id") == BOT_OWNER_ID,
     )
 

@@ -2572,26 +2572,28 @@ def mark_tribe_event_posted(log_id: int):
         conn.close()
 
 
-def get_tribe_log_events(guild_id: int, tribe_name: str = None, limit: int = 100, offset: int = 0):
+def get_tribe_log_events(guild_id: int, tribe_name: str = None, limit: int = 100, offset: int = 0, search: str = None):
     conn = get_conn()
     try:
         with conn.cursor() as cur:
+            conditions = ["guild_id = %s"]
+            params = [guild_id]
             if tribe_name:
-                cur.execute("""
-                    SELECT id, tribe_name, content, created_at
-                    FROM tribe_log_events
-                    WHERE guild_id = %s AND tribe_name = %s
-                    ORDER BY created_at DESC
-                    LIMIT %s OFFSET %s
-                """, (guild_id, tribe_name, limit, offset))
-            else:
-                cur.execute("""
-                    SELECT id, tribe_name, content, created_at
-                    FROM tribe_log_events
-                    WHERE guild_id = %s
-                    ORDER BY created_at DESC
-                    LIMIT %s OFFSET %s
-                """, (guild_id, limit, offset))
+                conditions.append("tribe_name = %s")
+                params.append(tribe_name)
+            if search:
+                conditions.append("content ILIKE %s")
+                params.append(f"%{search}%")
+            cur.execute(
+                f"""
+                SELECT id, tribe_name, content, created_at
+                FROM tribe_log_events
+                WHERE {' AND '.join(conditions)}
+                ORDER BY created_at DESC
+                LIMIT %s OFFSET %s
+                """,
+                (*params, limit, offset),
+            )
             return [
                 {"id": r[0], "tribe_name": r[1], "content": r[2], "created_at": r[3]}
                 for r in cur.fetchall()
@@ -2600,14 +2602,22 @@ def get_tribe_log_events(guild_id: int, tribe_name: str = None, limit: int = 100
         conn.close()
 
 
-def get_tribe_log_event_count(guild_id: int, tribe_name: str = None):
+def get_tribe_log_event_count(guild_id: int, tribe_name: str = None, search: str = None):
     conn = get_conn()
     try:
         with conn.cursor() as cur:
+            conditions = ["guild_id = %s"]
+            params = [guild_id]
             if tribe_name:
-                cur.execute("SELECT COUNT(*) FROM tribe_log_events WHERE guild_id = %s AND tribe_name = %s", (guild_id, tribe_name))
-            else:
-                cur.execute("SELECT COUNT(*) FROM tribe_log_events WHERE guild_id = %s", (guild_id,))
+                conditions.append("tribe_name = %s")
+                params.append(tribe_name)
+            if search:
+                conditions.append("content ILIKE %s")
+                params.append(f"%{search}%")
+            cur.execute(
+                f"SELECT COUNT(*) FROM tribe_log_events WHERE {' AND '.join(conditions)}",
+                params,
+            )
             return cur.fetchone()[0]
     finally:
         conn.close()

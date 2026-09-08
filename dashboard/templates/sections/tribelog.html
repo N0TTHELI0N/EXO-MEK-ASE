@@ -155,6 +155,43 @@
 <div class="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6 mt-6">
   <h3 class="text-lg font-semibold text-white mb-2">{{ t('tribe_log_events') }}</h3>
   <p class="text-sm text-gray-400 mb-4">{{ t('tribe_log_events_desc') }}</p>
+
+  <form method="GET" class="mb-4 p-4 bg-gray-900/50 border border-gray-700/50 rounded-xl">
+    <p class="text-sm font-medium text-gray-200 mb-3">{{ t('tribelog_search') }}</p>
+    <div class="flex flex-wrap items-center gap-3">
+      <input type="text" name="q" value="{{ search_q }}"
+             placeholder="{{ t('tribelog_search_ph') }}"
+             class="flex-1 min-w-[200px] bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none">
+      <select name="tribe"
+              class="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:ring-2 focus:ring-red-500 outline-none">
+        <option value="">{{ t('tribelog_all_tribes') }}</option>
+        {% for tribe in tribes %}
+        <option value="{{ tribe }}" {% if search_tribe == tribe %}selected{% endif %}>{{ tribe }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-medium rounded-lg transition-colors">{{ t('tribelog_search_btn') }}</button>
+      {% if search_q or search_tribe %}
+      <a href="{{ url_for('section_tribelog', guild_id=guild_id) }}"
+         class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium rounded-lg transition-colors">{{ t('tribelog_search_clear') }}</a>
+      {% endif %}
+    </div>
+    <div class="flex flex-wrap items-center gap-2 mt-3">
+      <span class="text-xs text-gray-400">{{ t('tribelog_search_quick') }}:</span>
+      <a href="{{ url_for('section_tribelog', guild_id=guild_id, q='added a member', tribe=search_tribe or '') }}"
+         class="px-3 py-1 rounded-full bg-gray-700 hover:bg-gray-600 border border-gray-600 text-xs text-gray-300">{{ t('tribelog_search_joined') }}</a>
+      <a href="{{ url_for('section_tribelog', guild_id=guild_id, q='removed a member', tribe=search_tribe or '') }}"
+         class="px-3 py-1 rounded-full bg-gray-700 hover:bg-gray-600 border border-gray-600 text-xs text-gray-300">{{ t('tribelog_search_left') }}</a>
+    </div>
+  </form>
+
+  {% if search_q or search_tribe %}
+  <p class="text-sm text-gray-400 mb-4">
+    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-500/10 border border-red-500/30 text-red-300 text-xs font-medium">
+      {{ tribe_event_total }} {{ t('tribe_log_events') }} — {{ t('tribelog_filtering') }}
+    </span>
+  </p>
+  {% endif %}
+
   {% if tribe_events %}
   <div class="overflow-x-auto">
     <table class="w-full text-sm text-left">
@@ -177,7 +214,7 @@
     </table>
   </div>
   {% else %}
-  <p class="text-gray-500 text-sm py-4 text-center">{{ t('tribe_log_no_events') }}</p>
+  <p class="text-gray-500 text-sm py-4 text-center">{{ t('tribe_log_no_search_results') if (search_q or search_tribe) else t('tribe_log_no_events') }}</p>
   {% endif %}
 
   <!-- Wipe Tribe Logs -->
