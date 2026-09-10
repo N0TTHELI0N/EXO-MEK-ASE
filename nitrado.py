@@ -398,27 +398,37 @@ class NitradoClient:
         text = self._get_log_file_text(lines)
         if text:
             return text
+        # The latest_log endpoint is not available for every game (PlayStation
+        # services expose no file interface at all). Trying every game slug
+        # fired hundreds of pointless 404 requests per tick — restrict the
+        # fallback to the resolved game + ARK-family slugs only.
         candidates: list[str] = []
         try:
-            candidates += self._discover_game_slugs()
             real = self._game_short()
             if real and real not in candidates:
                 candidates.append(real)
         except Exception:
             pass
-        candidates += ["arkse", "arkps4", "arksa", "arkxb", "ark", "asa", "arkps"]
+        for slug in ("arkse", "arkps4", "arksa", "arkxb", "arkps", "ark", "asa"):
+            if slug not in candidates:
+                candidates.append(slug)
         if not getattr(self, "_log_slugs_printed", False):
             self._log_slugs_printed = True
-            print(f"[nitrado] log candidate slugs: {list(dict.fromkeys(candidates))}", flush=True)
-        for slug in dict.fromkeys(candidates):
+            print(f"[nitrado] log candidate slugs: {candidates} (ARK-family only)", flush=True)
+        for slug in candidates:
             data = self._request("GET", f"/services/{self.service_id}/gameservers/games/{slug}/latest_log")
             content = data.get("content", "") if isinstance(data, dict) else ""
             if content:
                 return "\n".join(content.split("\n")[-lines:])
+        gs = self._server_gs() or {}
+        game = str(gs.get("game") or "").lower()
+        if ("ps4" in game or "ps5" in game or game == "arkps") and not getattr(self, "_ps_hint_printed", False):
+            self._ps_hint_printed = True
+            print(f"[nitrado-fs] HINT game={game!r} is a PLAYSTATION service: Nitrado exposes no API file interface for PS servers (download + latest_log empty) — route log reading through SFTP/FTP (set ftp_host/ftp_user/ftp_password in the dashboard)", flush=True)
         now = time.time()
         if not getattr(self, "_log_empty_printed", False) or now - self._log_empty_printed >= 60:
             self._log_empty_printed = now
-            print(f"[nitrado] get_logs EMPTY for file paths + all latest_log slugs", flush=True)
+            print(f"[nitrado] get_logs EMPTY for file paths + ARK latest_log slugs", flush=True)
         return ""
 
     def restart_server(self) -> bool:
