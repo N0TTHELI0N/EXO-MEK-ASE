@@ -32,6 +32,7 @@ async def _normalize_thread(result):
 class CustomCommands(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self._renamed_log_forum = False
         self.post_forum_logs.start()
 
     def cog_unload(self):
@@ -105,11 +106,17 @@ class CustomCommands(commands.Cog):
     @tasks.loop(seconds=20)
     async def post_forum_logs(self):
         for guild in self.bot.guilds:
-            # Server-log forum (command categories)
+            # Server-log forum (command categories) — renamed to admin-logs.
             cfg = guild_settings.get_forum_log_config(guild.id)
             if cfg and cfg["forum_id"]:
                 forum = guild.get_channel(cfg["forum_id"])
                 if forum:
+                    if not self._renamed_log_forum and forum.name.lower() == "server-logs":
+                        try:
+                            await forum.edit(name="admin-logs", reason="Renamed to admin-logs under the new log system")
+                        except Exception:
+                            pass
+                    self._renamed_log_forum = True
                     for entry in guild_settings.get_unposted_forum_logs(guild.id):
                         cat = entry.get("log_category")
                         meta = CATEGORY_META.get(cat)
@@ -252,7 +259,7 @@ class CustomCommands(commands.Cog):
         await interaction.followup.send(out)
 
     # ── /setup-forum-logs ───────────────────────────────────
-    @app_commands.command(name="setup-forum-logs", description="Create the server-log forum channel with 4 category threads (Admin only)")
+    @app_commands.command(name="setup-forum-logs", description="Create the admin-log forum channel with 4 category threads (Admin only)")
     @app_commands.describe(channel="Existing forum/text channel to use (optional - otherwise auto-created)")
     async def setup_forum_logs(self, interaction: discord.Interaction, channel: discord.TextChannel = None):
         if not interaction.user.guild_permissions.administrator:
@@ -264,12 +271,19 @@ class CustomCommands(commands.Cog):
             # create a new forum channel
             try:
                 forum = await interaction.guild.create_forum(
-                    name="server-logs",
+                    name="admin-logs",
                     topic=bot_i18n.t(interaction.guild_id, "forum_topic"),
-                    reason="Server log forum - created by setup-forum-logs",
+                    reason="Admin log forum - created by setup-forum-logs",
                 )
             except Exception as e:
                 return await interaction.followup.send(bot_i18n.t(interaction.guild_id, "forum_error", error=e), ephemeral=True)
+
+        # Rename past "server-logs" forums so the old forum becomes admin-logs.
+        if getattr(forum, "name", "").lower() == "server-logs":
+            try:
+                await forum.edit(name="admin-logs", reason="Renamed to admin-logs under the new log system")
+            except Exception:
+                pass
 
         # ensure 4 threads exist (one per category)
         thread_ids = {}

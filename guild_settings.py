@@ -258,6 +258,29 @@ def init_db():
                 )
             """)
             cur.execute("CREATE INDEX IF NOT EXISTS idx_chat_logs_guild ON chat_logs(guild_id, relayed_at DESC)")
+            cur.execute("ALTER TABLE chat_logs ADD COLUMN IF NOT EXISTS posted_chat_forum BOOLEAN DEFAULT FALSE")
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS server_log_config (
+                    guild_id                BIGINT PRIMARY KEY,
+                    enabled                 BOOLEAN DEFAULT FALSE,
+                    server_forum_id         BIGINT,
+                    server_events_thread_id BIGINT,
+                    chat_forum_id           BIGINT,
+                    chat_thread_id          BIGINT
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS server_events (
+                    id           SERIAL PRIMARY KEY,
+                    guild_id     BIGINT NOT NULL,
+                    event_type   TEXT NOT NULL,
+                    player_name  TEXT,
+                    raw_line     TEXT,
+                    created_at   TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    posted_forum BOOLEAN DEFAULT FALSE
+                )
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_server_events_guild ON server_events(guild_id, id)")
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS chat_auto_rules (
                     id             SERIAL PRIMARY KEY,
@@ -1468,6 +1491,129 @@ def clear_chat_logs(guild_id: int):
     try:
         with conn.cursor() as cur:
             cur.execute("DELETE FROM chat_logs WHERE guild_id = %s", (guild_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+# ============================================================
+#  SERVER LOGS (player join/leave events + game-chat forum)
+# ============================================================
+
+def get_server_log_config(guild_id: int) -> dict:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT enabled, server_forum_id, server_events_thread_id, chat_forum_id, chat_thread_id "
+                "FROM server_log_config WHERE guild_id = %s",
+                (guild_id,),
+            )
+            row = cur.fetchone()
+            if row:
+                return {
+                    "enabled": row[0],
+                    "server_forum_id": row[1],
+                    "server_events_thread_id": row[2],
+                    "chat_forum_id": row[3],
+                    "chat_thread_id": row[4],
+                }
+            return {
+                "enabled": False,
+                "server_forum_id": None,
+                "server_events_thread_id": None,
+                "chat_forum_id": None,
+                "chat_thread_id": None,
+            }
+    finally:
+        conn.close()
+
+
+def update_server_log_config(guild_id: int, **kwargs):
+    allowed = {"enabled", "server_forum_id", "server_events_thread_id", "chat_forum_id", "chat_thread_id"}
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO server_log_config (guild_id) VALUES (%s)
+                ON CONFLICT (guild_id) DO NOTHING
+            """, (guild_id,))
+            for key, val in kwargs.items():
+                if key not in allowed:
+                    raise ValueError(f"Invalid server log column: {key}")
+                cur.execute(f"UPDATE server_log_config SET {key} = %s WHERE guild_id = %s", (val, guild_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def add_server_event(guild_id: int, event_type: str, player_name: str, raw_line: str):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO server_events (guild_id, event_type, player_name, raw_line) VALUES (%s, %s, %s, %s)",
+                (guild_id, event_type, player_name, raw_line),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_unposted_server_events(guild_id: int, limit: int = 50):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, event_type, player_name, raw_line, created_at
+                FROM server_events
+                WHERE guild_id = %s AND posted_forum = FALSE
+                ORDER BY id ASC
+                LIMIT %s
+            """, (guild_id, limit))
+            return [
+                {"id": r[0], "event_type": r[1], "player_name": r[2], "raw_line": r[3], "created_at": r[4]}
+                for r in cur.fetchall()
+            ]
+    finally:
+        conn.close()
+
+
+def mark_server_event_posted(event_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE server_events SET posted_forum = TRUE WHERE id = %s", (event_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_unposted_chat_forum_logs(guild_id: int, limit: int = 50):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, channel, player_name, message, direction, relayed_at
+                FROM chat_logs
+                WHERE guild_id = %s AND posted_chat_forum = FALSE
+                ORDER BY id ASC
+                LIMIT %s
+            """, (guild_id, limit))
+            return [
+                {"id": r[0], "channel": r[1], "player_name": r[2], "message": r[3],
+                 "direction": r[4], "relayed_at": r[5]}
+                for r in cur.fetchall()
+            ]
+    finally:
+        conn.close()
+
+
+def mark_chat_forum_posted(log_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE chat_logs SET posted_chat_forum = TRUE WHERE id = %s", (log_id,))
         conn.commit()
     finally:
         conn.close()

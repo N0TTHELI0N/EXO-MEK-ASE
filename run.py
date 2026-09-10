@@ -51,6 +51,7 @@ def run_bot():
     GUILD_SCOPED_EXTENSIONS = [
         ("cogs.cluster", "Cluster"),
         ("cogs.staff", "Staff"),
+        ("cogs.server_logs", "ServerLogs"),
     ]
 
     async def _register_guild_scoped(bot):

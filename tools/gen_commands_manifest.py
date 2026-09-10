@@ -71,6 +71,7 @@ FILE_CATEGORY = {
     "anti_abuse.py": "moderation",
     "cluster.py": "server",
     "staff.py": "admin",
+    "server_logs.py": "server",
 }
 
 

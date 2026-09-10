@@ -28,6 +28,25 @@ _TS_CAT = re.compile(r"^\[[^\]]+\]\[[^\]]+\]\s*[^:]*?:\s*(.*)$")
 _PLAIN_CAT = re.compile(r"^[^:]+:\s*(.*)$")
 _CHAT_BODY = re.compile(r"^(?:\[(?P<channel>[^\]]+)\]\s*)?(?P<player>[^:\]]+?)\s*:\s*(?P<msg>.+)$")
 
+# Player join / leave the server, detected in the same ARK log stream.
+_JOIN_LEAVE_PATTERNS = [
+    (re.compile(r"'(?P<name>[^']+)'.*?joined the server", re.I), "join"),
+    (re.compile(r"Player (?P<name>[^']{2,40}?) joined the server", re.I), "join"),
+    (re.compile(r"'(?P<name>[^']+)'.*?(?:left|disconnected)(?:\s+from)?\s+the server", re.I), "leave"),
+    (re.compile(r"Player (?P<name>[^']{2,40}?)\s+(?:left|disconnected)(?:\s+from)?\s+the server", re.I), "leave"),
+]
+
+
+def _detect_join_leave(line: str):
+    """Return (event_type, player_name) if the line is a player join/leave event."""
+    for regex, ev_type in _JOIN_LEAVE_PATTERNS:
+        m = regex.search(line)
+        if m:
+            name = m.group("name").strip().strip("'\"").strip()
+            if name:
+                return ev_type, name
+    return None
+
 
 def _parse_chat_line(line: str):
     text = line
@@ -153,6 +172,10 @@ class ChatBridge(commands.Cog):
                 if not text:
                     continue
                 if not self._is_new_line(guild.id, text):
+                    continue
+                joined = _detect_join_leave(text)
+                if joined:
+                    guild_settings.add_server_event(guild.id, joined[0], joined[1], text)
                     continue
                 parsed = _parse_chat_line(text)
                 if not parsed:

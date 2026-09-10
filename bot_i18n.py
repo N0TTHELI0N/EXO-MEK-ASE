@@ -135,8 +135,8 @@ STRINGS = {
         "en": "The command runner is disabled. Enable it from the dashboard.",
     },
     "forum_topic": {
-        "ar": "سجل أوامر السيرفر - مصنف في ٤ أقسام",
-        "en": "Server command log - categorized into 4 sections",
+        "ar": "سجل أوامر الإدارة - مصنف في ٤ أقسام",
+        "en": "Admin command log - categorized into 4 sections",
     },
     "forum_thread_intro": {
         "ar": "قسم **{label}** - تُعرض هنا الأوامر المسجلة.",
@@ -1063,8 +1063,8 @@ STRINGS = {
         "en": "⚠️ Only {created}/4 threads were created. Missing: {missing}.{errors} Run the command again to retry.",
     },
     "forum_ready": {
-        "ar": "✅ فوروم سجل السيرفر جاهز.\nالفوروم: {forum}\nالمواضيع: 🦖 <#{thread_dino}> · 🎁 <#{thread_gfi}> · 🧍 <#{thread_player}> · 🎮 <#{thread_gcm}>",
-        "en": "✅ Server-log forum ready.\nForum: {forum}\nThreads: 🦖 <#{thread_dino}> · 🎁 <#{thread_gfi}> · 🧍 <#{thread_player}> · 🎮 <#{thread_gcm}>",
+        "ar": "✅ فوروم سجل الإدارة جاهز.\nالفوروم: {forum}\nالمواضيع: 🦖 <#{thread_dino}> · 🎁 <#{thread_gfi}> · 🧍 <#{thread_player}> · 🎮 <#{thread_gcm}>",
+        "en": "✅ Admin-log forum ready.\nForum: {forum}\nThreads: 🦖 <#{thread_dino}> · 🎁 <#{thread_gfi}> · 🧍 <#{thread_player}> · 🎮 <#{thread_gcm}>",
     },
     "shop_forum_partial": {
         "ar": "⚠️ تعذر إنشاء جميع مواضيع المتجر. المفقود: {missing}.{errors} أعد تشغيل الأمر للمحاولة.",
@@ -1073,6 +1073,42 @@ STRINGS = {
     "shop_forum_ready": {
         "ar": "✅ فوروم سجل المتجر جاهز.\nالفوروم: {forum}\nالمواضيع: ✅ <#{thread_done}> · ⏳ <#{thread_pending}>",
         "en": "✅ Shop-logs forum ready.\nForum: {forum}\nThreads: ✅ <#{thread_done}> · ⏳ <#{thread_pending}>",
+    },
+    "server_logs_topic": {
+        "ar": "لوقات السيرفر الأساسية - دخول وخروج اللاعبين",
+        "en": "Core server logs - player join/leave events",
+    },
+    "server_logs_thread_intro": {
+        "ar": "أحداث دخول وخروج اللاعبين من السيرفر.",
+        "en": "Player join / leave events from the server log.",
+    },
+    "server_logs_forum_ready": {
+        "ar": "✅ فوروم سجلات السيرفر جاهز.\nالفوروم: {forum}\nموضوع الأحداث: {thread}",
+        "en": "✅ Server-logs forum ready.\nForum: {forum}\nEvents thread: {thread}",
+    },
+    "chat_forum_topic": {
+        "ar": "شات اللعبة داخل السيرفر - رسائل اللاعبين",
+        "en": "In-game chat - player messages",
+    },
+    "chat_forum_thread_intro": {
+        "ar": "رسائل شات اللعبة القادمة من السيرفر.",
+        "en": "In-game chat messages from the server.",
+    },
+    "chat_forum_ready": {
+        "ar": "✅ فوروم شات اللعبة جاهز.\nالفوروم: {forum}\nالموضوع: {thread}",
+        "en": "✅ Game-chat forum ready.\nForum: {forum}\nThread: {thread}",
+    },
+    "server_logs_toggled": {
+        "ar": "تم تغيير حالة نشر السجلات إلى: **{state}**.",
+        "en": "Forum posting for server logs is now: **{state}**.",
+    },
+    "server_event_join": {
+        "ar": "دخل السيرفر",
+        "en": "joined the server",
+    },
+    "server_event_leave": {
+        "ar": "خرج من السيرفر",
+        "en": "left the server",
     },
 
     # ── automod ──────────────────────────────────────────────

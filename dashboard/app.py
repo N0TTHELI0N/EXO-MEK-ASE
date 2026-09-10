@@ -2343,6 +2343,7 @@ def section_logs(guild_id):
         log_settings=log_settings,
         forum_cfg=guild_settings.get_forum_log_config(guild_id),
         shop_forum_cfg=guild_settings.get_shop_forum_config(guild_id),
+        server_log_cfg=guild_settings.get_server_log_config(guild_id),
         category_rules=guild_settings.get_category_rules(guild_id),
         is_owner=(get_current_user() or {}).get("id") == BOT_OWNER_ID,
     )

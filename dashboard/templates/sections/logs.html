@@ -5,12 +5,12 @@
   <p class="text-gray-400 mt-1">{{ t('logs_desc') }}</p>
 </div>
 
-<!-- Server-Log Forum -->
+<!-- Admin-Log Forum -->
 <div class="mb-6 bg-gray-800/50 border border-gray-700/50 rounded-2xl shadow-lg p-6">
   <div class="flex items-center justify-between">
     <div>
-      <h3 class="text-lg font-bold text-white">📋 Server-Log Forum</h3>
-      <p class="text-gray-400 text-sm mt-1">Logged commands are posted into 4 forum threads (Dino Spawning / GFI / Player Features / GCM).</p>
+      <h3 class="text-lg font-bold text-white">🗂️ Admin-Logs Forum</h3>
+      <p class="text-gray-400 text-sm mt-1">Admin/bot command logs are posted into 4 forum threads (Dino Spawning / GFI / Player Features / GCM). The old <b>server-logs</b> forum was renamed to <b>admin-logs</b>.</p>
     </div>
   </div>
   {% if forum_cfg and forum_cfg.forum_id %}
@@ -20,8 +20,70 @@
   </div>
   {% else %}
   <div class="mt-3 px-4 py-3 bg-yellow-500/10 border border-yellow-500/40 rounded-xl text-yellow-300 text-sm">
-    ⚠️ Forum not set up. Run <code>/setup-forum-logs</code> in Discord (Admin only) to create the forum channel
-    <b>server-logs</b> with its 4 category threads. The bot will then post logged commands automatically.
+    ⚠️ Forum not set up. Run <code>/setup-forum-logs</code> in Discord (Admin only) to create the
+    <b>admin-logs</b> forum with its 4 category threads. The bot will then post logged commands automatically.
+  </div>
+  {% endif %}
+</div>
+
+<!-- Server-Logs Forum (player join/leave) -->
+<div class="mb-6 bg-gray-800/50 border border-gray-700/50 rounded-2xl shadow-lg p-6">
+  <div class="flex items-center justify-between">
+    <div>
+      <h3 class="text-lg font-bold text-white">🌐 Server-Logs Forum</h3>
+      <p class="text-gray-400 text-sm mt-1">Core server logs: who entered the server and when they left.</p>
+    </div>
+    {% if server_log_cfg.enabled %}
+    <span class="inline-flex px-3 py-1 rounded-full bg-green-500/10 border border-green-500/30 text-green-300 text-xs font-medium">Enabled</span>
+    {% else %}
+    <span class="inline-flex px-3 py-1 rounded-full bg-gray-700 text-gray-400 text-xs font-medium">Disabled</span>
+    {% endif %}
+  </div>
+  {% if server_log_cfg.server_forum_id %}
+  <div class="mt-3 text-sm text-green-300">
+    ✅ Forum configured: <code>&lt;#{{ server_log_cfg.server_forum_id }}&gt;</code>
+    {% if server_log_cfg.server_events_thread_id %}· 👤 events thread <code>&lt;#{{ server_log_cfg.server_events_thread_id }}&gt;</code>{% endif %}
+  </div>
+  {% if not server_log_cfg.enabled %}
+  <div class="mt-3 px-4 py-3 bg-yellow-500/10 border border-yellow-500/40 rounded-xl text-yellow-300 text-sm">
+    ⚠️ Posting is disabled. Run <code>/server-logs-enable enabled:True</code> in Discord to start posting.
+  </div>
+  {% endif %}
+  {% else %}
+  <div class="mt-3 px-4 py-3 bg-yellow-500/10 border border-yellow-500/40 rounded-xl text-yellow-300 text-sm">
+    ⚠️ Not set up. Run <code>/setup-server-logs</code> in Discord (Admin only) to create the
+    <b>server-logs</b> forum with its Player Events thread.
+  </div>
+  {% endif %}
+</div>
+
+<!-- Game-Chat Forum -->
+<div class="mb-6 bg-gray-800/50 border border-gray-700/50 rounded-2xl shadow-lg p-6">
+  <div class="flex items-center justify-between">
+    <div>
+      <h3 class="text-lg font-bold text-white">💬 Game-Chat Forum</h3>
+      <p class="text-gray-400 text-sm mt-1">In-game chat is logged to its own forum, separate from the old one.</p>
+    </div>
+    {% if server_log_cfg.enabled %}
+    <span class="inline-flex px-3 py-1 rounded-full bg-green-500/10 border border-green-500/30 text-green-300 text-xs font-medium">Enabled</span>
+    {% else %}
+    <span class="inline-flex px-3 py-1 rounded-full bg-gray-700 text-gray-400 text-xs font-medium">Disabled</span>
+    {% endif %}
+  </div>
+  {% if server_log_cfg.chat_forum_id %}
+  <div class="mt-3 text-sm text-green-300">
+    ✅ Forum configured: <code>&lt;#{{ server_log_cfg.chat_forum_id }}&gt;</code>
+    {% if server_log_cfg.chat_thread_id %}· chat thread <code>&lt;#{{ server_log_cfg.chat_thread_id }}&gt;</code>{% endif %}
+  </div>
+  {% if not server_log_cfg.enabled %}
+  <div class="mt-3 px-4 py-3 bg-yellow-500/10 border border-yellow-500/40 rounded-xl text-yellow-300 text-sm">
+    ⚠️ Posting is disabled. Run <code>/server-logs-enable enabled:True</code> in Discord to start posting.
+  </div>
+  {% endif %}
+  {% else %}
+  <div class="mt-3 px-4 py-3 bg-yellow-500/10 border border-yellow-500/40 rounded-xl text-yellow-300 text-sm">
+    ⚠️ Not set up. Run <code>/setup-game-chat-forum</code> in Discord (Admin only) to create the
+    <b>game-chat</b> forum with its chat thread.
   </div>
   {% endif %}
 </div>
