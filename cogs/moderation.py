@@ -6,7 +6,6 @@ from datetime import datetime, timezone, timedelta
 import aiohttp
 import guild_settings
 import bot_i18n
-import config
 import nitrado
 from security import sanitize_rcon_name, sanitize_rcon_input
 
@@ -25,9 +24,9 @@ async def _send_rcon(guild_id: int, command: str) -> str | None:
 
 def _get_nitrado_headers(guild_id: int):
     cfg = guild_settings.get_nitrado_config(guild_id)
-    token = cfg.get("api_token") or config.NITRADO_API_TOKEN
-    user_id = cfg.get("user_id") or config.NITRADO_USER_ID
-    service_id = cfg.get("service_id") or config.NITRADO_SERVICE_ID
+    token = cfg.get("api_token")
+    user_id = cfg.get("user_id")
+    service_id = cfg.get("service_id")
     if not token:
         return None, None
     return {"Authorization": f"Bearer {token}"}, service_id
