@@ -389,6 +389,12 @@ class NitradoClient:
         Preferred: read the live ARK log file (ShooterGame_Last.log) tail via the
         Nitrado file server. Fallback: REST latest_log endpoint per game slug.
         """
+        gs = self._server_gs() or {}
+        if str(gs.get("status") or "").lower() == "suspended":
+            if not getattr(self, "_susp_printed", False):
+                self._susp_printed = True
+                print(f"[nitrado-gs] WARN service {self.service_id} is SUSPENDED — skipping log fetch (path format is fine)", flush=True)
+            return ""
         text = self._get_log_file_text(lines)
         if text:
             return text
