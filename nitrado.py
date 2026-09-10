@@ -65,6 +65,7 @@ class NitradoClient:
         }
         self._log_fail_ts = {}
         self._gs_cached = None
+        self._probe_next_idx = {"ShooterGame_Last.log": 0, "ShooterGame.log": 0}
 
     # ── low-level ─────────────────────────────────────────────
 
@@ -265,6 +266,9 @@ class NitradoClient:
         gs = self._server_gs() or {}
         game = str(gs.get("game") or self._game_short() or "arkps").strip("/").strip("\ufeff")
         user = str(gs.get("username") or "").strip()
+        if not getattr(self, "_gs_status_printed", False):
+            self._gs_status_printed = True
+            print(f"[nitrado-gs] status={gs.get('status')} state={gs.get('status')} game={game!r} user={user!r}", flush=True)
         rel = f"ShooterGame/Saved/Logs/{filename}"
         game_rel = f"{game}/{rel}"
         cands: list[str] = []
@@ -304,7 +308,11 @@ class NitradoClient:
             _mark_429(str(raw.status_code))
             return ""
         if raw.status_code != 200 or not raw.text.startswith("{"):
-            print(f"[nitrado-fs] download-list HTTP={raw.status_code} file={file!r}", flush=True)
+            if not getattr(self, "_dl_runtime_printed", False):
+                self._dl_runtime_printed = True
+                print(f"[nitrado-fs] download-list HTTP={raw.status_code} body={raw.text[:200]!r}", flush=True)
+            else:
+                print(f"[nitrado-fs] download-list HTTP={raw.status_code} file={file!r}", flush=True)
             return ""
         data = raw.json()
         token_info = data.get("token") or data
@@ -341,23 +349,38 @@ class NitradoClient:
 
     def _get_log_file_text(self, lines: int, tail_bytes: int = 1000000) -> str:
         now = time.time()
-        backoff = 180  # seconds between full probe rounds
+        backoff = 300  # seconds after a full probe round
         for filename in ("ShooterGame_Last.log", "ShooterGame.log"):
-            if self._log_fail_ts.get(filename) and now - self._log_fail_ts[filename] < backoff:
+            last = self._log_fail_ts.get(filename)
+            if last and now - last < backoff:
                 continue
             paths = self._log_file_candidates(filename)
             if not getattr(self, "_log_cands_printed", False):
                 self._log_cands_printed = True
                 print(f"[nitrado-fs] probe-paths: {paths}", flush=True)
-            for path in paths:
-                text = self.read_file_tail(path, tail_bytes)
-                if text is None:
-                    return ""  # a cooldown is active — stay quiet this tick
-                if text:
-                    print(f"[nitrado-fs] using log file path={path!r} chars={len(text)}", flush=True)
-                    return "\n".join(text.splitlines()[-lines:])
-            self._log_fail_ts[filename] = now
-            print(f"[nitrado-fs] log file NOT found for {filename}", flush=True)
+            idx = self._probe_next_idx.get(filename, 0)
+            if idx >= len(paths):
+                self._probe_next_idx[filename] = 0
+                self._log_fail_ts[filename] = now
+                print(f"[nitrado-fs] log file NOT found for {filename} ({len(paths)} paths)", flush=True)
+                continue
+            path = paths[idx]
+            text = self.read_file_tail(path, tail_bytes)
+            if text is None:
+                return ""  # a cooldown is active — stay quiet this tick
+            if text:
+                self._probe_next_idx[filename] = 0
+                self._log_fail_ts.pop(filename, None)
+                print(f"[nitrado-fs] using log file path={path!r} chars={len(text)}", flush=True)
+                return "\n".join(text.splitlines()[-lines:])
+            # Failed this path — advance one step per tick to stay far below
+            # Nitrado's rate limits (probing all paths at once re-tripped 429).
+            self._probe_next_idx[filename] = idx + 1
+            if idx + 1 >= len(paths):
+                self._probe_next_idx[filename] = 0
+                self._log_fail_ts[filename] = now
+                print(f"[nitrado-fs] log file NOT found for {filename} ({len(paths)} paths)", flush=True)
+            return ""
         return ""
 
     def get_logs(self, lines: int = 200) -> str:
