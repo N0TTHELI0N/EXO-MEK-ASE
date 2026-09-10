@@ -197,44 +197,6 @@ class Tribelog(commands.Cog):
         except Exception:
             return []
 
-    # ── /setup-tribe-forum ──────────────────────────────────
-    @app_commands.command(name="setup-tribe-forum", description="Create a tribe-logs forum with one post per tribe (Admin only)")
-    @app_commands.describe(channel="Existing forum/text channel to use (optional - otherwise auto-created)")
-    async def setup_tribe_forum(self, interaction: discord.Interaction, channel: discord.TextChannel = None):
-        if not interaction.user.guild_permissions.administrator:
-            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
-        await interaction.response.defer(ephemeral=True)
-
-        forum = channel if isinstance(channel, discord.ForumChannel) else None
-        if not forum:
-            try:
-                forum = await interaction.guild.create_forum(
-                    name="tribe-logs",
-                    topic=bot_i18n.t(interaction.guild_id, "tribe_forum_topic"),
-                    reason="Tribe log forum - created by setup-tribe-forum",
-                )
-            except Exception as e:
-                return await interaction.followup.send(bot_i18n.t(interaction.guild_id, "forum_error", error=e), ephemeral=True)
-
-        guild_settings.set_tribe_forum_config(interaction.guild_id, forum.id)
-
-        tribes = self.known_tribes_cache.get(interaction.guild_id, set()) or set(_get_known_tribes(interaction.guild_id))
-        created = []
-        for tribe in sorted(tribes):
-            thread_id = await self._ensure_tribe_thread(interaction.guild, forum, tribe)
-            if thread_id:
-                created.append((tribe, thread_id))
-        if created:
-            lines = "\n".join(f"  • **{t}** → <#{tid}>" for t, tid in created)
-        else:
-            lines = bot_i18n.t(interaction.guild_id, "tribe_forum_no_tribes")
-
-        await interaction.followup.send(
-            bot_i18n.t(interaction.guild_id, "tribelog_forum_ready",
-                       forum=forum.mention, count=len(created), lines=lines),
-            ephemeral=True,
-        )
-
     # ── /add-tribe-name ─────────────────────────────────────
     @app_commands.command(name="add-tribe-name", description="Add a tribe name to monitor (Admin only)")
     @app_commands.describe(tribe_name="Tribe name")

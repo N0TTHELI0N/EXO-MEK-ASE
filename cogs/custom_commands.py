@@ -258,36 +258,42 @@ class CustomCommands(commands.Cog):
             out += f"\n```{resp[:1500]}```"
         await interaction.followup.send(out)
 
-    # ── /setup-forum-logs ───────────────────────────────────
-    @app_commands.command(name="setup-forum-logs", description="Create the admin-log forum channel with 4 category threads (Admin only)")
-    @app_commands.describe(channel="Existing forum/text channel to use (optional - otherwise auto-created)")
-    async def setup_forum_logs(self, interaction: discord.Interaction, channel: discord.TextChannel = None):
-        if not interaction.user.guild_permissions.administrator:
-            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
-        await interaction.response.defer(ephemeral=True)
+    # ── /setup-logs ─────────────────────────────────────────
+    LOG_KINDS = ("admin", "server", "chat", "shop", "tribes")
 
-        forum = channel
-        if not forum or not isinstance(forum, discord.ForumChannel):
-            # create a new forum channel
-            try:
-                forum = await interaction.guild.create_forum(
-                    name="admin-logs",
-                    topic=bot_i18n.t(interaction.guild_id, "forum_topic"),
-                    reason="Admin log forum - created by setup-forum-logs",
-                )
-            except Exception as e:
-                return await interaction.followup.send(bot_i18n.t(interaction.guild_id, "forum_error", error=e), ephemeral=True)
+    async def _get_or_create_forum(self, guild: discord.Guild, name: str, topic: str, reason: str,
+                                   channel: discord.TextChannel = None) -> discord.ForumChannel | None:
+        forum = channel if isinstance(channel, discord.ForumChannel) else None
+        if forum is not None:
+            return forum
+        try:
+            return await guild.create_forum(name=name, topic=topic, reason=reason)
+        except Exception:
+            return None
 
-        # Rename past "server-logs" forums so the old forum becomes admin-logs.
-        if getattr(forum, "name", "").lower() == "server-logs":
+    async def _ensure_forum_thread(self, forum: discord.ForumChannel, name: str, intro: str) -> int | None:
+        existing = discord.utils.find(lambda t, n=name: n in t.name or t.name.startswith(n), forum.threads)
+        if existing:
+            return existing.id
+        try:
+            result = await forum.create_thread(name=name, content=intro)
+            thread = await _normalize_thread(result)
+            return thread.id if thread else None
+        except Exception:
+            return None
+
+    async def _setup_admin_logs(self, guild: discord.Guild, channel=None):
+        forum = await self._get_or_create_forum(guild, "admin-logs", bot_i18n.t(guild.id, "forum_topic"),
+                                                "Admin log forum - created by setup-logs", channel)
+        if forum is None:
+            return None, "admin-logs: " + bot_i18n.t(guild.id, "forum_error", error="create failed")
+        # rename a past "server-logs" forum so the old forum becomes admin-logs
+        if forum.name.lower() == "server-logs":
             try:
                 await forum.edit(name="admin-logs", reason="Renamed to admin-logs under the new log system")
             except Exception:
                 pass
-
-        # ensure 4 threads exist (one per category)
-        thread_ids = {}
-        errors = []
+        thread_ids, errors = {}, []
         for cat, meta in CATEGORY_META.items():
             existing = discord.utils.find(lambda t, m=meta: t.name.startswith(m["emoji"]) and m["label"] in t.name, forum.threads)
             if existing:
@@ -296,7 +302,7 @@ class CustomCommands(commands.Cog):
             try:
                 result = await forum.create_thread(
                     name=f"{meta['emoji']} {meta['label']}",
-                    content=bot_i18n.t(interaction.guild_id, "forum_thread_intro", label=meta["label"]),
+                    content=bot_i18n.t(guild.id, "forum_thread_intro", label=meta["label"]),
                 )
                 thread = await _normalize_thread(result)
                 if thread is None:
@@ -304,80 +310,145 @@ class CustomCommands(commands.Cog):
                 thread_ids[meta["thread"]] = thread.id
             except Exception as e:
                 errors.append(f"{meta['label']}: {type(e).__name__}")
-
         if len(thread_ids) < 4:
             missing = [CATEGORY_META[c]["label"] for c in CATEGORY_META if CATEGORY_META[c]["thread"] not in thread_ids]
             errors_note = (" (" + "; ".join(errors) + ")") if errors else ""
-            return await interaction.followup.send(
-                bot_i18n.t(interaction.guild_id, "forums_partial", created=len(thread_ids), missing=', '.join(missing), errors=errors_note),
-                ephemeral=True,
-            )
+            return None, bot_i18n.t(guild.id, "forums_partial", created=len(thread_ids), missing=', '.join(missing), errors=errors_note)
+        guild_settings.set_forum_log_config(guild.id, forum.id,
+                                            thread_ids.get("thread_dino"), thread_ids.get("thread_gfi"),
+                                            thread_ids.get("thread_player"), thread_ids.get("thread_gcm"))
+        return bot_i18n.t(guild.id, "forum_ready", forum=forum.mention,
+                          thread_dino=thread_ids.get("thread_dino"), thread_gfi=thread_ids.get("thread_gfi"),
+                          thread_player=thread_ids.get("thread_player"), thread_gcm=thread_ids.get("thread_gcm")), None
 
-        guild_settings.set_forum_log_config(
-            interaction.guild_id,
-            forum.id,
-            thread_ids.get("thread_dino"),
-            thread_ids.get("thread_gfi"),
-            thread_ids.get("thread_player"),
-            thread_ids.get("thread_gcm"),
-        )
-        await interaction.followup.send(
-            bot_i18n.t(interaction.guild_id, "forum_ready", forum=forum.mention,
-                       thread_dino=thread_ids.get('thread_dino'), thread_gfi=thread_ids.get('thread_gfi'),
-                       thread_player=thread_ids.get('thread_player'), thread_gcm=thread_ids.get('thread_gcm')),
-            ephemeral=True,
-        )
-
-    # ── /setup-shop-forum ────────────────────────────────────
-    @app_commands.command(name="setup-shop-forum", description="Create the shop-logs forum with Done + Pending threads (Admin only)")
-    @app_commands.describe(channel="Existing forum/text channel to use (optional - otherwise auto-created)")
-    async def setup_shop_forum(self, interaction: discord.Interaction, channel: discord.TextChannel = None):
-        if not interaction.user.guild_permissions.administrator:
-            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
-        await interaction.response.defer(ephemeral=True)
-
-        forum = channel if isinstance(channel, discord.ForumChannel) else None
-        if not forum:
-            try:
-                forum = await interaction.guild.create_forum(
-                    name="shop-logs",
-                    topic=bot_i18n.t(interaction.guild_id, "shop_forum_topic"),
-                    reason="Shop log forum - created by setup-shop-forum",
-                )
-            except Exception as e:
-                return await interaction.followup.send(bot_i18n.t(interaction.guild_id, "forum_error", error=e), ephemeral=True)
-
+    async def _setup_shop_logs(self, guild: discord.Guild, channel=None):
+        forum = await self._get_or_create_forum(guild, "shop-logs", bot_i18n.t(guild.id, "shop_forum_topic"),
+                                                "Shop log forum - created by setup-logs", channel)
+        if forum is None:
+            return None, "shop-logs: " + bot_i18n.t(guild.id, "forum_error", error="create failed")
         thread_map = {"✅ Done Deliveries": "thread_done", "⏳ Pending Deliveries": "thread_pending"}
-        thread_ids = {}
-        errors = []
+        thread_ids, errors = {}, []
         for tname, tkey in thread_map.items():
             existing = discord.utils.find(lambda t, n=tname: n in t.name or t.name.startswith(n.split()[-1]), forum.threads)
             if existing:
                 thread_ids[tkey] = existing.id
                 continue
             try:
-                result = await forum.create_thread(name=tname, content=bot_i18n.t(interaction.guild_id, "shop_forum_thread_intro", label=tname))
+                result = await forum.create_thread(name=tname, content=bot_i18n.t(guild.id, "shop_forum_thread_intro", label=tname))
                 thread = await _normalize_thread(result)
                 if thread is None:
                     raise RuntimeError("create_thread returned no thread")
                 thread_ids[tkey] = thread.id
             except Exception as e:
                 errors.append(f"{tname}: {type(e).__name__}")
-
         if len(thread_ids) < 2:
             missing = [t for t, k in thread_map.items() if k not in thread_ids]
             errors_note = (" (" + "; ".join(errors) + ")") if errors else ""
-            return await interaction.followup.send(
-                bot_i18n.t(interaction.guild_id, "shop_forum_partial", missing=', '.join(missing), errors=errors_note),
-                ephemeral=True,
-            )
+            return None, bot_i18n.t(guild.id, "shop_forum_partial", missing=', '.join(missing), errors=errors_note)
+        guild_settings.set_shop_forum_config(guild.id, forum.id, thread_ids.get("thread_done"), thread_ids.get("thread_pending"))
+        return bot_i18n.t(guild.id, "shop_forum_ready", forum=forum.mention,
+                          thread_done=thread_ids.get("thread_done"), thread_pending=thread_ids.get("thread_pending")), None
 
-        guild_settings.set_shop_forum_config(
-            interaction.guild_id, forum.id, thread_ids.get("thread_done"), thread_ids.get("thread_pending")
-        )
+    async def _setup_server_logs(self, guild: discord.Guild, channel=None):
+        forum = await self._get_or_create_forum(guild, "server-logs", bot_i18n.t(guild.id, "server_logs_topic"),
+                                                "Server log forum - created by setup-logs", channel)
+        if forum is None:
+            return None, "server-logs: " + bot_i18n.t(guild.id, "forum_error", error="create failed")
+        thread_id = await self._ensure_forum_thread(forum, "👤 Player Events", bot_i18n.t(guild.id, "server_logs_thread_intro"))
+        if not thread_id:
+            return None, "server-logs: " + bot_i18n.t(guild.id, "forum_error", error="thread failed")
+        guild_settings.update_server_log_config(guild.id, server_forum_id=forum.id, server_events_thread_id=thread_id)
+        return bot_i18n.t(guild.id, "server_logs_forum_ready", forum=forum.mention, thread=f"<#{thread_id}>"), None
+
+    async def _setup_chat_logs(self, guild: discord.Guild, channel=None):
+        forum = await self._get_or_create_forum(guild, "game-chat", bot_i18n.t(guild.id, "chat_forum_topic"),
+                                                "Game chat forum - created by setup-logs", channel)
+        if forum is None:
+            return None, "game-chat: " + bot_i18n.t(guild.id, "forum_error", error="create failed")
+        thread_id = await self._ensure_forum_thread(forum, "💬 Game Chat", bot_i18n.t(guild.id, "chat_forum_thread_intro"))
+        if not thread_id:
+            return None, "game-chat: " + bot_i18n.t(guild.id, "forum_error", error="thread failed")
+        guild_settings.update_server_log_config(guild.id, chat_forum_id=forum.id, chat_thread_id=thread_id)
+        return bot_i18n.t(guild.id, "chat_forum_ready", forum=forum.mention, thread=f"<#{thread_id}>"), None
+
+    @staticmethod
+    def _known_tribes(guild_id: int) -> list[str]:
+        conn = guild_settings.get_conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT tribe_name FROM known_tribes WHERE guild_id = %s", (guild_id,))
+                return [r[0] for r in cur.fetchall()]
+        finally:
+            conn.close()
+
+    async def _ensure_tribe_thread(self, guild: discord.Guild, forum: discord.ForumChannel, tribe: str) -> int | None:
+        cfg = guild_settings.get_tribe_forum_config(guild.id)
+        if not cfg or cfg["forum_id"] != forum.id:
+            guild_settings.set_tribe_forum_config(guild.id, forum.id)
+        existing = discord.utils.find(lambda t, n=tribe: t.name == n or t.name.startswith(n) or n in t.name, forum.threads)
+        if existing:
+            guild_settings.set_tribe_thread(guild.id, tribe, existing.id)
+            return existing.id
+        try:
+            result = await forum.create_thread(name=tribe, content=bot_i18n.t(guild.id, "tribe_forum_thread_intro", tribe=tribe))
+            thread = await _normalize_thread(result)
+            if thread is None:
+                return None
+            guild_settings.set_tribe_thread(guild.id, tribe, thread.id)
+            return thread.id
+        except Exception:
+            return None
+
+    async def _setup_tribe_logs(self, guild: discord.Guild, channel=None):
+        forum = await self._get_or_create_forum(guild, "tribe-logs", bot_i18n.t(guild.id, "tribe_forum_topic"),
+                                                "Tribe log forum - created by setup-logs", channel)
+        if forum is None:
+            return None, "tribe-logs: " + bot_i18n.t(guild.id, "forum_error", error="create failed")
+        tribes = sorted(self._known_tribes(guild.id))
+        created = []
+        for tribe in tribes:
+            thread_id = await self._ensure_tribe_thread(guild, forum, tribe)
+            if thread_id:
+                created.append((tribe, thread_id))
+        if created:
+            lines = "\n".join(f"  • **{t}** → <#{tid}>" for t, tid in created)
+        else:
+            lines = bot_i18n.t(guild.id, "tribe_forum_no_tribes")
+        return bot_i18n.t(guild.id, "tribelog_forum_ready", forum=forum.mention, count=len(created), lines=lines), None
+
+    @app_commands.command(name="setup-logs", description="Set up all log forums at once, or just one type (Admin only)")
+    @app_commands.choices(which=[
+        app_commands.Choice(name="All (every log)", value="all"),
+        app_commands.Choice(name="Admin logs", value="admin"),
+        app_commands.Choice(name="Server logs (join/leave)", value="server"),
+        app_commands.Choice(name="Game chat", value="chat"),
+        app_commands.Choice(name="Shop logs", value="shop"),
+        app_commands.Choice(name="Tribe logs", value="tribes"),
+    ])
+    @app_commands.describe(
+        which="Which log to set up",
+        channel="Existing forum to use (optional - single selection only)",
+    )
+    async def setup_logs(self, interaction: discord.Interaction, which: str = "admin", channel: discord.TextChannel = None):
+        if not interaction.user.guild_permissions.administrator:
+            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
+        await interaction.response.defer(ephemeral=True)
+
+        kinds = self.LOG_KINDS if which == "all" else (which,)
+        setupers = {
+            "admin": self._setup_admin_logs,
+            "server": self._setup_server_logs,
+            "chat": self._setup_chat_logs,
+            "shop": self._setup_shop_logs,
+            "tribes": self._setup_tribe_logs,
+        }
+
+        lines = []
+        for kind in kinds:
+            ok, err = await setupers[kind](interaction.guild, channel if len(kinds) == 1 else None)
+            lines.append(ok if ok else err)
         await interaction.followup.send(
-            bot_i18n.t(interaction.guild_id, "shop_forum_ready", forum=forum.mention,
-                       thread_done=thread_ids.get('thread_done'), thread_pending=thread_ids.get('thread_pending')),
+            bot_i18n.t(interaction.guild_id, "setup_logs_done", lines="\n".join(lines)),
             ephemeral=True,
         )
 

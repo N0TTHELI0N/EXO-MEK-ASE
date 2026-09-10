@@ -1110,6 +1110,10 @@ STRINGS = {
         "ar": "خرج من السيرفر",
         "en": "left the server",
     },
+    "setup_logs_done": {
+        "ar": "✅ تم تجهيز اللوقات المطلوبة:\n{lines}",
+        "en": "✅ Logs set up:\n{lines}",
+    },
 
     # ── automod ──────────────────────────────────────────────
     "automod_alert": {

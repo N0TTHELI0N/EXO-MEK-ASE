@@ -28,32 +28,6 @@ class ServerLogs(commands.Cog):
     def cog_unload(self):
         self.post_server_logs.cancel()
 
-    # ── forum helpers ────────────────────────────────────────
-
-    async def _find_or_create_forum(self, guild: discord.Guild, name: str, topic: str) -> discord.ForumChannel | None:
-        forum = discord.utils.get(guild.channels, name=name, type=discord.ChannelType.forum)
-        if forum is not None:
-            return forum
-        try:
-            return await guild.create_forum(name=name, topic=topic, reason=f"{name} forum - created by setup command")
-        except Exception:
-            return None
-
-    async def _ensure_thread(self, forum: discord.ForumChannel, name: str, intro: str) -> int | None:
-        existing = discord.utils.find(lambda t, n=name: t.name == n or name in t.name or t.name.startswith(name[:10]), forum.threads)
-        if existing:
-            return existing.id
-        try:
-            result = await forum.create_thread(
-                name=name,
-                content=intro,
-                auto_archive_duration=10080,
-            )
-            thread = await _normalize_thread(result)
-            return thread.id if thread else None
-        except Exception:
-            return None
-
     # ── background poster ────────────────────────────────────
 
     @tasks.loop(seconds=15)
@@ -98,48 +72,6 @@ class ServerLogs(commands.Cog):
     @post_server_logs.before_loop
     async def before_post_server_logs(self):
         await self.bot.wait_until_ready()
-
-    # ── /setup-server-logs ───────────────────────────────────
-    @app_commands.command(name="setup-server-logs", description="Create the server-logs forum (player join/leave) (Admin only)")
-    @app_commands.describe(channel="Existing forum to use (optional)")
-    async def setup_server_logs(self, interaction: discord.Interaction, channel: discord.TextChannel = None):
-        if not interaction.user.guild_permissions.administrator:
-            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
-        await interaction.response.defer(ephemeral=True)
-        forum = channel if isinstance(channel, discord.ForumChannel) else await self._find_or_create_forum(
-            interaction.guild, "server-logs", bot_i18n.t(interaction.guild_id, "server_logs_topic"),
-        )
-        if forum is None:
-            return await interaction.followup.send(bot_i18n.t(interaction.guild_id, "forum_error", error="create failed"), ephemeral=True)
-        thread_id = await self._ensure_thread(forum, "👤 Player Events", bot_i18n.t(interaction.guild_id, "server_logs_thread_intro"))
-        if not thread_id:
-            return await interaction.followup.send(bot_i18n.t(interaction.guild_id, "forum_error", error="thread failed"), ephemeral=True)
-        guild_settings.update_server_log_config(interaction.guild_id, server_forum_id=forum.id, server_events_thread_id=thread_id)
-        await interaction.followup.send(
-            bot_i18n.t(interaction.guild_id, "server_logs_forum_ready", forum=forum.mention, thread=f"<#{thread_id}>"),
-            ephemeral=True,
-        )
-
-    # ── /setup-game-chat-forum ───────────────────────────────
-    @app_commands.command(name="setup-game-chat-forum", description="Create the game-chat forum (in-game chat log) (Admin only)")
-    @app_commands.describe(channel="Existing forum to use (optional)")
-    async def setup_game_chat_forum(self, interaction: discord.Interaction, channel: discord.TextChannel = None):
-        if not interaction.user.guild_permissions.administrator:
-            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
-        await interaction.response.defer(ephemeral=True)
-        forum = channel if isinstance(channel, discord.ForumChannel) else await self._find_or_create_forum(
-            interaction.guild, "game-chat", bot_i18n.t(interaction.guild_id, "chat_forum_topic"),
-        )
-        if forum is None:
-            return await interaction.followup.send(bot_i18n.t(interaction.guild_id, "forum_error", error="create failed"), ephemeral=True)
-        thread_id = await self._ensure_thread(forum, "💬 Game Chat", bot_i18n.t(interaction.guild_id, "chat_forum_thread_intro"))
-        if not thread_id:
-            return await interaction.followup.send(bot_i18n.t(interaction.guild_id, "forum_error", error="thread failed"), ephemeral=True)
-        guild_settings.update_server_log_config(interaction.guild_id, chat_forum_id=forum.id, chat_thread_id=thread_id)
-        await interaction.followup.send(
-            bot_i18n.t(interaction.guild_id, "chat_forum_ready", forum=forum.mention, thread=f"<#{thread_id}>"),
-            ephemeral=True,
-        )
 
     # ── /server-logs-enable ──────────────────────────────────
     @app_commands.command(name="server-logs-enable", description="Enable or disable posting to server-logs & game-chat forums (Admin)")
