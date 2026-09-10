@@ -472,11 +472,12 @@ class Moderation(commands.Cog):
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(
-                    f"https://api.nitrado.net/services/{service_id}/servers/gameserver",
+                    f"https://api.nitrado.net/services/{service_id}/gameservers",
                     headers=headers, timeout=aiohttp.ClientTimeout(total=10),
                 ) as resp:
+                    resp.raise_for_status()
                     data = await resp.json()
-                    server = data.get("data", {}).get("server", {})
+                    server = data.get("data", {}).get("gameserver", {})
 
             status = server.get("status", "unknown")
             players = server.get("query", {}).get("players", {})
