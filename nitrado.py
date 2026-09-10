@@ -116,11 +116,13 @@ class NitradoClient:
         ]
 
     def get_logs(self, lines: int = 200) -> str:
-        """Get the last N lines of the server log."""
-        data = self._request("GET", f"/services/{self.service_id}/gameservers/games/arkse/latest_log")
-        log_content = data.get("content", "") if isinstance(data, dict) else ""
-        log_lines = log_content.split("\n")
-        return "\n".join(log_lines[-lines:])
+        """Get the last N lines of the server log (tries every game slug)."""
+        for slug in ("arkse", "arkps4", "arksa", "arkxb", "ark"):
+            data = self._request("GET", f"/services/{self.service_id}/gameservers/games/{slug}/latest_log")
+            content = data.get("content", "") if isinstance(data, dict) else ""
+            if content:
+                return "\n".join(content.split("\n")[-lines:])
+        return ""
 
     def restart_server(self) -> bool:
         """Restart the ARK server."""
