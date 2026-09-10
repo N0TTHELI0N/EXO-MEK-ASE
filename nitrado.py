@@ -305,6 +305,11 @@ class NitradoClient:
         if resp.status_code == 429:
             _mark_429(str(resp.status_code))
             return ""
+        if resp.status_code == 416:
+            try:
+                resp = requests.get(url, params={"token": token}, timeout=60)
+            except requests.RequestException:
+                return ""
         if resp.status_code in (200, 206):
             body = resp.text
             head = body.lstrip()[:32]
