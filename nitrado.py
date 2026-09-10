@@ -155,8 +155,20 @@ class NitradoClient:
         ]
 
     def get_logs(self, lines: int = 200) -> str:
-        """Get the last N lines of the server log (tries every game slug)."""
-        for slug in ("arkse", "arkps4", "arksa", "arkxb", "ark"):
+        """Get the last N lines of the server log.
+
+        Resolves the real game Folder Short id from the service and reads that
+        game's log first; then falls back to the usual ARK slugs.
+        """
+        try:
+            real = self._game_short()
+        except Exception:
+            real = ""
+        slugs = []
+        if real:
+            slugs.append(real)
+        slugs += ["arkse", "arkps4", "arksa", "arkxb", "ark", "asa"]
+        for slug in dict.fromkeys(slugs):
             data = self._request("GET", f"/services/{self.service_id}/gameservers/games/{slug}/latest_log")
             content = data.get("content", "") if isinstance(data, dict) else ""
             if content:
