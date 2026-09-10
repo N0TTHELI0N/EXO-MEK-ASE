@@ -309,8 +309,14 @@ class NitradoClient:
                 entries = inner
         if not getattr(self, "_fs_list_printed", False):
             self._fs_list_printed = True
-            n = len(entries) if isinstance(entries, list) else "?"
-            print(f"[nitrado-fs] file_server/list dir={dir_path!r} HTTP={code} entries={n}", flush=True)
+            if code != 200:
+                snippet = ""
+                if isinstance(body, dict):
+                    snippet = str(body.get("_text") or body.get("message") or "")[:120]
+                print(f"[nitrado-fs] file_server/list dir={dir_path!r} HTTP={code} {snippet!r} entries=?", flush=True)
+            else:
+                n = len(entries) if isinstance(entries, list) else "?"
+                print(f"[nitrado-fs] file_server/list dir={dir_path!r} HTTP={code} entries={n}", flush=True)
         return code, entries
 
     def _discover_log_path(
@@ -318,29 +324,39 @@ class NitradoClient:
         filenames: tuple = ("ShooterGame_Last.log", "ShooterGame.log"),
         max_dirs: int = 24,
     ) -> str:
-        """Breadth-first walk of the file_server tree to locate an ARK log file.
+        """Walk the file_server tree to locate an ARK log file.
 
-        Nitrado's own docs show the true filesystem root is
-        ``/games/<user>/ftproot/...`` — the exact path is unknown for this
-        service, so we discover it from the live tree instead of guessing.
-        Runs at most once per 10 minutes per client; returns the cached path
-        meanwhile or an empty string when the whole tree has no match.
+        Nitrado's own docs show the true filesystem root is likely under
+        ``/games/<user>/ftproot/...`` — the exact path is unknown per game, so
+        probe the known root prefixes first (print failures once), then run a
+        breadth-first search under the first root that responds.
+        Runs at most once per 10 minutes per client.
         """
         now = time.time()
         cached = getattr(self, "_fs_discover_ts", 0.0)
         if now - cached < 600:
             return getattr(self, "_fs_log_path", "") or ""
         self._fs_discover_ts = now
-        queue = ["/"]
-        seen: set[str] = set()
+        gs = self._server_gs() or {}
+        user = str(gs.get("username") or "").strip()
+        roots = ["/", "/games", "/ftproot"]
+        if user:
+            roots += [f"/games/{user}", f"/games/{user}/ftproot", f"/{user}", f"/{user}/ftproot"]
+        seed = ""
+        for r in roots:
+            code, entries = self.file_server_list(r)
+            if code == 200:
+                seed = r.rstrip("/") or "/"
+                break
+        if not seed:
+            print("[nitrado-fs] file_server/list unavailable for all roots — PS has no API file interface either", flush=True)
+            return ""
+        queue = [seed]
+        seen: set[str] = {seed}
         checked = 0
         try:
             while queue and checked < max_dirs:
                 d = queue.pop(0)
-                key = d.rstrip("/") or "/"
-                if key in seen:
-                    continue
-                seen.add(key)
                 code, entries = self.file_server_list(d)
                 if code != 200 or not isinstance(entries, list):
                     continue
@@ -359,7 +375,10 @@ class NitradoClient:
                     break
                 for e in entries:
                     if isinstance(e, dict) and e.get("type") == "dir":
-                        queue.append(str(e.get("path") or ""))
+                        p = str(e.get("path") or "").rstrip("/") or "/"
+                        if p not in seen:
+                            seen.add(p)
+                            queue.append(p)
         except Exception as ex:
             print(f"[nitrado-fs] file_server discovery error: {type(ex).__name__}: {ex}", flush=True)
         return ""
