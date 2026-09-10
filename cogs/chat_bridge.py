@@ -48,6 +48,56 @@ def _detect_join_leave(line: str):
     return None
 
 
+def _detect_console_command(line: str):
+    """Try to parse a line as an in-game admin/console command.
+
+    Returns (command_string, log_category) or None. Commands typed in the
+    server console usually start with '?' / 'cheat' / 'admincheat', or echo a
+    known ARK command keyword without a prefix.
+    """
+    text = (line or "").strip()
+    if not text:
+        return None
+    m = _TS_CAT.match(text)
+    if m:
+        text = m.group(1).strip()
+    else:
+        m = _PLAIN_CAT.match(text)
+        if m:
+            text = m.group(1).strip()
+    text = text.strip()
+    low = (text or "").lower()
+    if not low:
+        return None
+    if _CHAT_BODY.match(text):
+        return None
+    if any(x in low for x in ("chat command sent to server", "serverchatmessage", "?setadminpassword", "?adminpassword")):
+        return None
+    cmd = None
+    if low.startswith("?"):
+        cmd = text.lstrip("?").strip()
+    elif low.startswith(("cheat ", "admincheat ", "adminenabledcheats ")):
+        cmd = text.split(None, 1)[1].strip() if " " in text else text
+    else:
+        rules = guild_settings.DEFAULT_CATEGORY_RULES
+        for cat in rules:
+            for kw in rules[cat]:
+                if kw and kw in low:
+                    cmd = text
+                    break
+            if cmd:
+                break
+    if not cmd:
+        return None
+    cl = cmd.lower()
+    if cl.startswith(("cheat ", "admincheat ")):
+        cmd = cmd.split(None, 1)[1].strip()
+    if not cmd:
+        return None
+    cat = guild_settings.detect_command_category(cmd)
+    return cmd, cat
+
+
 def _parse_chat_line(line: str):
     text = line
     m = _TS_CAT.match(text)
@@ -216,6 +266,15 @@ class ChatBridge(commands.Cog):
                     continue
                 parsed = _parse_chat_line(text)
                 if not parsed:
+                    cmd_detect = _detect_console_command(text)
+                    if cmd_detect:
+                        cmd, cat = cmd_detect
+                        guild_settings.log_action(
+                            guild.id, "admin_command", None, "Server Console", None,
+                            command=cmd, sub_type="console",
+                            details={"command": cmd, "source": "game console"},
+                            log_category=cat,
+                        )
                     continue
                 channel, player, message = parsed
                 if self._is_echo(channel, player, message):

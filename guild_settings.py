@@ -2396,6 +2396,16 @@ def detect_log_category_for_guild(guild_id: int, command: str) -> str:
     return detect_log_category(command, get_category_rules(guild_id))
 
 
+def detect_command_category(command: str) -> str:
+    """Categorize a command by real keyword only; unregistered ones get 'other'."""
+    lowered = (command or "").lower()
+    for cat in LOG_CATEGORIES:
+        for keyword in DEFAULT_CATEGORY_RULES.get(cat, []):
+            if keyword in lowered:
+                return cat
+    return "other"
+
+
 def add_custom_command(guild_id: int, name: str, command_string: str, category: str = None, created_by: int = None) -> str:
     """Create a custom command. Returns 'ok' or an error string."""
     if category is None:
