@@ -254,19 +254,57 @@ class CustomCommands(commands.Cog):
     # ── /setup-logs ─────────────────────────────────────────
     LOG_KINDS = ("admin", "server", "chat", "shop", "tribes")
 
+    async def _ensure_logs_category(self, guild: discord.Guild) -> discord.CategoryChannel | None:
+        """Find or create the admin-only 'logs' category that holds every log forum."""
+        overwrites = {}
+        if guild.default_role:
+            overwrites[guild.default_role] = discord.PermissionOverwrite(view_channel=False)
+        if guild.me:
+            overwrites[guild.me] = discord.PermissionOverwrite(view_channel=True)
+        for role in guild.roles:
+            if role == guild.default_role or role == guild.me:
+                continue
+            if role.permissions.administrator or role.permissions.manage_channels:
+                overwrites[role] = discord.PermissionOverwrite(view_channel=True)
+        category = discord.utils.get(guild.categories, name="logs")
+        if category is None:
+            try:
+                return await guild.create_category(name="logs", overwrites=overwrites,
+                                                   reason="Logs category - created by setup-logs")
+            except Exception:
+                return None
+        try:
+            await category.edit(overwrites=overwrites)
+        except Exception:
+            pass
+        return category
+
     async def _get_or_create_forum(self, guild: discord.Guild, name: str, topic: str, reason: str,
                                    channel: discord.TextChannel = None) -> discord.ForumChannel | None:
         forum = channel if isinstance(channel, discord.ForumChannel) else None
-        if forum is not None:
-            return forum
-        # Reuse an existing forum with the same name instead of duplicating it.
-        existing = discord.utils.get(guild.channels, name=name)
-        if isinstance(existing, discord.ForumChannel):
-            return existing
+        if forum is None:
+            # Reuse an existing forum with the same name instead of duplicating it.
+            existing = discord.utils.get(guild.channels, name=name)
+            if isinstance(existing, discord.ForumChannel):
+                forum = existing
+        if forum is None:
+            category = await self._ensure_logs_category(guild)
+            try:
+                forum = await guild.create_forum(name=name, topic=topic, reason=reason, category=category)
+            except Exception:
+                return None
+        # Keep every log forum inside the admin-only "logs" category.
+        category = await self._ensure_logs_category(guild)
+        if category is not None and forum.category_id != category.id:
+            try:
+                await forum.edit(category=category, sync_permissions=True)
+            except Exception:
+                pass
         try:
-            return await guild.create_forum(name=name, topic=topic, reason=reason)
+            await forum.edit(topic=topic)
         except Exception:
-            return None
+            pass
+        return forum
 
     async def _ensure_forum_thread(self, forum: discord.ForumChannel, name: str, intro: str) -> int | None:
         existing = discord.utils.find(lambda t, n=name: n in t.name or t.name.startswith(n), forum.threads)

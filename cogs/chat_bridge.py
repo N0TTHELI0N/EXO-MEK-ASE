@@ -101,6 +101,10 @@ class ChatBridge(commands.Cog):
         self._auto_rules_cache = {}
         self._auto_rules_cache_ts = {}
         self._auto_cooldown = {}
+        # auto service fallback: when the configured Nitrado service can't be read,
+        # scan the account once every 10 minutes and pick a working ARK service.
+        self._auto_service = {}
+        self._auto_service_ts = {}
 
     # ── helpers ──────────────────────────────────────────────
 
@@ -130,6 +134,24 @@ class ChatBridge(commands.Cog):
         self.seen_lines[guild_id] = text
         return True
 
+    def _pick_auto_service(self, guild_id: int) -> str | None:
+        """Pick a working ARK service id for this guild, with a 10-minute cache."""
+        now = time.time()
+        if guild_id in self._auto_service and now - self._auto_service_ts.get(guild_id, 0) < 600:
+            return self._auto_service.get(guild_id)
+        self._auto_service_ts[guild_id] = now
+        current = str((guild_settings.get_nitrado_config(guild_id) or {}).get("service_id") or "")
+        chosen = None
+        for svc in nitrado.find_ark_services(guild_id):
+            if svc.get("ok"):
+                s = str(svc.get("service_id"))
+                if current and s == current and not chosen:
+                    chosen = current
+                    break
+                chosen = chosen or s
+        self._auto_service[guild_id] = chosen
+        return chosen
+
     @staticmethod
     async def _send_to_game(guild_id, sender_name: str, message: str) -> bool:
         # Try the standard ServerChatMessage RCON broadcast first, then fallbacks.
@@ -157,6 +179,16 @@ class ChatBridge(commands.Cog):
             try:
                 raw = await asyncio_to_thread(client.get_logs, 400)
             except Exception:
+                raw = None
+            if not raw:
+                sid = self._pick_auto_service(guild.id)
+                if sid is not None and str(sid) != str(client.service_id):
+                    client = nitrado.NitradoClient(client.api_token, sid)
+                    try:
+                        raw = await asyncio_to_thread(client.get_logs, 400)
+                    except Exception:
+                        raw = None
+            if not raw:
                 continue
             lines = (raw or "").splitlines()
             # First run: just remember the latest line so we only capture NEW chat.
