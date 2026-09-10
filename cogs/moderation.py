@@ -517,6 +517,38 @@ class Moderation(commands.Cog):
             print(f"[server-status] error: {type(e).__name__}: {e}", flush=True)
             await interaction.followup.send(bot_i18n.t(interaction.guild_id, "server_status_error", error=e), ephemeral=True)
 
+    @app_commands.command(name="find-server", description="Find the correct Nitrado service ID for the ARK server (Admin)")
+    @app_commands.describe(apply="Automatically set the working service ID (default: True)")
+    async def find_server(self, interaction: discord.Interaction, apply: bool = True):
+        if not interaction.user.guild_permissions.administrator:
+            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
+
+        cfg = guild_settings.get_nitrado_config(interaction.guild_id)
+        if not cfg.get("api_token"):
+            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "nitrado_not_configured"), ephemeral=True)
+
+        await interaction.response.defer(ephemeral=True)
+        results = nitrado.find_ark_services(interaction.guild_id)
+        if not results:
+            return await interaction.followup.send(bot_i18n.t(interaction.guild_id, "find_server_no_services"), ephemeral=True)
+
+        lines = []
+        for r in sorted(results, key=lambda x: not x["ok"]):
+            mark = "✅" if r["ok"] else f"❌ ({r['code']})"
+            lines.append(f"{mark} **{r['service_id']}** — {r['name'] or r['game'] or '?'}")
+
+        ok_list = [r for r in results if r["ok"]]
+        if apply and len(ok_list) == 1:
+            sid = ok_list[0]["service_id"]
+            self._apply_service_id(interaction.guild_id, sid, ok_list[0])
+            lines.append(bot_i18n.t(interaction.guild_id, "find_server_applied", srv=sid))
+        elif apply and len(ok_list) > 1:
+            lines.append(bot_i18n.t(interaction.guild_id, "find_server_multi"))
+        elif apply and not ok_list:
+            lines.append(bot_i18n.t(interaction.guild_id, "find_server_no_ok"))
+
+        await interaction.followup.send("\n".join(lines), ephemeral=True)
+
     @app_commands.command(name="server-restart", description="Restart the ARK server")
     async def server_restart(self, interaction: discord.Interaction):
         if not interaction.user.guild_permissions.administrator:
@@ -544,6 +576,17 @@ class Moderation(commands.Cog):
     # ============================================================
     #  INTERNAL HELPERS
     # ============================================================
+
+    def _apply_service_id(self, guild_id, service_id, info):
+        cfg = guild_settings.get_nitrado_config(guild_id)
+        token = cfg.get("api_token") or ""
+        name = (info.get("name") or f"ARK-{service_id}")[:64]
+        guild_settings.update_setting(guild_id, "nitrado_service_id", service_id)
+        guild_settings.add_nitrado_service(guild_id, name=name, service_id=service_id, api_token=token)
+        for svc in guild_settings.list_nitrado_services(guild_id):
+            if str(svc.get("service_id")) == str(service_id):
+                guild_settings.set_active_nitrado_service(guild_id, svc.get("id"))
+                break
 
     async def _get_scope_players(self, guild_id, player_name, scope):
         if scope == "tribe":

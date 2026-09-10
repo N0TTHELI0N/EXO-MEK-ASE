@@ -59,6 +59,33 @@ class NitradoClient:
             _log_error_once(status, endpoint, body)
             return {}
 
+    def _raw(self, method: str, endpoint: str, **kwargs):
+        """Send a request without raising; return (status_code, payload)."""
+        url = f"{NITRADO_BASE_URL}{endpoint}"
+        try:
+            resp = requests.request(method, url, headers=self.headers, timeout=10, **kwargs)
+            try:
+                payload = resp.json()
+            except Exception:
+                payload = {"_text": (resp.text or "")[:300]}
+            return resp.status_code, payload
+        except requests.RequestException as e:
+            return getattr(e.response, "status_code", 0), {}
+
+    def list_services(self) -> list[dict]:
+        """List all Nitrado services accessible with this token."""
+        code, body = self._raw("GET", "/services")
+        if not isinstance(body, dict):
+            return []
+        inner = body.get("data", body)
+        if isinstance(inner, dict):
+            services = inner.get("services", [])
+        elif isinstance(inner, list):
+            services = inner
+        else:
+            services = []
+        return services if isinstance(services, list) else []
+
     def _post_binary(self, url: str, token: str, content: str) -> bool:
         """POST raw binary content to a Nitrado upload URL."""
         try:
@@ -593,6 +620,41 @@ def get_client(guild_id: int) -> NitradoClient | None:
     if not token or not service_id:
         return None
     return NitradoClient(token, service_id)
+
+
+def find_ark_services(guild_id: int) -> list[dict]:
+    """Scan the token's Nitrado services and find the ARK gameserver.
+
+    Probes /services/{id}/gameservers for every service that looks ARK-like
+    and reports which ones actually respond (ok=True). The configured token
+    must have access to the services list.
+    """
+    client = get_client(guild_id)
+    if not client:
+        return []
+    ark_slugs = {"arkse", "arkps4", "arksa", "arkxb", "ark", "asa", "ase"}
+    results = []
+    for svc in client.list_services():
+        if not isinstance(svc, dict):
+            continue
+        sid = str(svc.get("id") or "").strip()
+        name = str(svc.get("name") or svc.get("game_name") or "").strip()
+        game = str(svc.get("game") or svc.get("game_id") or "").strip()
+        if not sid:
+            continue
+        low = game.lower()
+        is_ark = (not game) or "ark" in low or low in ark_slugs
+        if not is_ark:
+            continue
+        code, _ = client._raw("GET", f"/services/{sid}/gameservers")
+        results.append({
+            "service_id": sid,
+            "name": name,
+            "game": game,
+            "ok": code == 200,
+            "code": code,
+        })
+    return results
 
 
 def send_rcon(guild_id: int, command: str) -> str | None:

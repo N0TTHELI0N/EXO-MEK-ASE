@@ -75,6 +75,7 @@ COMMANDS = [
     ('set-punishment-log', 'moderation', 'Set channel for punishment log messages'),
     ('add-tribe-member', 'tribelog', 'Manually add a player to a tribe'),
     ('server-status', 'server', 'Show server status (players, ping, etc.)'),
+    ('find-server', 'moderation', 'Find the correct Nitrado service ID for the ARK server (Admin)'),
     ('server-restart', 'server', 'Restart the ARK server'),
     ('server-stop', 'server', 'Stop the ARK server'),
     ('player-info', 'moderation', 'Advanced info about an in-game player (online status, tribe, punishment history, IPs)'),

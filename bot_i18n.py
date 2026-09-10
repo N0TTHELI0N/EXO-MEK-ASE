@@ -42,6 +42,22 @@ STRINGS = {
         "ar": "Nitrado غير مُعد. استخدم `/set-nitrado-token`.",
         "en": "Nitrado is not configured. Use `/set-nitrado-token`.",
     },
+    "find_server_no_services": {
+        "ar": "ما لقيت أي خدمات Nitrado تحت هذا التوكن. تأكد إنك وضعت التوكن صح.",
+        "en": "Found no Nitrado services under this token. Make sure the token is correct.",
+    },
+    "find_server_applied": {
+        "ar": "\nتم ضبط السيرفر النشط تلقائيًا إلى **{srv}**. جرّب الآن `/server-status`.",
+        "en": "\nThe active service was set to **{srv}** automatically. Try `/server-status` now.",
+    },
+    "find_server_multi": {
+        "ar": "\nوجدت أكثر من سيرفر ARK يرد بشكل صحيح — ما ضبطت شي تلقائيًا. حدّد المعرّف الصح من القائمة.",
+        "en": "\nFound more than one working ARK service — nothing was set automatically. Pick the correct ID from the list.",
+    },
+    "find_server_no_ok": {
+        "ar": "\nولا سيرفر ARK يرد على الـ API — تأكد إن معرفات السيرفرات صحيحة وصلاحية التوكن تشمل الـ gameservers.",
+        "en": "\nNo ARK service responded to the API — check the service IDs and that the token scope includes gameservers.",
+    },
     "license_invalid": {
         "ar": "الرخصة غير صالحة أو منتهية.",
         "en": "Invalid or expired license.",
