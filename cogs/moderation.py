@@ -476,17 +476,28 @@ class Moderation(commands.Cog):
                     headers=headers, timeout=aiohttp.ClientTimeout(total=10),
                 ) as resp:
                     resp.raise_for_status()
-                    data = await resp.json()
-                    inner = data.get("data", {})
+                    raw = await resp.json()
+                    print(f"[server-status] raw type={type(raw).__name__} keys={list(raw.keys())[:10] if isinstance(raw, dict) else len(raw) if isinstance(raw, list) else '?'}", flush=True)
+                    data = raw
+                    inner = data.get("data", data) if isinstance(data, dict) else data
                     if isinstance(inner, list):
                         inner = inner[0] if inner else {}
                     server = inner.get("gameserver", inner) if isinstance(inner, dict) else {}
+                    if not isinstance(server, dict):
+                        server = {}
 
             status = server.get("status", "unknown")
-            players = server.get("query", {}).get("players", {})
+            query = server.get("query", {})
+            if not isinstance(query, dict):
+                query = {}
+            players = query.get("players", {})
+            if not isinstance(players, dict):
+                players = {}
             player_current = players.get("current", 0)
             player_max = players.get("max", 0)
             player_list = players.get("player", [])
+            if not isinstance(player_list, list):
+                player_list = []
 
             embed = discord.Embed(title=bot_i18n.t(interaction.guild_id, "server_status_title"), color=discord.Color.green() if status == "started" else discord.Color.red())
             embed.add_field(name=bot_i18n.t(interaction.guild_id, "field_status"), value=f"{'🟢' if status == 'started' else '🔴'} {status}", inline=True)
@@ -498,6 +509,7 @@ class Moderation(commands.Cog):
             _log(interaction.guild_id, "server", "status_check", interaction.user, None)
             await interaction.followup.send(embed=embed)
         except Exception as e:
+            print(f"[server-status] error: {type(e).__name__}: {e}", flush=True)
             await interaction.followup.send(bot_i18n.t(interaction.guild_id, "server_status_error", error=e), ephemeral=True)
 
     @app_commands.command(name="server-restart", description="Restart the ARK server")

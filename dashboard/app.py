@@ -638,10 +638,16 @@ def section_overview(guild_id):
         if isinstance(info, list):
             info = info[0] if info else {}
         server = info.get("gameserver", info) if isinstance(info, dict) else {}
+        if not isinstance(server, dict):
+            server = {}
         if server:
             status = str(server.get("status") or "unknown")
-            query = server.get("query", {}) or {}
-            players = query.get("players", {}) or {}
+            query = server.get("query", {})
+            if not isinstance(query, dict):
+                query = {}
+            players = query.get("players", {})
+            if not isinstance(players, dict):
+                players = {}
             server_status = {
                 "configured": True,
                 "online": status.lower() == "started",
