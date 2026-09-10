@@ -1415,7 +1415,7 @@ def get_chat_bridge_config(guild_id: int) -> dict:
                     "last_log_line": row[5],
                 }
             return {
-                "enabled": False,
+                "enabled": True,
                 "log_channel_id": None,
                 "relay_channel_id": None,
                 "relay_out": False,
@@ -1524,7 +1524,7 @@ def get_server_log_config(guild_id: int) -> dict:
                     "leave_thread_id": row[6],
                 }
             return {
-                "enabled": False,
+                "enabled": True,
                 "server_forum_id": None,
                 "server_events_thread_id": None,
                 "chat_forum_id": None,

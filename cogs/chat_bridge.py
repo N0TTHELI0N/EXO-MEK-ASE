@@ -105,6 +105,7 @@ class ChatBridge(commands.Cog):
         # scan the account once every 10 minutes and pick a working ARK service.
         self._auto_service = {}
         self._auto_service_ts = {}
+        self._hb_ts = {}
 
     # ── helpers ──────────────────────────────────────────────
 
@@ -171,7 +172,7 @@ class ChatBridge(commands.Cog):
         import discord as _d
         for guild in self.bot.guilds:
             cfg = guild_settings.get_chat_bridge_config(guild.id)
-            if not cfg or not cfg.get("enabled"):
+            if not cfg or cfg.get("enabled") is False:
                 continue
             client = nitrado.get_client(guild.id)
             if client is None:
@@ -190,6 +191,10 @@ class ChatBridge(commands.Cog):
                         raw = None
             if not raw:
                 continue
+            now5 = time.time()
+            if guild.id not in self._hb_ts or now5 - self._hb_ts[guild.id] >= 300:
+                self._hb_ts[guild.id] = now5
+                print(f"[ChatBridge] guild={guild.id} service={client.service_id} log_lines={len(raw.splitlines())}", flush=True)
             lines = (raw or "").splitlines()
             # First run: just remember the latest line so we only capture NEW chat.
             if guild.id not in self.seen_lines:

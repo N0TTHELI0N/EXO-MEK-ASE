@@ -34,8 +34,27 @@ class ServerLogs(commands.Cog):
     async def post_server_logs(self):
         for guild in self.bot.guilds:
             cfg = guild_settings.get_server_log_config(guild.id)
-            if not cfg or not cfg.get("enabled"):
+            if not cfg or cfg.get("enabled") is False:
                 continue
+            # Self-heal: a "server-logs" forum exists but its thread ids are not
+            # saved yet (e.g. no /setup-logs run on this build). Resolve them now.
+            if not (cfg.get("join_thread_id") or cfg.get("leave_thread_id") or cfg.get("chat_thread_id")):
+                forum = guild.get_channel(cfg.get("server_forum_id") or 0)
+                if not isinstance(forum, discord.ForumChannel):
+                    forum = discord.utils.get(guild.channels, name="server-logs")
+                if isinstance(forum, discord.ForumChannel):
+                    ids = {}
+                    for t in forum.threads:
+                        if "دخول" in t.name:
+                            ids["join_thread_id"] = t.id
+                        elif "خروج" in t.name:
+                            ids["leave_thread_id"] = t.id
+                        elif "شات" in t.name or "chat" in t.name.lower():
+                            ids["chat_thread_id"] = t.id
+                    if ids:
+                        ids["server_forum_id"] = forum.id
+                        guild_settings.update_server_log_config(guild.id, **ids)
+                        cfg = guild_settings.get_server_log_config(guild.id)
             join_thread = guild.get_thread(cfg.get("join_thread_id") or cfg.get("server_events_thread_id")) if cfg.get("join_thread_id") or cfg.get("server_events_thread_id") else None
             leave_thread = guild.get_thread(cfg.get("leave_thread_id") or cfg.get("server_events_thread_id")) if cfg.get("leave_thread_id") or cfg.get("server_events_thread_id") else None
             chat_thread = guild.get_thread(cfg.get("chat_thread_id")) if cfg.get("chat_thread_id") else None
