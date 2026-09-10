@@ -714,10 +714,20 @@ def section_nitrado(guild_id):
                 pass
         elif action == "legacy":
             nitrado_token = request.form.get("nitrado_api_token", "")
+            legacy_sid = request.form.get("nitrado_service_id", "").strip()
             if nitrado_token:
                 guild_settings.update_setting(guild_id, "nitrado_api_token", nitrado_token)
-            guild_settings.update_setting(guild_id, "nitrado_service_id", request.form.get("nitrado_service_id", ""))
+            guild_settings.update_setting(guild_id, "nitrado_service_id", legacy_sid)
             guild_settings.update_setting(guild_id, "nitrado_display_name", request.form.get("nitrado_display_name", ""))
+            # The services table takes precedence over legacy settings; upsert an
+            # active row so single-config edits actually take effect.
+            if legacy_sid:
+                guild_settings.add_nitrado_service(
+                    guild_id,
+                    name=request.form.get("nitrado_display_name", "").strip() or f"Server-{legacy_sid}",
+                    service_id=legacy_sid,
+                    api_token=nitrado_token,
+                )
         return redirect(url_for("section_nitrado", guild_id=guild_id))
     services = guild_settings.list_nitrado_services(guild_id)
     return render_template(

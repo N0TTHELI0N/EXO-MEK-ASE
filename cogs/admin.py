@@ -56,6 +56,14 @@ class Admin(commands.Cog):
         guild_settings.update_setting(interaction.guild_id, "nitrado_api_token", api_token)
         if service_id:
             guild_settings.update_setting(interaction.guild_id, "nitrado_service_id", service_id)
+            # The services table takes precedence over the legacy settings; also
+            # upsert an active service row so this actually takes effect.
+            guild_settings.add_nitrado_service(
+                interaction.guild_id,
+                name=f"Server-{service_id}",
+                service_id=service_id,
+                api_token=api_token,
+            )
         await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "nitrado_token_saved"), ephemeral=True)
 
     # ── /set-log-channel ─────────────────────────────────────

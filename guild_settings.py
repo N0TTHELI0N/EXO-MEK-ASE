@@ -743,7 +743,7 @@ def get_active_nitrado_service(guild_id: int) -> dict:
 def add_nitrado_service(guild_id: int, name: str, service_id: str, api_token: str = "",
                         ftp_host: str = "", ftp_port: str = "22", ftp_user: str = "",
                         ftp_password: str = "") -> bool:
-    """Add a new Nitrado service (server) for a guild. First service becomes active."""
+    """Add or update a Nitrado service. The saved service becomes the active one."""
     name = (name or "").strip() or f"Server-{service_id or '?'}"
     service_id = (service_id or "").strip()
     api_token = _encrypt(api_token or "")
@@ -751,16 +751,15 @@ def add_nitrado_service(guild_id: int, name: str, service_id: str, api_token: st
     conn = get_conn()
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT COUNT(*) FROM nitrado_services WHERE guild_id = %s", (guild_id,))
-            count = cur.fetchone()[0]
             cur.execute(
                 "INSERT INTO nitrado_services (guild_id, name, service_id, api_token, ftp_host, ftp_port, ftp_user, ftp_password, is_active) "
                 "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
                 "ON CONFLICT (guild_id, name) DO UPDATE SET service_id = EXCLUDED.service_id, "
+                "is_active = TRUE, "
                 "api_token = CASE WHEN EXCLUDED.api_token = '' THEN nitrado_services.api_token ELSE EXCLUDED.api_token END, "
                 "ftp_host = EXCLUDED.ftp_host, ftp_port = EXCLUDED.ftp_port, ftp_user = EXCLUDED.ftp_user, "
                 "ftp_password = CASE WHEN EXCLUDED.ftp_password = '' THEN nitrado_services.ftp_password ELSE EXCLUDED.ftp_password END",
-                (guild_id, name, service_id, api_token, ftp_host, ftp_port, ftp_user, ftp_password, count == 0),
+                (guild_id, name, service_id, api_token, ftp_host, ftp_port, ftp_user, ftp_password, True),
             )
         conn.commit()
         return True
