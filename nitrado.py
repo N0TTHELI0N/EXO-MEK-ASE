@@ -239,21 +239,29 @@ class NitradoClient:
         return self._gs_cached
 
     def _log_file_candidates(self, filename: str) -> list[str]:
-        """Deterministic, dependency-free candidate paths for an ARK log file.
+        """Deterministic candidate paths for an ARK log file.
 
-        Questions no list/recursive file APIs — only a handful of download
-        attempts per tick, which keeps us far below Nitrado's rate limits.
+        Nitrado file_server serves game files under the account/game root; the
+        web Files tab shows `arkps/ShooterGame/...` but the API rejected that
+        with 500, so we probe the full /games/<user>[/noftp] roots first. No
+        list/recursive APIs — only a handful of cheap download attempts.
         """
         gs = self._server_gs() or {}
         game = str(gs.get("game") or self._game_short() or "arkps").strip("/").strip("\ufeff")
         user = str(gs.get("username") or "").strip()
         rel = f"ShooterGame/Saved/Logs/{filename}"
         game_rel = f"{game}/{rel}"
-        cands = [rel, game_rel]
+        cands: list[str] = []
         if user:
-            cands.append(f"noftp/{user}/{game_rel}")
-            cands.append(f"/games/{user}/{game_rel}")
-            cands.append(f"/games/{user}/noftp/{game_rel}")
+            cands += [
+                f"/games/{user}/noftp/{game_rel}",
+                f"/games/{user}/{game_rel}",
+                f"/games/{user}/noftp/{rel}",
+                f"/games/{user}/{rel}",
+                f"noftp/{user}/{game_rel}",
+                f"{user}/{game_rel}",
+            ]
+        cands += [game_rel, rel]
         return list(dict.fromkeys(cands))
 
     def read_file_tail(self, file: str, tail_bytes: int = 1000000) -> str:
@@ -261,9 +269,12 @@ class NitradoClient:
 
         Downloads through the Nitrado file server; asks for a byte-range tail
         and falls back to trimming the full body locally if ranges are ignored.
+        Returns None while a rate-limit cooldown is active (not a failure).
         """
+        if time.monotonic() < _nitrado_cooldown_until:
+            return None
         if not _begin_request():
-            return ""
+            return None
         try:
             raw = requests.get(
                 f"{NITRADO_BASE_URL}{self.fs_base()}/download",
@@ -309,11 +320,14 @@ class NitradoClient:
 
     def _get_log_file_text(self, lines: int, tail_bytes: int = 1000000) -> str:
         now = time.time()
+        backoff = 180  # seconds between full probe rounds
         for filename in ("ShooterGame_Last.log", "ShooterGame.log"):
-            if self._log_fail_ts.get(filename) and now - self._log_fail_ts[filename] < 60:
+            if self._log_fail_ts.get(filename) and now - self._log_fail_ts[filename] < backoff:
                 continue
-            for path in self._log_file_candidates(filename)[:4]:
+            for path in self._log_file_candidates(filename):
                 text = self.read_file_tail(path, tail_bytes)
+                if text is None:
+                    return ""  # a cooldown is active — stay quiet this tick
                 if text:
                     print(f"[nitrado-fs] using log file path={path!r} chars={len(text)}", flush=True)
                     return "\n".join(text.splitlines()[-lines:])
@@ -921,14 +935,6 @@ def get_ark_server_name(guild_id: int) -> str:
         "ShooterGame/Saved/Config/GameUserSettings.ini",
         "ShooterGame/Saved/Config/LinuxServer/GameUserSettings.ini",
     ]
-    # Best-effort discovery of the INI anywhere in the tree.
-    try:
-        found = client.find_file_tree("", "GameUserSettings.ini")
-        print(f"[nitrado-fs] find_file_tree found={found!r}", flush=True)
-        if found and found not in tried:
-            tried.insert(0, found)
-    except Exception as e:
-        print(f"[nitrado-fs] find_file_tree error: {type(e).__name__}: {e}", flush=True)
     for path in tried:
         try:
             content = client.read_file(path)
@@ -1046,17 +1052,28 @@ def get_server_passwords(guild_id: int) -> dict:
     return {"admin": "", "server": ""}
 
 
+_server_name_cache: dict[int, tuple[float, str]] = {}
+
+
 def server_name(guild_id: int) -> str:
-    """Best-effort 'real' ARK server name: GameUserSettings.ini first, then API info."""
+    """Best-effort 'real' ARK server name: GameUserSettings.ini first, then API info.
+
+    Cached per guild so per-page renders don't hit the file server repeatedly.
+    """
+    now = time.time()
+    cached = _server_name_cache.get(guild_id)
+    if cached and now - cached[0] < 300:
+        return cached[1]
     name = get_ark_server_name(guild_id)
-    if name:
-        return name
-    try:
-        info = get_server_info(guild_id) or {}
-        inner = info.get("gameserver", info) if isinstance(info, dict) else {}
-        return str(inner.get("name") or inner.get("server_name") or "") if isinstance(inner, dict) else ""
-    except Exception:
-        return ""
+    if not name:
+        try:
+            info = get_server_info(guild_id) or {}
+            inner = info.get("gameserver", info) if isinstance(info, dict) else {}
+            name = str(inner.get("name") or inner.get("server_name") or "") if isinstance(inner, dict) else ""
+        except Exception:
+            name = ""
+    _server_name_cache[guild_id] = (time.time(), name)
+    return name
 
 
 def ban_player(guild_id: int, name: str) -> str:
