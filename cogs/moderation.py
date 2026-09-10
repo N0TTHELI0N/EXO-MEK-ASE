@@ -503,7 +503,12 @@ class Moderation(commands.Cog):
             embed.add_field(name=bot_i18n.t(interaction.guild_id, "field_status"), value=f"{'🟢' if status == 'started' else '🔴'} {status}", inline=True)
             embed.add_field(name=bot_i18n.t(interaction.guild_id, "field_players"), value=f"{player_current}/{player_max}", inline=True)
             if player_list:
-                names = [p.get("name", "Unknown") for p in player_list[:20]]
+                names = []
+                for p in player_list[:20]:
+                    if isinstance(p, dict):
+                        names.append(p.get("name", "Unknown"))
+                    else:
+                        names.append(str(p))
                 embed.add_field(name=bot_i18n.t(interaction.guild_id, "field_player_list"), value="\n".join(names) or "None", inline=False)
 
             _log(interaction.guild_id, "server", "status_check", interaction.user, None)

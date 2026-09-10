@@ -63,6 +63,10 @@ def init_leaderboard_db():
                     last_update TIMESTAMP WITH TIME ZONE DEFAULT NOW()
                 )
             """)
+            try:
+                cur.execute("ALTER TABLE tribe_points ALTER COLUMN points TYPE BIGINT")
+            except Exception:
+                pass
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS leaderboard_config (
                     guild_id        BIGINT PRIMARY KEY,

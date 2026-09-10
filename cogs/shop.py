@@ -348,6 +348,7 @@ class Shop(commands.Cog):
         if not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
 
+        amount = max(1, min(amount, 1000000000))
         shop_db.add_points(interaction.guild_id, member.display_name, amount)
         guild_settings.log_action(interaction.guild_id, "leaderboard", interaction.user.id, str(interaction.user), member.display_name, sub_type="points_added", details={"amount": amount})
         balance = shop_db.get_points(interaction.guild_id, member.display_name)
@@ -362,6 +363,7 @@ class Shop(commands.Cog):
         if not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
 
+        amount = max(1, min(amount, 1000000000))
         shop_db.remove_points(interaction.guild_id, member.display_name, amount)
         guild_settings.log_action(interaction.guild_id, "leaderboard", interaction.user.id, str(interaction.user), member.display_name, sub_type="points_removed", details={"amount": amount})
         balance = shop_db.get_points(interaction.guild_id, member.display_name)

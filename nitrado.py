@@ -2,6 +2,7 @@
 # Handles server logs, player lists, restarts, cloud backups and file management
 # (the FileServer/backup flows replace the old SFTP approach).
 
+import time
 import requests
 import guild_settings
 
@@ -25,7 +26,7 @@ class NitradoClient:
     def _request(self, method: str, endpoint: str, **kwargs) -> dict:
         url = f"{NITRADO_BASE_URL}{endpoint}"
         try:
-            resp = requests.request(method, url, headers=self.headers, timeout=30, **kwargs)
+            resp = requests.request(method, url, headers=self.headers, timeout=10, **kwargs)
             resp.raise_for_status()
             data = resp.json()
             outer = data.get("data", data) if isinstance(data, dict) else data
@@ -33,7 +34,17 @@ class NitradoClient:
                 outer = outer[0] if outer else {}
             return outer or {}
         except requests.RequestException as e:
-            print(f"Nitrado API error: {type(e).__name__}")
+            status = getattr(e.response, "status_code", None)
+            body = ""
+            try:
+                if e.response is not None:
+                    body = (e.response.text or "")[:150]
+            except Exception:
+                pass
+            now = time.monotonic()
+            if now - getattr(self, "_last_err_log", 0) > 30:
+                self._last_err_log = now
+                print(f"Nitrado API error: {type(e).__name__} status={status} endpoint={endpoint} body={body!r}", flush=True)
             return {}
 
     def _post_binary(self, url: str, token: str, content: str) -> bool:

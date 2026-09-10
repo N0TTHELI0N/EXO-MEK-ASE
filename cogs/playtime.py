@@ -2,6 +2,7 @@
 # The Nitrado API only reports currently-online players, so playtime is
 # accumulated over time here and stored per guild in player_playtime.
 
+import asyncio
 import discord
 from discord.ext import commands, tasks
 from discord import app_commands
@@ -44,7 +45,7 @@ class Playtime(commands.Cog):
                 client = nitrado.get_client(guild.id)
                 if client is None:
                     continue
-                players = client.get_player_list()
+                players = await asyncio.to_thread(client.get_player_list)
                 guild_settings.record_playtime(guild.id, players, 60)
             except Exception as e:
                 print(f"[playtime] track error guild={guild.id}: {type(e).__name__}: {e}", flush=True)

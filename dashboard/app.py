@@ -648,12 +648,18 @@ def section_overview(guild_id):
             players = query.get("players", {})
             if not isinstance(players, dict):
                 players = {}
+            details = server.get("details", {})
+            if not isinstance(details, dict):
+                details = {}
+            game = server.get("game", {})
+            if not isinstance(game, dict):
+                game = {}
             server_status = {
                 "configured": True,
                 "online": status.lower() == "started",
                 "status_text": status,
                 "server_name": server.get("name") or settings.get("server_name", ""),
-                "map": server.get("details", {}).get("map") or server.get("game", {}).get("map"),
+                "map": details.get("map") or game.get("map"),
                 "players": players.get("current", 0),
                 "max_players": players.get("max", 0),
             }
