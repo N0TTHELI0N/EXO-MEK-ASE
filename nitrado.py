@@ -35,6 +35,7 @@ class NitradoClient:
             "Authorization": f"Bearer {api_token}",
             "Content-Type": "application/json",
         }
+        self._log_fail_ts = {}
 
     # ── low-level ─────────────────────────────────────────────
 
@@ -171,12 +172,87 @@ class NitradoClient:
                     candidates.append(v)
         return list(dict.fromkeys(candidates))
 
+    def _resolve_log_file(self, filename: str = "ShooterGame_Last.log") -> str:
+        """Resolve the path of an ARK log file on the Nitrado file server."""
+        base = (self._game_short() or "arkps").strip("/")
+        candidates = [f"{base}/ShooterGame/Saved/Logs/{filename}"]
+        for root in self.base_roots():
+            root = (root or "").strip("/")
+            if root and root != base:
+                candidates.append(f"{root.rstrip('/')}/{base.rstrip('/')}/ShooterGame/Saved/Logs/{filename}")
+        for cand in candidates:
+            if self._log_file_exists(cand):
+                return cand
+        found = ""
+        try:
+            found = self.find_file_tree(base, filename, max_depth=6)
+        except Exception:
+            pass
+        return found
+
+    def _log_file_exists(self, path: str) -> bool:
+        path = (path or "").strip("/")
+        try:
+            entries = self.list_file_entries(path.rsplit("/", 1)[0])
+        except Exception:
+            return False
+        wanted = path.rsplit("/", 1)[-1].lower()
+        return any(str(e.get("name", "")).lower() == wanted for e in entries)
+
+    def read_file_tail(self, file: str, tail_bytes: int = 1000000) -> str:
+        """Read only the tail of a server file (last ~tail_bytes).
+
+        Downloads through the Nitrado file server; asks for a byte-range tail
+        and falls back to trimming the full body locally if ranges are ignored.
+        """
+        raw = requests.get(
+            f"{NITRADO_BASE_URL}{self.fs_base()}/download",
+            params={"file": file}, headers=self.headers, timeout=30,
+        )
+        if raw.status_code != 200 or not raw.text.startswith("{"):
+            return ""
+        data = raw.json()
+        token_info = data.get("token") or data
+        token = token_info.get("token")
+        url = token_info.get("url")
+        if not token or not url:
+            return ""
+        try:
+            resp = requests.get(url, params={"token": token}, headers={"Range": f"bytes=-{tail_bytes}"}, timeout=60)
+        except requests.RequestException:
+            return ""
+        if resp.status_code in (200, 206):
+            body = resp.text
+            if len(body) > tail_bytes:
+                body = body[-tail_bytes:]
+            return body
+        return ""
+
+    def _get_log_file_text(self, lines: int, tail_bytes: int = 1000000) -> str:
+        now = time.time()
+        for filename in ("ShooterGame_Last.log", "ShooterGame.log"):
+            if self._log_fail_ts.get(filename) and now - self._log_fail_ts[filename] < 60:
+                continue
+            path = self._resolve_log_file(filename)
+            if not path:
+                self._log_fail_ts[filename] = now
+                continue
+            text = self.read_file_tail(path, tail_bytes)
+            if text:
+                print(f"[nitrado-fs] using log file path={path!r} chars={len(text)}", flush=True)
+                return "\n".join(text.splitlines()[-lines:])
+            self._log_fail_ts[filename] = now
+        return ""
+
     def get_logs(self, lines: int = 200) -> str:
         """Get the last N lines of the server log.
 
-        Uses the game ids actually installed on the service, then the resolved
-        Folder Short id, then the usual ARK slugs as a last resort.
+        Preferred: read the live ARK log file (ShooterGame_Last.log) tail via the
+        Nitrado file server. Fallback: REST latest_log endpoint per game slug.
         """
+        text = self._get_log_file_text(lines)
+        if text:
+            return text
         candidates: list[str] = []
         try:
             candidates += self._discover_game_slugs()
