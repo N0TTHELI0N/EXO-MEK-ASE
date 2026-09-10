@@ -259,6 +259,10 @@ class CustomCommands(commands.Cog):
         forum = channel if isinstance(channel, discord.ForumChannel) else None
         if forum is not None:
             return forum
+        # Reuse an existing forum with the same name instead of duplicating it.
+        existing = discord.utils.get(guild.channels, name=name)
+        if isinstance(existing, discord.ForumChannel):
+            return existing
         try:
             return await guild.create_forum(name=name, topic=topic, reason=reason)
         except Exception:
