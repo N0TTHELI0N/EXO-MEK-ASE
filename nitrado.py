@@ -236,6 +236,7 @@ class NitradoClient:
             path = self._resolve_log_file(filename)
             if not path:
                 self._log_fail_ts[filename] = now
+                print(f"[nitrado-fs] log file NOT found for {filename}", flush=True)
                 continue
             text = self.read_file_tail(path, tail_bytes)
             if text:
@@ -270,6 +271,10 @@ class NitradoClient:
             content = data.get("content", "") if isinstance(data, dict) else ""
             if content:
                 return "\n".join(content.split("\n")[-lines:])
+        now = time.time()
+        if not getattr(self, "_log_empty_printed", False) or now - self._log_empty_printed >= 60:
+            self._log_empty_printed = now
+            print(f"[nitrado] get_logs EMPTY for file paths + all latest_log slugs", flush=True)
         return ""
 
     def restart_server(self) -> bool:

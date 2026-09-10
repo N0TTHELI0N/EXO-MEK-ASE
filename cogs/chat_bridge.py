@@ -156,6 +156,7 @@ class ChatBridge(commands.Cog):
         self._auto_service = {}
         self._auto_service_ts = {}
         self._hb_ts = {}
+        self._empty_ts = {}
 
     # ── helpers ──────────────────────────────────────────────
 
@@ -240,6 +241,10 @@ class ChatBridge(commands.Cog):
                     except Exception:
                         raw = None
             if not raw:
+                now_empty = time.time()
+                if guild.id not in self._empty_ts or now_empty - self._empty_ts[guild.id] >= 60:
+                    self._empty_ts[guild.id] = now_empty
+                    print(f"[ChatBridge] guild={guild.id} service={client.service_id} NO_LOG_DATA (file + latest_log empty)", flush=True)
                 continue
             now5 = time.time()
             if guild.id not in self._hb_ts or now5 - self._hb_ts[guild.id] >= 300:
