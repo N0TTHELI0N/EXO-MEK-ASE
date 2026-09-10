@@ -232,9 +232,25 @@ class NitradoClient:
         return list(dict.fromkeys(candidates))
 
     def _server_gs(self) -> dict:
-        """Fetch (and cache) the gameserver object once per client."""
+        """Fetch (and cache) the gameserver object once per client.
+
+        The /gameservers payload may be flat ({username, game, ...}) or nested
+        under a 'gameserver'/'data' key; both are unwrapped here.""" 
         if self._gs_cached is None:
             info = self._request("GET", f"/services/{self.service_id}/gameservers")
+            if isinstance(info, dict):
+                inner = info
+                while True:
+                    nxt = None
+                    for _k in ("gameserver", "data"):
+                        _v = inner.get(_k)
+                        if isinstance(_v, dict):
+                            nxt = _v
+                            break
+                    if not isinstance(nxt, dict):
+                        break
+                    inner = nxt
+                info = inner
             self._gs_cached = info if isinstance(info, dict) else {}
         return self._gs_cached
 
