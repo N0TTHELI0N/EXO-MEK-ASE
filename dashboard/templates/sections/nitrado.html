@@ -23,7 +23,7 @@
           <span class="text-[10px] font-bold uppercase bg-red-600 text-white px-2 py-0.5 rounded">{{ t('nitrado_active_badge') }}</span>
           {% endif %}
         </div>
-        <p class="text-xs text-gray-400 mt-0.5">Service ID: <span class="font-mono">{{ svc.service_id or '—' }}</span>{% if svc.has_token %} · {{ t('api_token') }}: {{ svc.api_token }}{% endif %}</p>
+        <p class="text-xs text-gray-400 mt-0.5">Service ID: <span class="font-mono">{{ svc.service_id or '—' }}</span>{% if svc.has_token %} · {{ t('api_token') }}: {{ svc.api_token }}{% endif %}{% if svc.has_ftp %} · SFTP: {{ t('ftp_configured') }}{% endif %}</p>
         <form method="POST" action="" class="mt-2 flex items-center gap-2">
           <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="service_action" value="rename">
@@ -35,6 +35,33 @@
             {{ t('nitrado_set_name') }}
           </button>
         </form>
+        <details class="mt-3 bg-gray-900/40 border border-gray-700/50 rounded-xl p-3">
+          <summary class="text-xs font-semibold text-gray-300 cursor-pointer select-none">{{ t('ftp_title') }}</summary>
+          <form method="POST" action="" class="mt-2 grid grid-cols-2 gap-2">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="service_action" value="ftp">
+            <input type="hidden" name="svc_id" value="{{ svc.id }}">
+            <div>
+              <label class="block text-[11px] text-gray-400 mb-0.5">{{ t('ftp_host') }}</label>
+              <input type="text" name="svc_ftp_host" value="{{ svc.ftp_host or '' }}" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-xs text-white">
+            </div>
+            <div>
+              <label class="block text-[11px] text-gray-400 mb-0.5">{{ t('ftp_port') }}</label>
+              <input type="text" name="svc_ftp_port" value="{{ svc.ftp_port or '22' }}" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-xs text-white">
+            </div>
+            <div>
+              <label class="block text-[11px] text-gray-400 mb-0.5">{{ t('ftp_user') }}</label>
+              <input type="text" name="svc_ftp_user" value="{{ svc.ftp_user or '' }}" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-xs text-white">
+            </div>
+            <div>
+              <label class="block text-[11px] text-gray-400 mb-0.5">{{ t('ftp_password') }}</label>
+              <input type="password" name="svc_ftp_password" placeholder="{% if svc.has_ftp %}{{ t('ftp_keep') }}{% else %}••••••••{% endif %}" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-xs text-white">
+            </div>
+            <div class="col-span-2">
+              <button type="submit" class="px-3 py-1.5 text-xs bg-red-600 hover:bg-red-500 text-white rounded-lg transition-colors">{{ t('save') }}</button>
+            </div>
+          </form>
+        </details>
       </div>
       <div class="flex items-center gap-2 shrink-0">
         {% if not svc.is_active %}
@@ -81,6 +108,24 @@
         <div class="sm:col-span-2">
           <label class="block text-sm font-medium text-gray-300 mb-1">{{ t('api_token') }}</label>
           <input type="password" name="svc_api_token" placeholder="{{ t('api_token') }}" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500">
+        </div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
+        <div>
+          <label class="block text-sm font-medium text-gray-300 mb-1">{{ t('ftp_host') }}</label>
+          <input type="text" name="svc_ftp_host" placeholder="{{ t('ftp_host') }}" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-300 mb-1">{{ t('ftp_port') }}</label>
+          <input type="text" name="svc_ftp_port" placeholder="22" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-300 mb-1">{{ t('ftp_user') }}</label>
+          <input type="text" name="svc_ftp_user" placeholder="{{ t('ftp_user') }}" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500">
+        </div>
+        <div class="col-span-1 sm:col-span-3">
+          <label class="block text-sm font-medium text-gray-300 mb-1">{{ t('ftp_password') }}</label>
+          <input type="password" name="svc_ftp_password" placeholder="{{ t('ftp_password') }}" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500">
         </div>
       </div>
       <div class="mt-4">

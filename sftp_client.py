@@ -72,6 +72,85 @@ class SFTPClient:
             if client is not None:
                 client.close()
 
+    def tail_first(self, paths: list[str], tail_bytes: int = 3000000) -> tuple:
+        """Return (path, text) for the first existing file, tailed to tail_bytes.
+
+        Uses a single SFTP connection across all candidate paths.
+        """
+        client = None
+        sftp = None
+        try:
+            client, sftp = self._connect()
+            for p in paths:
+                try:
+                    with sftp.open(p, "rb") as f:
+                        size = f.stat().st_size
+                        if size <= 0:
+                            continue
+                        f.seek(max(size - tail_bytes, 0))
+                        return p, f.read().decode("utf-8", "replace")
+                except (IOError, OSError):
+                    continue
+        except Exception as e:
+            print(f"[sftp] tail_first error: {type(e).__name__}: {e}")
+        finally:
+            if sftp is not None:
+                sftp.close()
+            if client is not None:
+                client.close()
+        return None, ""
+
+    def find_log_path(self, rel: str = "ShooterGame/Saved/Logs/ShooterGame_Last.log",
+                      max_dirs: int = 40) -> str | None:
+        """Locate a log file by walking key roots (bounded BFS).
+
+        Nitrado FTP layouts differ between services, so we probe common roots
+        and any directory that looks like the game root, checking the target
+        relative path under each candidate. Returns the found path or None.
+        """
+        client = None
+        sftp = None
+        try:
+            client, sftp = self._connect()
+            seen = set()
+            queue = ["", "games", "noftp"]
+            checked = 0
+            while queue and checked < max_dirs:
+                base = queue.pop(0)
+                key = base or "/"
+                if key in seen:
+                    continue
+                seen.add(key)
+                try:
+                    entries = sftp.listdir_attr(base)
+                except (IOError, OSError):
+                    continue
+                checked += 1
+                cand = (base.rstrip("/") + "/" + rel).lstrip("/")
+                try:
+                    sftp.stat(cand)
+                    if cand.startswith("/"):
+                        return cand
+                    return ("/" + cand) if not cand.startswith("/") else cand
+                except (IOError, OSError):
+                    pass
+                for e in entries:
+                    if not stat.S_ISDIR(e.st_mode):
+                        continue
+                    name = e.filename
+                    if name in (".", ".."):
+                        continue
+                    queue.append((base.rstrip("/") + "/" + name).lstrip("/"))
+            return None
+        except Exception as e:
+            print(f"[sftp] find_log_path error: {type(e).__name__}: {e}")
+            return None
+        finally:
+            if sftp is not None:
+                sftp.close()
+            if client is not None:
+                client.close()
+
     def upload(self, path: str, filename: str, data: bytes) -> bool:
         """Upload bytes to a directory path."""
         client = None

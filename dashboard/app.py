@@ -692,7 +692,23 @@ def section_nitrado(guild_id):
                 request.form.get("svc_name", ""),
                 request.form.get("svc_service_id", ""),
                 request.form.get("svc_api_token", ""),
+                ftp_host=request.form.get("svc_ftp_host", ""),
+                ftp_port=request.form.get("svc_ftp_port", ""),
+                ftp_user=request.form.get("svc_ftp_user", ""),
+                ftp_password=request.form.get("svc_ftp_password", ""),
             )
+        elif action == "ftp":
+            try:
+                guild_settings.update_nitrado_ftp(
+                    guild_id,
+                    int(request.form.get("svc_id", "0")),
+                    request.form.get("svc_ftp_host", "").strip(),
+                    request.form.get("svc_ftp_port", "").strip() or "22",
+                    request.form.get("svc_ftp_user", "").strip(),
+                    request.form.get("svc_ftp_password", ""),
+                )
+            except Exception:
+                pass
         elif action == "select":
             try:
                 guild_settings.set_active_nitrado_service(guild_id, int(request.form.get("svc_id", "0")))

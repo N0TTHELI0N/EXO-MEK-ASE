@@ -66,6 +66,7 @@ class NitradoClient:
         self._log_fail_ts = {}
         self._gs_cached = None
         self._probe_next_idx = {"ShooterGame_Last.log": 0, "ShooterGame.log": 0}
+        self._sftp_fail_ts = 0.0
 
     # ── low-level ─────────────────────────────────────────────
 
@@ -383,6 +384,57 @@ class NitradoClient:
             return ""
         return ""
 
+    def _sftp_get_log_text(self, lines: int, tail_bytes: int = 3000000) -> str:
+        """Read the ARK log tail over SFTP/FTP (used for PlayStation services,
+        which Nitrado does not expose through the file/download API).
+
+        Needs FTP/SFTP credentials configured in the dashboard Nitrado section
+        (host + password; the user falls back to the gameserver FTP user).
+        """
+        if not getattr(self, "guild_id", None):
+            return ""
+        now = time.time()
+        if self._sftp_fail_ts and now - self._sftp_fail_ts < 300:
+            return ""
+        try:
+            import sftp_client
+            cfg = sftp_client.get_sftp_config(self.guild_id)
+        except Exception:
+            return ""
+        host = (cfg.get("host") or "").strip()
+        password = (cfg.get("password") or "").strip()
+        if not host or not password:
+            return ""
+        gs = self._server_gs() or {}
+        user = str(cfg.get("user") or gs.get("username") or "").strip()
+        if not user:
+            return ""
+        sftp = sftp_client.SFTPClient(host, user, password, cfg.get("port") or 22)
+        game = str(gs.get("game") or self._game_short() or "arkps").strip("/").strip("\ufeff").split("/")[0]
+        for fname in ("ShooterGame_Last.log", "ShooterGame.log"):
+            rel = f"ShooterGame/Saved/Logs/{fname}"
+            guesses = []
+            roots = [f"{game}", f"noftp/{game}", "noftp", f"/games/{user}/noftp/{game}",
+                     f"/games/{user}/{game}", f"/games/{user}/noftp", f"/games/{user}"]
+            for root in roots:
+                base = root.rstrip("/")
+                guess = f"/{base}/{rel}" if base else f"/{rel}"
+                for variant in (guess, guess.lstrip("/")):
+                    guesses.append(variant)
+            guesses = list(dict.fromkeys(guesses))
+            path, text = sftp.tail_first(guesses, tail_bytes)
+            if not path:
+                path = sftp.find_log_path(rel)
+                if path:
+                    _, text = sftp.tail_first([path], tail_bytes)
+            if text:
+                self._sftp_fail_ts = 0.0
+                print(f"[nitrado-fs] sftp using log path={path!r} chars={len(text)}", flush=True)
+                return "\n".join(text.splitlines()[-lines:])
+        self._sftp_fail_ts = now
+        print(f"[nitrado-fs] sftp: no log found for {user}@{host} (guesses + tree walk) — check ftp details in dashboard", flush=True)
+        return ""
+
     def get_logs(self, lines: int = 200) -> str:
         """Get the last N lines of the server log.
 
@@ -420,6 +472,9 @@ class NitradoClient:
             content = data.get("content", "") if isinstance(data, dict) else ""
             if content:
                 return "\n".join(content.split("\n")[-lines:])
+        text = self._sftp_get_log_text(lines)
+        if text:
+            return text
         gs = self._server_gs() or {}
         game = str(gs.get("game") or "").lower()
         if ("ps4" in game or "ps5" in game or game == "arkps") and not getattr(self, "_ps_hint_printed", False):
@@ -991,7 +1046,9 @@ def get_client(guild_id: int) -> NitradoClient | None:
                     service_id = str(h["service_id"])
             elif not healthy:
                 print(f"[nitrado] guild={guild_id} active service {service_id} unhealthy; no healthy ARK service under this token", flush=True)
-    return NitradoClient(token, service_id)
+    client = NitradoClient(token, service_id)
+    client.guild_id = guild_id
+    return client
 
 
 def find_ark_services(guild_id: int) -> list[dict]:

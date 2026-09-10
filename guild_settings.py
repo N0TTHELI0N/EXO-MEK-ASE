@@ -718,6 +718,7 @@ def list_nitrado_services(guild_id: int) -> list[dict]:
                 d = _svc_row_to_dict(row)
                 d["has_token"] = bool(_decrypt(d.get("api_token", "")))
                 d["api_token"] = "••••••••" if d["has_token"] else ""
+                d["has_ftp"] = bool(_decrypt(d.get("ftp_password", "")))
                 out.append(d)
             return out
     except Exception:
@@ -818,6 +819,30 @@ def set_active_nitrado_service(guild_id: int, service_record_id: int) -> bool:
             cur.execute(
                 "UPDATE nitrado_services SET is_active = TRUE WHERE guild_id = %s AND id = %s",
                 (guild_id, service_record_id),
+            )
+        conn.commit()
+        return True
+    except Exception:
+        conn.rollback()
+        return False
+    finally:
+        conn.close()
+
+
+def update_nitrado_ftp(guild_id: int, service_record_id: int, ftp_host: str = "",
+                       ftp_port: str = "22", ftp_user: str = "", ftp_password: str = "") -> bool:
+    """Update FTP/SFTP credentials for a configured service (used as the log
+    and save-file reader for PlayStation services, which lack an API interface)."""
+    ftp_port = str(ftp_port or "22")
+    _pw = _encrypt(ftp_password or "")
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE nitrado_services SET ftp_host = %s, ftp_port = %s, ftp_user = %s, "
+                "ftp_password = CASE WHEN %s = '' THEN ftp_password ELSE %s END "
+                "WHERE guild_id = %s AND id = %s",
+                (ftp_host, ftp_port, ftp_user, _pw, _pw, guild_id, service_record_id),
             )
         conn.commit()
         return True
