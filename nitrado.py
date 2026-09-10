@@ -28,7 +28,10 @@ class NitradoClient:
             resp = requests.request(method, url, headers=self.headers, timeout=30, **kwargs)
             resp.raise_for_status()
             data = resp.json()
-            return data.get("data", data)
+            payload = data.get("data", data)
+            if isinstance(payload, list):
+                payload = payload[0] if payload else {}
+            return payload or {}
         except requests.RequestException as e:
             print(f"Nitrado API error: {type(e).__name__}")
             return {}

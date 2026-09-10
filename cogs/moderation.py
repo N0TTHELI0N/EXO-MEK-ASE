@@ -477,7 +477,10 @@ class Moderation(commands.Cog):
                 ) as resp:
                     resp.raise_for_status()
                     data = await resp.json()
-                    server = data.get("data", {}).get("gameserver", {})
+                    inner = data.get("data", {})
+                    if isinstance(inner, list):
+                        inner = inner[0] if inner else {}
+                    server = inner.get("gameserver", inner) if isinstance(inner, dict) else {}
 
             status = server.get("status", "unknown")
             players = server.get("query", {}).get("players", {})
