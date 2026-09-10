@@ -885,30 +885,44 @@ class NitradoClient:
         return True
 
 
-def get_client(guild_id: int) -> NitradoClient | None:
-    """Get a Nitrado client for a guild. Returns None if not configured."""
-    config = guild_settings.get_nitrado_config(guild_id)
-    token = config.get("api_token")
-    service_id = config.get("service_id")
-    if not token or not service_id:
-        return None
-    return NitradoClient(token, service_id)
+_heal_cache: dict[int, float] = {}
+_HEAL_TTL = 300.0
+_HEAL_BAD_STATUS = {"suspended", "decommissioned", "deleted", "closed"}
 
 
-def find_ark_services(guild_id: int) -> list[dict]:
-    """Scan the token's Nitrado services and find the ARK gameserver.
+def _extract_gameserver_status(code, body) -> str:
+    """Pull the gameserver status string out of a /gameservers response."""
+    if code != 200 or not isinstance(body, dict):
+        return ""
+    inner = body.get("data", body)
+    while isinstance(inner, dict):
+        gs = inner.get("gameserver")
+        if isinstance(gs, dict):
+            inner = gs
+        nxt = inner.get("data")
+        if isinstance(nxt, dict) and not isinstance(gs, dict):
+            inner = nxt
+            continue
+        break
+    return str(inner.get("status") or "").lower()
 
-    Probes /services/{id}/gameservers for every service that looks ARK-like
-    and reports which ones actually respond (ok=True). The configured token
-    must have access to the services list.
+
+def _ark_services_for_token(token: str, max_probes: int = 12) -> list[dict]:
+    """Scan a Nitrado token's services for ARK gameservers (no guild context).
+
+    Safe to call from get_client's self-heal path (no recursion).
     """
-    client = get_client(guild_id)
-    if not client:
+    if not token:
         return []
+    probe = NitradoClient(token, "")
     ark_slugs = {"arkse", "arkps4", "arksa", "arkxb", "ark", "asa", "ase"}
     results = []
-    for svc in client.list_services():
-        if not isinstance(svc, dict):
+    try:
+        services = probe.list_services()
+    except Exception:
+        return results
+    for svc in services:
+        if not isinstance(svc, dict) or len(results) >= max_probes:
             continue
         sid = str(svc.get("id") or "").strip()
         name = str(svc.get("name") or svc.get("game_name") or "").strip()
@@ -919,21 +933,9 @@ def find_ark_services(guild_id: int) -> list[dict]:
         is_ark = (not game) or "ark" in low or low in ark_slugs
         if not is_ark:
             continue
-        code, body = client._raw("GET", f"/services/{sid}/gameservers")
-        status = ""
-        if isinstance(body, dict):
-            inner = body.get("data", body)
-            while isinstance(inner, dict):
-                gs = inner.get("gameserver")
-                if isinstance(gs, dict):
-                    inner = gs
-                nxt = inner.get("data")
-                if isinstance(nxt, dict) and not isinstance(gs, dict):
-                    inner = nxt
-                    continue
-                break
-            status = str(inner.get("status") or "").lower()
-        ok = code == 200 and status not in ("suspended", "stopped") and status != ""
+        code, body = probe._raw("GET", f"/services/{sid}/gameservers")
+        status = _extract_gameserver_status(code, body)
+        ok = code == 200 and status not in ("suspended", "stopped", "decommissioned") and status != ""
         results.append({
             "service_id": sid,
             "name": name,
@@ -943,6 +945,57 @@ def find_ark_services(guild_id: int) -> list[dict]:
             "code": code,
         })
     return results
+
+
+def get_client(guild_id: int) -> NitradoClient | None:
+    """Get a Nitrado client for a guild. Returns None if not configured.
+
+    Self-heals: at most once every 5 minutes it re-checks the active service's
+    gameserver status; if the service is suspended/decommissioned or the
+    endpoint is erroring, it promotes a healthy ARK service under the same
+    token and persists the choice, so every feature keeps working.
+    """
+    config = guild_settings.get_nitrado_config(guild_id)
+    token = config.get("api_token")
+    service_id = config.get("service_id")
+    if not token or not service_id:
+        return None
+    now = time.time()
+    last = _heal_cache.get(guild_id, 0.0)
+    if now - last >= _HEAL_TTL:
+        _heal_cache[guild_id] = now
+        code, body = None, None
+        try:
+            probe = NitradoClient(token, service_id)
+            code, body = probe._raw("GET", f"/services/{service_id}/gameservers")
+        except Exception:
+            code = None
+        status = _extract_gameserver_status(code, body)
+        unhealthy = bool(code and 400 <= code < 429) or status in _HEAL_BAD_STATUS
+        if unhealthy:
+            healthy = [s for s in _ark_services_for_token(token) if s.get("ok")]
+            h = next((s for s in healthy if s), None)
+            if h and str(h["service_id"]) != str(service_id):
+                if guild_settings.promote_nitrado_service(guild_id, str(h["service_id"])):
+                    print(f"[nitrado] guild={guild_id} auto-promoted service {service_id} -> {h['service_id']} (status={h.get('status') or '?'})", flush=True)
+                    service_id = str(h["service_id"])
+            elif not healthy:
+                print(f"[nitrado] guild={guild_id} active service {service_id} unhealthy; no healthy ARK service under this token", flush=True)
+    return NitradoClient(token, service_id)
+
+
+def find_ark_services(guild_id: int) -> list[dict]:
+    """Scan the token's Nitrado services and find the ARK gameserver.
+
+    Probes /services/{id}/gameservers for every service that looks ARK-like
+    and reports which ones actually respond (ok=True). The configured token
+    must have access to the services list.
+    """
+    config = guild_settings.get_nitrado_config(guild_id)
+    token = config.get("api_token")
+    if not token:
+        return []
+    return _ark_services_for_token(token)
 
 
 def send_rcon(guild_id: int, command: str) -> str | None:
