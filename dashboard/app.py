@@ -635,7 +635,7 @@ def section_overview(guild_id):
     server_status = {}
     try:
         info = nitrado.get_server_info(guild_id)
-        server = info.get("server", info) if isinstance(info, dict) else {}
+        server = info.get("gameserver", info) if isinstance(info, dict) else {}
         if server:
             status = str(server.get("status") or "unknown")
             query = server.get("query", {}) or {}
