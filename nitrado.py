@@ -9,6 +9,21 @@ import guild_settings
 
 NITRADO_BASE_URL = "https://api.nitrado.net"
 
+_ERR_LOG_THROTTLE = {}
+
+
+def _log_error_once(status, endpoint, body):
+    """Log a Nitrado error at most once per (status, endpoint) window (process-wide)."""
+    import time as _t
+    key = f"{status}::{endpoint}"
+    now = _t.monotonic()
+    if now - _ERR_LOG_THROTTLE.get(key, 0) < 120:
+        return
+    _ERR_LOG_THROTTLE[key] = now
+    if len(_ERR_LOG_THROTTLE) > 100:
+        _ERR_LOG_THROTTLE.clear()
+    print(f"Nitrado API error: HTTPError status={status} endpoint={endpoint} body={body!r}", flush=True)
+
 
 class NitradoClient:
     """Client for interacting with a Nitrado-hosted ARK PS4/5 server."""
@@ -41,10 +56,7 @@ class NitradoClient:
                     body = (e.response.text or "")[:150]
             except Exception:
                 pass
-            now = time.monotonic()
-            if now - getattr(self, "_last_err_log", 0) > 30:
-                self._last_err_log = now
-                print(f"Nitrado API error: {type(e).__name__} status={status} endpoint={endpoint} body={body!r}", flush=True)
+            _log_error_once(status, endpoint, body)
             return {}
 
     def _post_binary(self, url: str, token: str, content: str) -> bool:
