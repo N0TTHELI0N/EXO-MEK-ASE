@@ -187,20 +187,33 @@ class ChatBridge(commands.Cog):
         return True
 
     def _pick_auto_service(self, guild_id: int) -> str | None:
-        """Pick a working ARK service id for this guild, with a 10-minute cache."""
+        """Pick a working ARK service id for this guild, with a 10-minute cache.
+
+        Promotes a healthy service to active when the configured one is stale,
+        suspended, or missing, so every feature resolves the right service.
+        """
         now = time.time()
         if guild_id in self._auto_service and now - self._auto_service_ts.get(guild_id, 0) < 600:
             return self._auto_service.get(guild_id)
         self._auto_service_ts[guild_id] = now
         current = str((guild_settings.get_nitrado_config(guild_id) or {}).get("service_id") or "")
+        healthy = [s for s in nitrado.find_ark_services(guild_id) if s.get("ok")]
+        promoted = None
         chosen = None
-        for svc in nitrado.find_ark_services(guild_id):
-            if svc.get("ok"):
-                s = str(svc.get("service_id"))
-                if current and s == current and not chosen:
-                    chosen = current
-                    break
-                chosen = chosen or s
+        for svc in healthy:
+            s = str(svc.get("service_id"))
+            if current and s == current:
+                chosen = current
+                break
+            if not chosen:
+                chosen = s
+                promoted = svc
+        if chosen and chosen != current:
+            try:
+                if guild_settings.set_active_nitrado_service(guild_id, chosen):
+                    print(f"[ChatBridge] guild={guild_id} auto-promoted Nitrado service {current or '?'} -> {chosen} (status={promoted.get('status') if promoted else '?'})", flush=True)
+            except Exception:
+                pass
         self._auto_service[guild_id] = chosen
         return chosen
 

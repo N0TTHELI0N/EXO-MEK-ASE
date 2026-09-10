@@ -919,12 +919,27 @@ def find_ark_services(guild_id: int) -> list[dict]:
         is_ark = (not game) or "ark" in low or low in ark_slugs
         if not is_ark:
             continue
-        code, _ = client._raw("GET", f"/services/{sid}/gameservers")
+        code, body = client._raw("GET", f"/services/{sid}/gameservers")
+        status = ""
+        if isinstance(body, dict):
+            inner = body.get("data", body)
+            while isinstance(inner, dict):
+                gs = inner.get("gameserver")
+                if isinstance(gs, dict):
+                    inner = gs
+                nxt = inner.get("data")
+                if isinstance(nxt, dict) and not isinstance(gs, dict):
+                    inner = nxt
+                    continue
+                break
+            status = str(inner.get("status") or "").lower()
+        ok = code == 200 and status not in ("suspended", "stopped") and status != ""
         results.append({
             "service_id": sid,
             "name": name,
             "game": game,
-            "ok": code == 200,
+            "status": status,
+            "ok": ok,
             "code": code,
         })
     return results

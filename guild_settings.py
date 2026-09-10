@@ -743,6 +743,36 @@ def get_active_nitrado_service(guild_id: int) -> dict:
         conn.close()
 
 
+def set_active_nitrado_service(guild_id: int, service_id: str) -> bool:
+    """Mark a configured Nitrado service as the active one for a guild.
+
+    Used by auto-heal: when the stored/active service turns out stale or
+    suspended, the bot promotes a healthy one so every feature (not just the
+    chat bridge) resolves the correct service via get_nitrado_config.
+    """
+    service_id = (service_id or "").strip()
+    if not service_id:
+        return False
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE nitrado_services SET is_active = (service_id = %s) WHERE guild_id = %s",
+                (service_id, guild_id),
+            )
+        conn.commit()
+        update_setting(guild_id, "nitrado_service_id", service_id)
+        return True
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return False
+    finally:
+        conn.close()
+
+
 def add_nitrado_service(guild_id: int, name: str, service_id: str, api_token: str = "",
                         ftp_host: str = "", ftp_port: str = "22", ftp_user: str = "",
                         ftp_password: str = "") -> bool:
