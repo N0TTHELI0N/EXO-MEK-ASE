@@ -283,11 +283,86 @@ class NitradoClient:
                 f"/games/{user}/{game_rel}",
                 f"/games/{user}/noftp/{rel}",
                 f"/games/{user}/{rel}",
+                f"/games/{user}/ftproot/{game_rel}",
+                f"/games/{user}/ftproot/{rel}",
                 f"noftp/{user}/{game_rel}",
                 f"{user}/{game_rel}",
             ]
-        cands += [game_rel, rel]
+        cands += [
+            f"/ftproot/{game_rel}",
+            f"ftproot/{game_rel}",
+            game_rel,
+            rel,
+        ]
         return list(dict.fromkeys(cands))
+
+    def file_server_list(self, dir_path: str = "/") -> tuple[int, list]:
+        """List entries under a server path via the Nitrado file server API.
+        Returns (http_status, entries); empty list if the API is unavailable."""
+        code, body = self._raw("GET", f"{self.fs_base()}/list", params={"dir": dir_path})
+        entries: list = []
+        if isinstance(body, dict):
+            inner = body.get("data", body)
+            if isinstance(inner, dict):
+                entries = inner.get("entries") or []
+            elif isinstance(inner, list):
+                entries = inner
+        if not getattr(self, "_fs_list_printed", False):
+            self._fs_list_printed = True
+            n = len(entries) if isinstance(entries, list) else "?"
+            print(f"[nitrado-fs] file_server/list dir={dir_path!r} HTTP={code} entries={n}", flush=True)
+        return code, entries
+
+    def _discover_log_path(
+        self,
+        filenames: tuple = ("ShooterGame_Last.log", "ShooterGame.log"),
+        max_dirs: int = 24,
+    ) -> str:
+        """Breadth-first walk of the file_server tree to locate an ARK log file.
+
+        Nitrado's own docs show the true filesystem root is
+        ``/games/<user>/ftproot/...`` — the exact path is unknown for this
+        service, so we discover it from the live tree instead of guessing.
+        Runs at most once per 10 minutes per client; returns the cached path
+        meanwhile or an empty string when the whole tree has no match.
+        """
+        now = time.time()
+        cached = getattr(self, "_fs_discover_ts", 0.0)
+        if now - cached < 600:
+            return getattr(self, "_fs_log_path", "") or ""
+        self._fs_discover_ts = now
+        queue = ["/"]
+        seen: set[str] = set()
+        checked = 0
+        try:
+            while queue and checked < max_dirs:
+                d = queue.pop(0)
+                key = d.rstrip("/") or "/"
+                if key in seen:
+                    continue
+                seen.add(key)
+                code, entries = self.file_server_list(d)
+                if code != 200 or not isinstance(entries, list):
+                    continue
+                checked += 1
+                for e in entries:
+                    if not isinstance(e, dict):
+                        continue
+                    name = str(e.get("name") or "")
+                    if e.get("type") == "file" and name in filenames:
+                        path = str(e.get("path") or "")
+                        if path:
+                            self._fs_log_path = path
+                            print(f"[nitrado-fs] DISCOVERED {name} => {path!r}", flush=True)
+                            return path
+                if checked >= max_dirs:
+                    break
+                for e in entries:
+                    if isinstance(e, dict) and e.get("type") == "dir":
+                        queue.append(str(e.get("path") or ""))
+        except Exception as ex:
+            print(f"[nitrado-fs] file_server discovery error: {type(ex).__name__}: {ex}", flush=True)
+        return ""
 
     def read_file_tail(self, file: str, tail_bytes: int = 1000000) -> str:
         """Read only the tail of a server file (last ~tail_bytes).
@@ -457,6 +532,14 @@ class NitradoClient:
         text = self._get_log_file_text(lines)
         if text:
             return text
+        # Discover the real filesystem path (root may be /games/<user>/ftproot)
+        # instead of guessing — one BFS every 10 minutes, then direct reads.
+        path = self._discover_log_path()
+        if path:
+            text = self.read_file_tail(path)
+            if text:
+                print(f"[nitrado-fs] using log file path={path!r} chars={len(text)}", flush=True)
+                return "\n".join(text.splitlines()[-lines:])
         # The latest_log endpoint is not available for every game (PlayStation
         # services expose no file interface at all). Trying every game slug
         # fired hundreds of pointless 404 requests per tick — restrict the
