@@ -11,6 +11,34 @@ NITRADO_BASE_URL = "https://api.nitrado.net"
 
 _ERR_LOG_THROTTLE = {}
 
+# Global Nitrado request throttle + backoff. Heavy probing (or the dashboard
+# polling) tripped Cloudflare ("429 Just a moment..."), so we enforce a minimum
+# gap between every API call and a hard cooldown after any 429.
+_NITRADO_MIN_INTERVAL = 1.0
+_nitrado_last_req = 0.0
+_nitrado_cooldown_until = 0.0
+_player_raw_logged = False
+
+
+def _begin_request() -> bool:
+    """Wait for the minimum request gap; returns False if cooling down."""
+    global _nitrado_last_req, _nitrado_cooldown_until
+    now = time.monotonic()
+    if now < _nitrado_cooldown_until:
+        return False
+    wait = _nitrado_last_req + _NITRADO_MIN_INTERVAL - now
+    if wait > 0:
+        time.sleep(wait)
+    _nitrado_last_req = time.monotonic()
+    return True
+
+
+def _mark_429(reason: str = ""):
+    global _nitrado_cooldown_until
+    if time.monotonic() >= _nitrado_cooldown_until:
+        print(f"[nitrado] 429/rejected by Cloudflare{(': ' + reason) if reason else ''} — pausing all Nitrado calls for 180s", flush=True)
+    _nitrado_cooldown_until = time.monotonic() + 180.0
+
 
 def _log_error_once(status, endpoint, body):
     """Log a Nitrado error at most once per (status, endpoint) window (process-wide)."""
@@ -36,13 +64,19 @@ class NitradoClient:
             "Content-Type": "application/json",
         }
         self._log_fail_ts = {}
+        self._gs_cached = None
 
     # ── low-level ─────────────────────────────────────────────
 
     def _request(self, method: str, endpoint: str, **kwargs) -> dict:
+        if not _begin_request():
+            return {}
         url = f"{NITRADO_BASE_URL}{endpoint}"
         try:
             resp = requests.request(method, url, headers=self.headers, timeout=10, **kwargs)
+            if resp.status_code == 429:
+                _mark_429(str(resp.status_code))
+                return {}
             resp.raise_for_status()
             data = resp.json()
             outer = data.get("data", data) if isinstance(data, dict) else data
@@ -51,6 +85,8 @@ class NitradoClient:
             return outer or {}
         except requests.RequestException as e:
             status = getattr(e.response, "status_code", None)
+            if status == 429:
+                _mark_429(str(status))
             body = ""
             try:
                 if e.response is not None:
@@ -62,15 +98,22 @@ class NitradoClient:
 
     def _raw(self, method: str, endpoint: str, **kwargs):
         """Send a request without raising; return (status_code, payload)."""
+        if not _begin_request():
+            return 429, {"_text": "throttled", "throttled": True}
         url = f"{NITRADO_BASE_URL}{endpoint}"
         try:
             resp = requests.request(method, url, headers=self.headers, timeout=10, **kwargs)
+            if resp.status_code == 429:
+                _mark_429(str(resp.status_code))
+                return resp.status_code, {"_text": (resp.text or "")[:300]}
             try:
                 payload = resp.json()
             except Exception:
                 payload = {"_text": (resp.text or "")[:300]}
             return resp.status_code, payload
         except requests.RequestException as e:
+            if getattr(e.response, "status_code", None) == 429:
+                _mark_429("429")
             return getattr(e.response, "status_code", 0), {}
 
     def list_services(self) -> list[dict]:
@@ -89,6 +132,8 @@ class NitradoClient:
 
     def _post_binary(self, url: str, token: str, content: str) -> bool:
         """POST raw binary content to a Nitrado upload URL."""
+        if time.monotonic() < _nitrado_cooldown_until:
+            return False
         try:
             resp = requests.post(
                 url,
@@ -97,6 +142,9 @@ class NitradoClient:
                 headers={"content-type": "application/binary"},
                 timeout=60,
             )
+            if resp.status_code == 429:
+                _mark_429(str(resp.status_code))
+                return False
             resp.raise_for_status()
             return True
         except requests.RequestException as e:
@@ -105,12 +153,17 @@ class NitradoClient:
 
     def _get_binary(self, url: str, token: str) -> str:
         """GET raw content from a Nitrado download URL."""
+        if time.monotonic() < _nitrado_cooldown_until:
+            return ""
         try:
             resp = requests.get(
                 url,
                 params={"token": token},
                 timeout=60,
             )
+            if resp.status_code == 429:
+                _mark_429(str(resp.status_code))
+                return ""
             resp.raise_for_status()
             return resp.text
         except requests.RequestException as e:
@@ -119,12 +172,17 @@ class NitradoClient:
 
     def _get_bytes(self, url: str, token: str) -> bytes:
         """GET raw bytes from a Nitrado download URL (binary-safe)."""
+        if time.monotonic() < _nitrado_cooldown_until:
+            return b""
         try:
             resp = requests.get(
                 url,
                 params={"token": token},
                 timeout=120,
             )
+            if resp.status_code == 429:
+                _mark_429(str(resp.status_code))
+                return b""
             resp.raise_for_status()
             return resp.content
         except requests.RequestException as e:
@@ -140,10 +198,11 @@ class NitradoClient:
     def get_player_list(self) -> list[dict]:
         """Get list of currently connected players."""
         data = self._request("GET", f"/services/{self.service_id}/gameservers/games/players")
-        if not getattr(self, "_player_raw_logged", False):
+        global _player_raw_logged
+        if not _player_raw_logged:
             import json as _json
             print(f"[nitrado] RAW player list response: {_json.dumps(data, default=str)}", flush=True)
-            self._player_raw_logged = True
+            _player_raw_logged = True
         players = data.get("players", [])
         return [
             {
@@ -172,32 +231,30 @@ class NitradoClient:
                     candidates.append(v)
         return list(dict.fromkeys(candidates))
 
-    def _resolve_log_file(self, filename: str = "ShooterGame_Last.log") -> str:
-        """Resolve the path of an ARK log file on the Nitrado file server."""
-        base = (self._game_short() or "arkps").strip("/")
-        candidates = [f"{base}/ShooterGame/Saved/Logs/{filename}"]
-        for root in self.base_roots():
-            root = (root or "").strip("/")
-            if root and root != base:
-                candidates.append(f"{root.rstrip('/')}/{base.rstrip('/')}/ShooterGame/Saved/Logs/{filename}")
-        for cand in candidates:
-            if self._log_file_exists(cand):
-                return cand
-        found = ""
-        try:
-            found = self.find_file_tree(base, filename, max_depth=6)
-        except Exception:
-            pass
-        return found
+    def _server_gs(self) -> dict:
+        """Fetch (and cache) the gameserver object once per client."""
+        if self._gs_cached is None:
+            info = self._request("GET", f"/services/{self.service_id}/gameservers")
+            self._gs_cached = info if isinstance(info, dict) else {}
+        return self._gs_cached
 
-    def _log_file_exists(self, path: str) -> bool:
-        path = (path or "").strip("/")
-        try:
-            entries = self.list_file_entries(path.rsplit("/", 1)[0])
-        except Exception:
-            return False
-        wanted = path.rsplit("/", 1)[-1].lower()
-        return any(str(e.get("name", "")).lower() == wanted for e in entries)
+    def _log_file_candidates(self, filename: str) -> list[str]:
+        """Deterministic, dependency-free candidate paths for an ARK log file.
+
+        Questions no list/recursive file APIs — only a handful of download
+        attempts per tick, which keeps us far below Nitrado's rate limits.
+        """
+        gs = self._server_gs() or {}
+        game = str(gs.get("game") or self._game_short() or "arkps").strip("/").strip("\ufeff")
+        user = str(gs.get("username") or "").strip()
+        rel = f"ShooterGame/Saved/Logs/{filename}"
+        game_rel = f"{game}/{rel}"
+        cands = [rel, game_rel]
+        if user:
+            cands.append(f"noftp/{user}/{game_rel}")
+            cands.append(f"/games/{user}/{game_rel}")
+            cands.append(f"/games/{user}/noftp/{game_rel}")
+        return list(dict.fromkeys(cands))
 
     def read_file_tail(self, file: str, tail_bytes: int = 1000000) -> str:
         """Read only the tail of a server file (last ~tail_bytes).
@@ -205,11 +262,22 @@ class NitradoClient:
         Downloads through the Nitrado file server; asks for a byte-range tail
         and falls back to trimming the full body locally if ranges are ignored.
         """
-        raw = requests.get(
-            f"{NITRADO_BASE_URL}{self.fs_base()}/download",
-            params={"file": file}, headers=self.headers, timeout=30,
-        )
+        if not _begin_request():
+            return ""
+        try:
+            raw = requests.get(
+                f"{NITRADO_BASE_URL}{self.fs_base()}/download",
+                params={"file": file}, headers=self.headers, timeout=30,
+            )
+        except requests.RequestException:
+            raw = None
+        if raw is None:
+            return ""
+        if raw.status_code == 429:
+            _mark_429(str(raw.status_code))
+            return ""
         if raw.status_code != 200 or not raw.text.startswith("{"):
+            print(f"[nitrado-fs] download-list HTTP={raw.status_code} file={file!r}", flush=True)
             return ""
         data = raw.json()
         token_info = data.get("token") or data
@@ -217,15 +285,26 @@ class NitradoClient:
         url = token_info.get("url")
         if not token or not url:
             return ""
+        if time.monotonic() < _nitrado_cooldown_until:
+            return ""
         try:
             resp = requests.get(url, params={"token": token}, headers={"Range": f"bytes=-{tail_bytes}"}, timeout=60)
         except requests.RequestException:
             return ""
+        if resp.status_code == 429:
+            _mark_429(str(resp.status_code))
+            return ""
         if resp.status_code in (200, 206):
             body = resp.text
+            head = body.lstrip()[:32]
+            if head and head.startswith(("<", "{")):
+                if "just a moment" in head.lower() or "cloudflare" in head.lower():
+                    _mark_429("Cloudflare challenge")
+                return ""
             if len(body) > tail_bytes:
                 body = body[-tail_bytes:]
             return body
+        print(f"[nitrado-fs] download body HTTP={resp.status_code} file={file!r}", flush=True)
         return ""
 
     def _get_log_file_text(self, lines: int, tail_bytes: int = 1000000) -> str:
@@ -233,16 +312,13 @@ class NitradoClient:
         for filename in ("ShooterGame_Last.log", "ShooterGame.log"):
             if self._log_fail_ts.get(filename) and now - self._log_fail_ts[filename] < 60:
                 continue
-            path = self._resolve_log_file(filename)
-            if not path:
-                self._log_fail_ts[filename] = now
-                print(f"[nitrado-fs] log file NOT found for {filename}", flush=True)
-                continue
-            text = self.read_file_tail(path, tail_bytes)
-            if text:
-                print(f"[nitrado-fs] using log file path={path!r} chars={len(text)}", flush=True)
-                return "\n".join(text.splitlines()[-lines:])
+            for path in self._log_file_candidates(filename)[:4]:
+                text = self.read_file_tail(path, tail_bytes)
+                if text:
+                    print(f"[nitrado-fs] using log file path={path!r} chars={len(text)}", flush=True)
+                    return "\n".join(text.splitlines()[-lines:])
             self._log_fail_ts[filename] = now
+            print(f"[nitrado-fs] log file NOT found for {filename}", flush=True)
         return ""
 
     def get_logs(self, lines: int = 200) -> str:
@@ -303,7 +379,7 @@ class NitradoClient:
             return self._game_short_cached
         short = ""
         try:
-            info = self._request("GET", f"/services/{self.service_id}/gameservers")
+            info = self._server_gs()
             inner = info.get("data", info) if isinstance(info, dict) else {}
             gs = inner.get("gameserver", inner) if isinstance(inner, dict) else {}
             for k in ("folder_short", "folder", "game", "game_short"):
@@ -470,7 +546,12 @@ class NitradoClient:
 
     def read_file(self, file: str) -> str:
         """Read a file's content from the server."""
+        if not _begin_request():
+            return ""
         raw = requests.get(f"{NITRADO_BASE_URL}{self.fs_base()}/download", params={"file": file}, headers=self.headers, timeout=30)
+        if raw.status_code == 429:
+            _mark_429(str(raw.status_code))
+            return ""
         print(f"[nitrado-fs] download?file={file!r} HTTP={raw.status_code} text={raw.text[:300]!r}")
         data = raw.json() if raw.text.startswith("{") else {}
         token_info = data.get("token") or data
@@ -608,8 +689,13 @@ class NitradoClient:
         return last
 
     def _fs_list(self, directory: str) -> list[dict]:
+        if not _begin_request():
+            raise RuntimeError("Nitrado list error: HTTP 429 (throttled)")
         url = f"{NITRADO_BASE_URL}{self.fs_base()}/list"
         resp = requests.get(url, params={"dir": directory}, headers=self.headers, timeout=30)
+        if resp.status_code == 429:
+            _mark_429(str(resp.status_code))
+            raise RuntimeError(f"Nitrado list error: HTTP {resp.status_code}")
         if resp.status_code != 200:
             raise RuntimeError(f"Nitrado list error: HTTP {resp.status_code}")
         raw = resp.json()
@@ -641,7 +727,12 @@ class NitradoClient:
 
     def download_file_bytes(self, file: str) -> bytes:
         """Download a file as raw bytes (binary-safe). Returns b'' on failure."""
+        if not _begin_request():
+            return b""
         raw = requests.get(f"{NITRADO_BASE_URL}{self.fs_base()}/download", params={"file": file}, headers=self.headers, timeout=30)
+        if raw.status_code == 429:
+            _mark_429(str(raw.status_code))
+            return b""
         print(f"[nitrado-fs] download_bytes?file={file!r} HTTP={raw.status_code} text={raw.text[:200]!r}")
         data = raw.json() if raw.text.startswith("{") else {}
         token_info = data.get("token") or data

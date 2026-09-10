@@ -14,7 +14,7 @@ import bot_i18n
 from security import sanitize_rcon_name
 
 
-CHAT_BRIDGE_INTERVAL_SECONDS = 20
+CHAT_BRIDGE_INTERVAL_SECONDS = 30
 MAX_SEEN = 20000
 ECHO_FINGERPRINT_TTL = 120
 
