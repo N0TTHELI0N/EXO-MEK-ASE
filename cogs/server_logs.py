@@ -36,20 +36,28 @@ class ServerLogs(commands.Cog):
             cfg = guild_settings.get_server_log_config(guild.id)
             if not cfg or not cfg.get("enabled"):
                 continue
-            server_thread = guild.get_thread(cfg.get("server_events_thread_id")) if cfg.get("server_events_thread_id") else None
+            join_thread = guild.get_thread(cfg.get("join_thread_id") or cfg.get("server_events_thread_id")) if cfg.get("join_thread_id") or cfg.get("server_events_thread_id") else None
+            leave_thread = guild.get_thread(cfg.get("leave_thread_id") or cfg.get("server_events_thread_id")) if cfg.get("leave_thread_id") or cfg.get("server_events_thread_id") else None
             chat_thread = guild.get_thread(cfg.get("chat_thread_id")) if cfg.get("chat_thread_id") else None
 
-            if isinstance(server_thread, discord.Thread):
-                for ev in guild_settings.get_unposted_server_events(guild.id):
+            if isinstance(join_thread, discord.Thread):
+                for ev in guild_settings.get_unposted_server_events(guild.id, event_type="join"):
                     name = ev["player_name"] or "?"
-                    if ev["event_type"] == "join":
-                        icon, verb = "🟢", bot_i18n.t(guild.id, "server_event_join")
-                    else:
-                        icon, verb = "🔴", bot_i18n.t(guild.id, "server_event_leave")
                     ts = int(ev["created_at"].timestamp()) if getattr(ev["created_at"], "timestamp", None) else None
                     ts_part = f" · <t:{ts}:f>" if ts else ""
                     try:
-                        await server_thread.send(f"{icon} **{name}** — {verb}{ts_part}")
+                        await join_thread.send(f"🟢 **{name}** — {bot_i18n.t(guild.id, 'server_event_join')}{ts_part}")
+                        guild_settings.mark_server_event_posted(ev["id"])
+                    except Exception:
+                        break
+
+            if isinstance(leave_thread, discord.Thread):
+                for ev in guild_settings.get_unposted_server_events(guild.id, event_type="leave"):
+                    name = ev["player_name"] or "?"
+                    ts = int(ev["created_at"].timestamp()) if getattr(ev["created_at"], "timestamp", None) else None
+                    ts_part = f" · <t:{ts}:f>" if ts else ""
+                    try:
+                        await leave_thread.send(f"🔴 **{name}** — {bot_i18n.t(guild.id, 'server_event_leave')}{ts_part}")
                         guild_settings.mark_server_event_posted(ev["id"])
                     except Exception:
                         break

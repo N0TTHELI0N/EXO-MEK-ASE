@@ -1075,12 +1075,12 @@ STRINGS = {
         "en": "❌ Could not create forum: {error}",
     },
     "forums_partial": {
-        "ar": "⚠️ تم إنشاء {created}/4 مواضيع فقط. المفقود: {missing}.{errors} أعد تشغيل الأمر للمحاولة.",
-        "en": "⚠️ Only {created}/4 threads were created. Missing: {missing}.{errors} Run the command again to retry.",
+        "ar": "⚠️ تم إنشاء {created}/5 مواضيع فقط. المفقود: {missing}.{errors} أعد تشغيل الأمر للمحاولة.",
+        "en": "⚠️ Only {created}/5 threads were created. Missing: {missing}.{errors} Run the command again to retry.",
     },
     "forum_ready": {
-        "ar": "✅ فوروم سجل الإدارة جاهز.\nالفوروم: {forum}\nالمواضيع: 🦖 <#{thread_dino}> · 🎁 <#{thread_gfi}> · 🧍 <#{thread_player}> · 🎮 <#{thread_gcm}>",
-        "en": "✅ Admin-log forum ready.\nForum: {forum}\nThreads: 🦖 <#{thread_dino}> · 🎁 <#{thread_gfi}> · 🧍 <#{thread_player}> · 🎮 <#{thread_gcm}>",
+        "ar": "✅ فوروم سجل الإدارة جاهز.\nالفوروم: {forum}\nالمواضيع: 🦖 <#{thread_dino}> · 🎁 <#{thread_gfi}> · 🧍 <#{thread_player}> · 🎮 <#{thread_gcm}> · 🗂️ <#{thread_other}>",
+        "en": "✅ Admin-log forum ready.\nForum: {forum}\nThreads: 🦖 <#{thread_dino}> · 🎁 <#{thread_gfi}> · 🧍 <#{thread_player}> · 🎮 <#{thread_gcm}> · 🗂️ <#{thread_other}>",
     },
     "shop_forum_partial": {
         "ar": "⚠️ تعذر إنشاء جميع مواضيع المتجر. المفقود: {missing}.{errors} أعد تشغيل الأمر للمحاولة.",
@@ -1098,9 +1098,17 @@ STRINGS = {
         "ar": "أحداث دخول وخروج اللاعبين من السيرفر.",
         "en": "Player join / leave events from the server log.",
     },
+    "server_logs_thread_join": {
+        "ar": "🟢 دخول",
+        "en": "🟢 Joins",
+    },
+    "server_logs_thread_leave": {
+        "ar": "🔴 خروج",
+        "en": "🔴 Leaves",
+    },
     "server_logs_forum_ready": {
-        "ar": "✅ فوروم سجلات السيرفر جاهز.\nالفوروم: {forum}\nموضوع الأحداث: {thread}",
-        "en": "✅ Server-logs forum ready.\nForum: {forum}\nEvents thread: {thread}",
+        "ar": "✅ فوروم سجلات السيرفر جاهز.\nالفوروم: {forum}\nالمواضيع: 🟢 دخول <#{join}> · 🔴 خروج <#{leave}>",
+        "en": "✅ Server-logs forum ready.\nForum: {forum}\nThreads: 🟢 Joins <#{join}> · 🔴 Leaves <#{leave}>",
     },
     "chat_forum_topic": {
         "ar": "شات اللعبة داخل السيرفر - رسائل اللاعبين",
@@ -1110,9 +1118,13 @@ STRINGS = {
         "ar": "رسائل شات اللعبة القادمة من السيرفر.",
         "en": "In-game chat messages from the server.",
     },
+    "chat_forum_thread_name": {
+        "ar": "💬 شات اللعبة",
+        "en": "💬 Game Chat",
+    },
     "chat_forum_ready": {
-        "ar": "✅ فوروم شات اللعبة جاهز.\nالفوروم: {forum}\nالموضوع: {thread}",
-        "en": "✅ Game-chat forum ready.\nForum: {forum}\nThread: {thread}",
+        "ar": "✅ شات اللعبة جاهز داخل فوروم سجلات السيرفر.\nالفوروم: {forum}\nالموضوع: {thread}",
+        "en": "✅ Game chat ready inside the server-logs forum.\nForum: {forum}\nThread: {thread}",
     },
     "server_logs_toggled": {
         "ar": "تم تغيير حالة نشر السجلات إلى: **{state}**.",

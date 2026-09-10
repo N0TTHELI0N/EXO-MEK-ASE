@@ -281,6 +281,9 @@ def init_db():
                 )
             """)
             cur.execute("CREATE INDEX IF NOT EXISTS idx_server_events_guild ON server_events(guild_id, id)")
+            cur.execute("ALTER TABLE server_log_config ADD COLUMN IF NOT EXISTS join_thread_id BIGINT")
+            cur.execute("ALTER TABLE server_log_config ADD COLUMN IF NOT EXISTS leave_thread_id BIGINT")
+            cur.execute("ALTER TABLE forum_log_config ADD COLUMN IF NOT EXISTS thread_other BIGINT")
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS chat_auto_rules (
                     id             SERIAL PRIMARY KEY,
@@ -1504,7 +1507,8 @@ def get_server_log_config(guild_id: int) -> dict:
     try:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT enabled, server_forum_id, server_events_thread_id, chat_forum_id, chat_thread_id "
+                "SELECT enabled, server_forum_id, server_events_thread_id, chat_forum_id, chat_thread_id, "
+                "join_thread_id, leave_thread_id "
                 "FROM server_log_config WHERE guild_id = %s",
                 (guild_id,),
             )
@@ -1516,6 +1520,8 @@ def get_server_log_config(guild_id: int) -> dict:
                     "server_events_thread_id": row[2],
                     "chat_forum_id": row[3],
                     "chat_thread_id": row[4],
+                    "join_thread_id": row[5],
+                    "leave_thread_id": row[6],
                 }
             return {
                 "enabled": False,
@@ -1523,13 +1529,16 @@ def get_server_log_config(guild_id: int) -> dict:
                 "server_events_thread_id": None,
                 "chat_forum_id": None,
                 "chat_thread_id": None,
+                "join_thread_id": None,
+                "leave_thread_id": None,
             }
     finally:
         conn.close()
 
 
 def update_server_log_config(guild_id: int, **kwargs):
-    allowed = {"enabled", "server_forum_id", "server_events_thread_id", "chat_forum_id", "chat_thread_id"}
+    allowed = {"enabled", "server_forum_id", "server_events_thread_id", "chat_forum_id",
+               "chat_thread_id", "join_thread_id", "leave_thread_id"}
     conn = get_conn()
     try:
         with conn.cursor() as cur:
@@ -1559,17 +1568,26 @@ def add_server_event(guild_id: int, event_type: str, player_name: str, raw_line:
         conn.close()
 
 
-def get_unposted_server_events(guild_id: int, limit: int = 50):
+def get_unposted_server_events(guild_id: int, limit: int = 50, event_type: str = None):
     conn = get_conn()
     try:
         with conn.cursor() as cur:
-            cur.execute("""
-                SELECT id, event_type, player_name, raw_line, created_at
-                FROM server_events
-                WHERE guild_id = %s AND posted_forum = FALSE
-                ORDER BY id ASC
-                LIMIT %s
-            """, (guild_id, limit))
+            if event_type:
+                cur.execute("""
+                    SELECT id, event_type, player_name, raw_line, created_at
+                    FROM server_events
+                    WHERE guild_id = %s AND event_type = %s AND posted_forum = FALSE
+                    ORDER BY id ASC
+                    LIMIT %s
+                """, (guild_id, event_type, limit))
+            else:
+                cur.execute("""
+                    SELECT id, event_type, player_name, raw_line, created_at
+                    FROM server_events
+                    WHERE guild_id = %s AND posted_forum = FALSE
+                    ORDER BY id ASC
+                    LIMIT %s
+                """, (guild_id, limit))
             return [
                 {"id": r[0], "event_type": r[1], "player_name": r[2], "raw_line": r[3], "created_at": r[4]}
                 for r in cur.fetchall()
@@ -2481,7 +2499,7 @@ def get_forum_log_config(guild_id: int):
     try:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT forum_id, thread_dino, thread_gfi, thread_player, thread_gcm
+                SELECT forum_id, thread_dino, thread_gfi, thread_player, thread_gcm, thread_other
                 FROM forum_log_config WHERE guild_id = %s
             """, (guild_id,))
             row = cur.fetchone()
@@ -2493,40 +2511,48 @@ def get_forum_log_config(guild_id: int):
                 "thread_gfi": row[2],
                 "thread_player": row[3],
                 "thread_gcm": row[4],
+                "thread_other": row[5],
             }
     finally:
         conn.close()
 
 
 def set_forum_log_config(guild_id: int, forum_id: int, thread_dino: int = None,
-                         thread_gfi: int = None, thread_player: int = None, thread_gcm: int = None):
+                         thread_gfi: int = None, thread_player: int = None,
+                         thread_gcm: int = None, thread_other: int = None):
     conn = get_conn()
     try:
         with conn.cursor() as cur:
             cur.execute("""
-                INSERT INTO forum_log_config (guild_id, forum_id, thread_dino, thread_gfi, thread_player, thread_gcm)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                INSERT INTO forum_log_config (guild_id, forum_id, thread_dino, thread_gfi, thread_player, thread_gcm, thread_other)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (guild_id) DO UPDATE SET
                     forum_id = EXCLUDED.forum_id,
                     thread_dino = COALESCE(EXCLUDED.thread_dino, forum_log_config.thread_dino),
                     thread_gfi = COALESCE(EXCLUDED.thread_gfi, forum_log_config.thread_gfi),
                     thread_player = COALESCE(EXCLUDED.thread_player, forum_log_config.thread_player),
-                    thread_gcm = COALESCE(EXCLUDED.thread_gcm, forum_log_config.thread_gcm)
-            """, (guild_id, forum_id, thread_dino, thread_gfi, thread_player, thread_gcm))
+                    thread_gcm = COALESCE(EXCLUDED.thread_gcm, forum_log_config.thread_gcm),
+                    thread_other = COALESCE(EXCLUDED.thread_other, forum_log_config.thread_other)
+            """, (guild_id, forum_id, thread_dino, thread_gfi, thread_player, thread_gcm, thread_other))
         conn.commit()
     finally:
         conn.close()
 
 
 def get_unposted_forum_logs(guild_id: int, limit: int = 50):
-    """Return categorized log entries not yet posted to the forum."""
+    """Return categorized log entries not yet posted to the forum.
+
+    Entries with an explicit category go to their thread; uncategorized
+    admin_command/cmd entries are treated as "Other".
+    """
     conn = get_conn()
     try:
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT id, log_type, sub_type, user_id, user_name, player_name, command, details, created_at, log_category
                 FROM bot_logs
-                WHERE guild_id = %s AND log_category IS NOT NULL AND posted_forum = FALSE
+                WHERE guild_id = %s AND posted_forum = FALSE
+                  AND (log_category IS NOT NULL OR log_type IN ('admin_command', 'cmd'))
                 ORDER BY id ASC
                 LIMIT %s
             """, (guild_id, limit))

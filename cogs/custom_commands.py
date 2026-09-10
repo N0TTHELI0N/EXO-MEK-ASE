@@ -12,6 +12,7 @@ CATEGORY_META = {
     "gfi": {"emoji": "🎁", "label": "GFI Commands", "thread": "thread_gfi"},
     "player": {"emoji": "🧍", "label": "Player Features", "thread": "thread_player"},
     "gcm": {"emoji": "🎮", "label": "GCM", "thread": "thread_gcm"},
+    "other": {"emoji": "🗂️", "label": "Other", "thread": "thread_other"},
 }
 
 
@@ -32,7 +33,6 @@ async def _normalize_thread(result):
 class CustomCommands(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self._renamed_log_forum = False
         self.post_forum_logs.start()
 
     def cog_unload(self):
@@ -61,9 +61,10 @@ class CustomCommands(commands.Cog):
         return resp
 
     async def _log_forum_message(self, guild_id: int, log_entry: dict) -> discord.Embed:
-        meta = CATEGORY_META.get(log_entry.get("log_category"), CATEGORY_META["gcm"])
+        meta = CATEGORY_META.get(log_entry.get("log_category"), CATEGORY_META["other"])
         who = log_entry.get("user_name") or f"User#{log_entry.get('user_id')}"
-        cmd = (log_entry.get("details") or {}).get("command") or log_entry.get("command") or ""
+        details = log_entry.get("details") or {}
+        cmd = details.get("command") or details.get("action") or log_entry.get("command") or ""
         embed = discord.Embed(
             title=bot_i18n.t(guild_id, "forum_log_title", emoji=meta['emoji'], label=meta['label']),
             description=bot_i18n.t(guild_id, "forum_log_body", who=who, cmd=cmd),
@@ -106,22 +107,14 @@ class CustomCommands(commands.Cog):
     @tasks.loop(seconds=20)
     async def post_forum_logs(self):
         for guild in self.bot.guilds:
-            # Server-log forum (command categories) — renamed to admin-logs.
+            # Admin-log forum (command categories).
             cfg = guild_settings.get_forum_log_config(guild.id)
             if cfg and cfg["forum_id"]:
                 forum = guild.get_channel(cfg["forum_id"])
                 if forum:
-                    if not self._renamed_log_forum and forum.name.lower() == "server-logs":
-                        try:
-                            await forum.edit(name="admin-logs", reason="Renamed to admin-logs under the new log system")
-                        except Exception:
-                            pass
-                    self._renamed_log_forum = True
                     for entry in guild_settings.get_unposted_forum_logs(guild.id):
-                        cat = entry.get("log_category")
-                        meta = CATEGORY_META.get(cat)
-                        if not meta:
-                            continue
+                        cat = entry.get("log_category") or "other"
+                        meta = CATEGORY_META.get(cat, CATEGORY_META["other"])
                         thread_id = cfg.get(meta["thread"])
                         target = guild.get_thread(thread_id) if thread_id else None
                         if not target:
@@ -287,12 +280,6 @@ class CustomCommands(commands.Cog):
                                                 "Admin log forum - created by setup-logs", channel)
         if forum is None:
             return None, "admin-logs: " + bot_i18n.t(guild.id, "forum_error", error="create failed")
-        # rename a past "server-logs" forum so the old forum becomes admin-logs
-        if forum.name.lower() == "server-logs":
-            try:
-                await forum.edit(name="admin-logs", reason="Renamed to admin-logs under the new log system")
-            except Exception:
-                pass
         thread_ids, errors = {}, []
         for cat, meta in CATEGORY_META.items():
             existing = discord.utils.find(lambda t, m=meta: t.name.startswith(m["emoji"]) and m["label"] in t.name, forum.threads)
@@ -310,16 +297,18 @@ class CustomCommands(commands.Cog):
                 thread_ids[meta["thread"]] = thread.id
             except Exception as e:
                 errors.append(f"{meta['label']}: {type(e).__name__}")
-        if len(thread_ids) < 4:
+        if len(thread_ids) < len(CATEGORY_META):
             missing = [CATEGORY_META[c]["label"] for c in CATEGORY_META if CATEGORY_META[c]["thread"] not in thread_ids]
             errors_note = (" (" + "; ".join(errors) + ")") if errors else ""
             return None, bot_i18n.t(guild.id, "forums_partial", created=len(thread_ids), missing=', '.join(missing), errors=errors_note)
         guild_settings.set_forum_log_config(guild.id, forum.id,
                                             thread_ids.get("thread_dino"), thread_ids.get("thread_gfi"),
-                                            thread_ids.get("thread_player"), thread_ids.get("thread_gcm"))
+                                            thread_ids.get("thread_player"), thread_ids.get("thread_gcm"),
+                                            thread_ids.get("thread_other"))
         return bot_i18n.t(guild.id, "forum_ready", forum=forum.mention,
                           thread_dino=thread_ids.get("thread_dino"), thread_gfi=thread_ids.get("thread_gfi"),
-                          thread_player=thread_ids.get("thread_player"), thread_gcm=thread_ids.get("thread_gcm")), None
+                          thread_player=thread_ids.get("thread_player"), thread_gcm=thread_ids.get("thread_gcm"),
+                          thread_other=thread_ids.get("thread_other")), None
 
     async def _setup_shop_logs(self, guild: discord.Guild, channel=None):
         forum = await self._get_or_create_forum(guild, "shop-logs", bot_i18n.t(guild.id, "shop_forum_topic"),
@@ -349,27 +338,53 @@ class CustomCommands(commands.Cog):
         return bot_i18n.t(guild.id, "shop_forum_ready", forum=forum.mention,
                           thread_done=thread_ids.get("thread_done"), thread_pending=thread_ids.get("thread_pending")), None
 
-    async def _setup_server_logs(self, guild: discord.Guild, channel=None):
+    async def _ensure_server_log_threads(self, guild: discord.Guild, channel=None):
+        """Make sure the server-logs forum exists with join / leave / chat threads."""
         forum = await self._get_or_create_forum(guild, "server-logs", bot_i18n.t(guild.id, "server_logs_topic"),
                                                 "Server log forum - created by setup-logs", channel)
         if forum is None:
+            return None, None, None, None, None
+        join_tid = await self._ensure_forum_thread(forum, bot_i18n.t(guild.id, "server_logs_thread_join"),
+                                                   bot_i18n.t(guild.id, "server_logs_thread_intro"))
+        leave_tid = await self._ensure_forum_thread(forum, bot_i18n.t(guild.id, "server_logs_thread_leave"),
+                                                    bot_i18n.t(guild.id, "server_logs_thread_intro"))
+        chat_tid = await self._ensure_forum_thread(forum, bot_i18n.t(guild.id, "chat_forum_thread_name"),
+                                                   bot_i18n.t(guild.id, "chat_forum_thread_intro"))
+        return forum, join_tid, leave_tid, chat_tid
+
+    async def _setup_server_logs(self, guild: discord.Guild, channel=None):
+        forum, join_tid, leave_tid, chat_tid = await self._ensure_server_log_threads(guild, channel)
+        if forum is None:
             return None, "server-logs: " + bot_i18n.t(guild.id, "forum_error", error="create failed")
-        thread_id = await self._ensure_forum_thread(forum, "👤 Player Events", bot_i18n.t(guild.id, "server_logs_thread_intro"))
-        if not thread_id:
+        if not (join_tid and leave_tid and chat_tid):
             return None, "server-logs: " + bot_i18n.t(guild.id, "forum_error", error="thread failed")
-        guild_settings.update_server_log_config(guild.id, server_forum_id=forum.id, server_events_thread_id=thread_id)
-        return bot_i18n.t(guild.id, "server_logs_forum_ready", forum=forum.mention, thread=f"<#{thread_id}>"), None
+        guild_settings.update_server_log_config(guild.id, enabled=True,
+                                                server_forum_id=forum.id,
+                                                join_thread_id=join_tid,
+                                                leave_thread_id=leave_tid,
+                                                chat_forum_id=forum.id,
+                                                chat_thread_id=chat_tid)
+        # The in-game monitoring that captures events must run to feed this forum.
+        guild_settings.update_chat_bridge_config(guild.id, enabled=True)
+        return bot_i18n.t(guild.id, "server_logs_forum_ready", forum=forum.mention,
+                          join=join_tid, leave=leave_tid), None
 
     async def _setup_chat_logs(self, guild: discord.Guild, channel=None):
-        forum = await self._get_or_create_forum(guild, "game-chat", bot_i18n.t(guild.id, "chat_forum_topic"),
-                                                "Game chat forum - created by setup-logs", channel)
+        forum, join_tid, leave_tid, chat_tid = await self._ensure_server_log_threads(guild, channel)
         if forum is None:
-            return None, "game-chat: " + bot_i18n.t(guild.id, "forum_error", error="create failed")
-        thread_id = await self._ensure_forum_thread(forum, "💬 Game Chat", bot_i18n.t(guild.id, "chat_forum_thread_intro"))
-        if not thread_id:
+            return None, "server-logs: " + bot_i18n.t(guild.id, "forum_error", error="create failed")
+        if not chat_tid:
             return None, "game-chat: " + bot_i18n.t(guild.id, "forum_error", error="thread failed")
-        guild_settings.update_server_log_config(guild.id, chat_forum_id=forum.id, chat_thread_id=thread_id)
-        return bot_i18n.t(guild.id, "chat_forum_ready", forum=forum.mention, thread=f"<#{thread_id}>"), None
+        cfg = guild_settings.get_server_log_config(guild.id)
+        guild_settings.update_server_log_config(guild.id, enabled=True,
+                                                server_forum_id=forum.id,
+                                                join_thread_id=join_tid or cfg.get("join_thread_id"),
+                                                leave_thread_id=leave_tid or cfg.get("leave_thread_id"),
+                                                chat_forum_id=forum.id,
+                                                chat_thread_id=chat_tid,
+                                                server_events_thread_id=cfg.get("server_events_thread_id"))
+        guild_settings.update_chat_bridge_config(guild.id, enabled=True)
+        return bot_i18n.t(guild.id, "chat_forum_ready", forum=forum.mention, thread=f"<#{chat_tid}>"), None
 
     @staticmethod
     def _known_tribes(guild_id: int) -> list[str]:
