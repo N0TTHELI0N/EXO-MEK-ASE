@@ -733,7 +733,7 @@ def get_active_nitrado_service(guild_id: int) -> dict:
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT id, guild_id, name, service_id, api_token, ftp_host, ftp_port, ftp_user, ftp_password, is_active, display_name "
-                "FROM nitrado_services WHERE guild_id = %s AND is_active = TRUE LIMIT 1",
+                "FROM nitrado_services WHERE guild_id = %s AND is_active = TRUE ORDER BY id ASC LIMIT 1",
                 (guild_id,),
             )
             return _svc_row_to_dict(cur.fetchone())
@@ -743,12 +743,13 @@ def get_active_nitrado_service(guild_id: int) -> dict:
         conn.close()
 
 
-def set_active_nitrado_service(guild_id: int, service_id: str) -> bool:
-    """Mark a configured Nitrado service as the active one for a guild.
+def promote_nitrado_service(guild_id: int, service_id: str) -> bool:
+    """Promote a configured Nitrado service to active by its service id.
 
     Used by auto-heal: when the stored/active service turns out stale or
     suspended, the bot promotes a healthy one so every feature (not just the
     chat bridge) resolves the correct service via get_nitrado_config.
+    Success does not require a pre-existing row (legacy fallback also updated).
     """
     service_id = (service_id or "").strip()
     if not service_id:
@@ -793,6 +794,11 @@ def add_nitrado_service(guild_id: int, name: str, service_id: str, api_token: st
                 "ftp_host = EXCLUDED.ftp_host, ftp_port = EXCLUDED.ftp_port, ftp_user = EXCLUDED.ftp_user, "
                 "ftp_password = CASE WHEN EXCLUDED.ftp_password = '' THEN nitrado_services.ftp_password ELSE EXCLUDED.ftp_password END",
                 (guild_id, name, service_id, api_token, ftp_host, ftp_port, ftp_user, ftp_password, True),
+            )
+            cur.execute(
+                "UPDATE nitrado_services SET is_active = FALSE "
+                "WHERE guild_id = %s AND (service_id <> %s OR name <> %s)",
+                (guild_id, service_id, name),
             )
         conn.commit()
         return True

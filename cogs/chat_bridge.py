@@ -210,7 +210,7 @@ class ChatBridge(commands.Cog):
                 promoted = svc
         if chosen and chosen != current:
             try:
-                if guild_settings.set_active_nitrado_service(guild_id, chosen):
+                if guild_settings.promote_nitrado_service(guild_id, chosen):
                     print(f"[ChatBridge] guild={guild_id} auto-promoted Nitrado service {current or '?'} -> {chosen} (status={promoted.get('status') if promoted else '?'})", flush=True)
             except Exception:
                 pass
