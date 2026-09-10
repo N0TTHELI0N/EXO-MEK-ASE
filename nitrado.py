@@ -270,6 +270,10 @@ class NitradoClient:
         if not getattr(self, "_gs_status_printed", False):
             self._gs_status_printed = True
             print(f"[nitrado-gs] status={gs.get('status')} state={gs.get('status')} game={game!r} user={user!r}", flush=True)
+            if isinstance(gs, dict):
+                ftp_keys = sorted(k for k in gs.keys() if "ftp" in k.lower() or "sftp" in k.lower())
+                if ftp_keys:
+                    print(f"[nitrado-gs] ftp-related fields present: {ftp_keys}", flush=True)
         rel = f"ShooterGame/Saved/Logs/{filename}"
         game_rel = f"{game}/{rel}"
         cands: list[str] = []
@@ -404,6 +408,9 @@ class NitradoClient:
         host = (cfg.get("host") or "").strip()
         password = (cfg.get("password") or "").strip()
         if not host or not password:
+            if not getattr(self, "_sftp_creds_printed", False):
+                self._sftp_creds_printed = True
+                print(f"[nitrado-fs] sftp: FTP credentials NOT set for guild={self.guild_id} — add ftp_host/ftp_password in dashboard > Nitrado to read PS logs", flush=True)
             return ""
         gs = self._server_gs() or {}
         user = str(cfg.get("user") or gs.get("username") or "").strip()
