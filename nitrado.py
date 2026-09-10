@@ -329,7 +329,11 @@ class NitradoClient:
         for filename in ("ShooterGame_Last.log", "ShooterGame.log"):
             if self._log_fail_ts.get(filename) and now - self._log_fail_ts[filename] < backoff:
                 continue
-            for path in self._log_file_candidates(filename):
+            paths = self._log_file_candidates(filename)
+            if not getattr(self, "_log_cands_printed", False):
+                self._log_cands_printed = True
+                print(f"[nitrado-fs] probe-paths: {paths}", flush=True)
+            for path in paths:
                 text = self.read_file_tail(path, tail_bytes)
                 if text is None:
                     return ""  # a cooldown is active — stay quiet this tick
