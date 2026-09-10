@@ -154,21 +154,42 @@ class NitradoClient:
             for p in players
         ]
 
+    def _discover_game_slugs(self) -> list[str]:
+        """List the game ids actually installed on this service (authoritative)."""
+        code, body = self._raw("GET", f"/services/{self.service_id}/gameservers/games")
+        if not isinstance(body, dict):
+            return []
+        inner = body.get("data", body)
+        games = inner.get("games", []) if isinstance(inner, dict) else (inner if isinstance(inner, list) else [])
+        candidates = []
+        for g in games:
+            if not isinstance(g, dict):
+                continue
+            for k in ("folder_short", "id", "game", "game_id", "folder", "short"):
+                v = str(g.get(k) or "").strip()
+                if v:
+                    candidates.append(v)
+        return list(dict.fromkeys(candidates))
+
     def get_logs(self, lines: int = 200) -> str:
         """Get the last N lines of the server log.
 
-        Resolves the real game Folder Short id from the service and reads that
-        game's log first; then falls back to the usual ARK slugs.
+        Uses the game ids actually installed on the service, then the resolved
+        Folder Short id, then the usual ARK slugs as a last resort.
         """
+        candidates: list[str] = []
         try:
+            candidates += self._discover_game_slugs()
             real = self._game_short()
+            if real and real not in candidates:
+                candidates.append(real)
         except Exception:
-            real = ""
-        slugs = []
-        if real:
-            slugs.append(real)
-        slugs += ["arkse", "arkps4", "arksa", "arkxb", "ark", "asa"]
-        for slug in dict.fromkeys(slugs):
+            pass
+        candidates += ["arkse", "arkps4", "arksa", "arkxb", "ark", "asa", "arkps"]
+        if not getattr(self, "_log_slugs_printed", False):
+            self._log_slugs_printed = True
+            print(f"[nitrado] log candidate slugs: {list(dict.fromkeys(candidates))}", flush=True)
+        for slug in dict.fromkeys(candidates):
             data = self._request("GET", f"/services/{self.service_id}/gameservers/games/{slug}/latest_log")
             content = data.get("content", "") if isinstance(data, dict) else ""
             if content:
