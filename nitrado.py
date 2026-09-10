@@ -345,9 +345,15 @@ class NitradoClient:
         seed = ""
         for r in roots:
             code, entries = self.file_server_list(r)
-            if code == 200:
-                seed = r.rstrip("/") or "/"
-                break
+            if code != 200:
+                snippet = ""
+                if code != 429:
+                    snippet = " (check last list print)" if getattr(self, "_fs_list_printed", False) else ""
+                print(f"[nitrado-fs] root {r!r} HTTP={code}{snippet}", flush=True)
+                continue
+            print(f"[nitrado-fs] root {r!r} HTTP=200 entries={len(entries) if isinstance(entries, list) else '?'}", flush=True)
+            seed = r.rstrip("/") or "/"
+            break
         if not seed:
             print("[nitrado-fs] file_server/list unavailable for all roots — PS has no API file interface either", flush=True)
             return ""
