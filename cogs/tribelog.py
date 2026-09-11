@@ -16,6 +16,8 @@ TRIBE_LOG_PATTERN = re.compile(r"Tribe called '(.+?)' added a member")
 
 # Patterns used to discover tribe names straight from server log lines.
 TRIBE_DISCOVERY_PATTERNS = [
+    re.compile(r"Tribe\s+([^,\s:]+),\s*ID\b", re.I),
+    re.compile(r"Tribe\s+(?!called\b)(?!of\b)(?!named\b)([^,\s:]+)", re.I),
     re.compile(r"Tribe called ['\"]?([^'\"]+)['\"]?", re.I),
     re.compile(r"Tribe ['\"]?([^'\"\s]+)['\"]?", re.I),
     re.compile(r"Tribe (?:of |named )?['\"]?([^'\"\s]+)['\"]?", re.I),
@@ -217,6 +219,21 @@ class Tribelog(commands.Cog):
                 await self._ensure_tribe_thread(interaction.guild, forum, name)
         await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "tribe_name_added", name=name), ephemeral=True)
 
+    @staticmethod
+    async def _resolve_thread(guild: discord.Guild, thread_id) -> discord.Thread | None:
+        """Resolve a thread by id, falling back to an API fetch (archived threads
+        are often missing from the guild cache), mirroring cogs/server_logs.py."""
+        if not thread_id:
+            return None
+        t = guild.get_thread(thread_id)
+        if isinstance(t, discord.Thread):
+            return t
+        try:
+            ch = await guild.fetch_channel(thread_id)
+        except Exception:
+            return None
+        return ch if isinstance(ch, discord.Thread) else None
+
     async def _ensure_tribe_thread(self, guild: discord.Guild, forum: discord.ForumChannel, tribe: str) -> int | None:
         """Reuse or create the forum thread for a tribe. Returns thread id."""
         cfg = guild_settings.get_tribe_forum_config(guild.id)
@@ -242,10 +259,13 @@ class Tribelog(commands.Cog):
     @tasks.loop(seconds=30)
     async def tribe_log_monitor(self):
         for guild in self.bot.guilds:
-            cfg = _get_tribelog_config(guild.id)
-            if not cfg or not cfg.get("enabled"):
+            cfg = _get_tribelog_config(guild.id) or {}
+            # Only an explicit disable stops the monitor. No row at all (user never
+            # ran /setup-logs or the tribe commands) now works automatically from
+            # the same Nitrado log stream the chat/server logs already use.
+            if cfg.get("enabled") is False:
                 continue
-            source = cfg.get("log_source", "file")
+            source = cfg.get("log_source") or "file"
             path = (cfg.get("log_path") or "").strip()
             known = self.known_tribes_cache.get(guild.id, set())
             if not known:
@@ -263,9 +283,19 @@ class Tribelog(commands.Cog):
                             lines = raw.splitlines()
                     except Exception:
                         lines = []
-            else:
-                if path:
-                    lines = self._read_new_lines(guild.id, path)
+            elif path:
+                lines = self._read_new_lines(guild.id, path)
+            if not lines and source != "nitrado":
+                # Self-heal: unconfigured/unreadable file source -> read the same
+                # archived Nitrado log the chat/server loggers already use.
+                client = nitrado.get_client(guild.id)
+                if client is not None:
+                    try:
+                        raw = await asyncio_to_thread(nitrado.get_logs_cached, client, 300)
+                        if raw:
+                            lines = raw.splitlines()
+                    except Exception:
+                        lines = []
 
             forum_cfg = guild_settings.get_tribe_forum_config(guild.id)
             forum = guild.get_channel(forum_cfg["forum_id"]) if forum_cfg and forum_cfg["forum_id"] else None
@@ -294,12 +324,17 @@ class Tribelog(commands.Cog):
                     cfg2 = guild_settings.get_tribe_forum_config(guild.id)
                     threads = (cfg2 or {}).get("threads", {})
                     tid = threads.get(event["tribe_name"])
-                    target = guild.get_thread(tid) if tid else None
-                    if not target:
+                    target = await self._resolve_thread(guild, tid) if tid else None
+                    if not isinstance(target, discord.Thread):
                         tid2 = await self._ensure_tribe_thread(guild, forum, event["tribe_name"])
-                        target = guild.get_thread(tid2) if tid2 else None
-                        if not target:
+                        target = await self._resolve_thread(guild, tid2) if tid2 else None
+                        if not isinstance(target, discord.Thread):
                             continue
+                    if target.archived:
+                        try:
+                            await target.edit(archived=False, auto_archive_duration=10080)
+                        except Exception:
+                            pass
                     try:
                         await target.send(f"```{event['content'][:1850]}```")
                         guild_settings.mark_tribe_event_posted(event["id"])
