@@ -113,8 +113,8 @@ class ServerLogs(commands.Cog):
             if not plan:
                 continue
             cfg = plan["cfg"]
-            join_thread = guild.get_thread(cfg.get("join_thread_id") or cfg.get("server_events_thread_id")) if cfg.get("join_thread_id") or cfg.get("server_events_thread_id") else None
-            leave_thread = guild.get_thread(cfg.get("leave_thread_id") or cfg.get("server_events_thread_id")) if cfg.get("leave_thread_id") or cfg.get("server_events_thread_id") else None
+            join_thread = guild.get_thread(cfg.get("join_thread_id")) if cfg.get("join_thread_id") else None
+            leave_thread = guild.get_thread(cfg.get("leave_thread_id")) if cfg.get("leave_thread_id") else None
             chat_thread = guild.get_thread(cfg.get("chat_thread_id")) if cfg.get("chat_thread_id") else None
             admin_thread = guild.get_thread(cfg.get("admin_thread_id")) if cfg.get("admin_thread_id") else None
 
@@ -143,8 +143,10 @@ class ServerLogs(commands.Cog):
             if isinstance(admin_thread, discord.Thread):
                 for ev in plan["admins"]:
                     raw = (ev["raw_line"] or "").strip()
+                    ts = int(ev["created_at"].timestamp()) if getattr(ev["created_at"], "timestamp", None) else None
+                    ts_part = f" · <t:{ts}:f>" if ts else ""
                     try:
-                        await admin_thread.send(f"🛠️ **{bot_i18n.t(guild.id, 'server_log_admin')}**\n```{raw[:1700]}```")
+                        await admin_thread.send(f"🛠️ **{bot_i18n.t(guild.id, 'server_log_admin')}**{ts_part}\n```{raw[:1700]}```")
                         await asyncio.to_thread(guild_settings.mark_server_event_posted, ev["id"])
                     except Exception:
                         break
@@ -157,8 +159,10 @@ class ServerLogs(commands.Cog):
                     player = log["player_name"] or "?"
                     icon = "➡️" if log["direction"] == "out" else "💬"
                     channel = (log["channel"] or "global").replace("[", "").replace("]", "")
+                    ts = int(log["relayed_at"].timestamp()) if getattr(log["relayed_at"], "timestamp", None) else None
+                    ts_part = f" <t:{ts}:t>" if ts else ""
                     try:
-                        await chat_thread.send(f"{icon} `{channel}` **{player}**: {log['message'][:1900]}")
+                        await chat_thread.send(f"{icon} `{channel}` **{player}**{ts_part}: {log['message'][:1850]}")
                         await asyncio.to_thread(guild_settings.mark_chat_forum_posted, log["id"])
                         posts += 1
                     except Exception:

@@ -301,7 +301,9 @@ class Tribelog(commands.Cog):
                         if not target:
                             continue
                     try:
-                        await target.send(event["content"][:1900])
+                        ts = int(event["created_at"].timestamp()) if getattr(event["created_at"], "timestamp", None) else None
+                        ts_part = f"<t:{ts}:f> · " if ts else ""
+                        await target.send(f"{ts_part}{event['content'][:1850]}")
                         guild_settings.mark_tribe_event_posted(event["id"])
                     except Exception:
                         continue

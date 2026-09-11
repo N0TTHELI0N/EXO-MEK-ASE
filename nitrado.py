@@ -34,7 +34,7 @@ def _log_path_should_print(now: float = None) -> bool:
 # tribe log monitor) and would otherwise hit the Nitrado file server on every
 # tick. Share one short-lived fetch per service+line-count.
 _LOGS_CACHE: dict[str, tuple[float, str]] = {}
-_LOGS_CACHE_TTL = 12.0
+_LOGS_CACHE_TTL = 32.0
 
 
 def get_logs_cached(client, lines: int = 250, ttl: float = None) -> str:
