@@ -435,6 +435,11 @@ def init_db():
             cur.execute("ALTER TABLE server_log_config ADD COLUMN IF NOT EXISTS join_thread_id BIGINT")
             cur.execute("ALTER TABLE server_log_config ADD COLUMN IF NOT EXISTS leave_thread_id BIGINT")
             cur.execute("ALTER TABLE server_log_config ADD COLUMN IF NOT EXISTS admin_thread_id BIGINT")
+            cur.execute("ALTER TABLE server_log_config ADD COLUMN IF NOT EXISTS admin_gfi_thread_id BIGINT")
+            cur.execute("ALTER TABLE server_log_config ADD COLUMN IF NOT EXISTS admin_dino_thread_id BIGINT")
+            cur.execute("ALTER TABLE server_log_config ADD COLUMN IF NOT EXISTS admin_gcm_thread_id BIGINT")
+            cur.execute("ALTER TABLE server_log_config ADD COLUMN IF NOT EXISTS admin_player_thread_id BIGINT")
+            cur.execute("ALTER TABLE server_log_config ADD COLUMN IF NOT EXISTS admin_other_thread_id BIGINT")
             cur.execute("ALTER TABLE server_log_config ADD COLUMN IF NOT EXISTS tribe_thread_id BIGINT")
             cur.execute("ALTER TABLE forum_log_config ADD COLUMN IF NOT EXISTS thread_other BIGINT")
             cur.execute("""
@@ -2632,9 +2637,9 @@ LOG_CATEGORIES = ["dino_spawn", "gfi", "player", "gcm"]
 
 # Default keyword detection for auto-categorizing ARK commands.
 DEFAULT_CATEGORY_RULES = {
-    "dino_spawn": ["gmsummon", "summontamed", "summon ", "spawndino", "spawnactor", "sdf", "do injure", "force tame", "tame "],
+    "dino_spawn": ["gmsummon", "gsummon", "summontamed", "summon ", "spawndino", "spawnactor", "sdf", "do injure", "force tame", "tame "],
     "gfi": ["gfi", "giveitemtoplayer", "giveitemnum", "giveitem ", "giveengrams", "giveresources"],
-    "player": ["teleport", "tpname", "teleportplayername", "addexperience", "addexp", "addxp", "givecolors", "setplayername", "god", "infinitestats", "walk", "fly"],
+    "player": ["teleport", "tpname", "teleportplayername", "addexperience", "addexp", "addxp", "givecolors", "setplayername", "god", "infinitestats", "walk", "fly", "lma"],
     "gcm": ["gcm", "gmc", "cheatmenu", "setcheat", "setgm"],
 }
 

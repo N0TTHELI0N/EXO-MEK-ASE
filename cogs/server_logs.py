@@ -35,6 +35,24 @@ def _forum_named(guild, name) -> discord.ForumChannel | None:
     return None
 
 
+# Category threading for admin events captured from the ARK server log.
+# Mirrors CATEGORY_META / forum_log_config in custom_commands.py.
+ADMIN_CATEGORY_THREAD_KEY = {
+    "dino_spawn": "thread_dino",
+    "gfi": "thread_gfi",
+    "player": "thread_player",
+    "gcm": "thread_gcm",
+    "other": "thread_other",
+}
+ADMIN_CATEGORY_META = {
+    "dino_spawn": {"emoji": "🦖", "label": "Dino Spawning", "kws": ("dino", "spawn")},
+    "gfi": {"emoji": "🎁", "label": "GFI Commands", "kws": ("gfi", "give")},
+    "player": {"emoji": "🧍", "label": "Player Features", "kws": ("player", "feature")},
+    "gcm": {"emoji": "🎮", "label": "GCM", "kws": ("gcm",)},
+    "other": {"emoji": "🗂️", "label": "Other", "kws": ("other",)},
+}
+
+
 class ServerLogs(commands.Cog):
     """Server-logs forum (player join/leave) + game-chat forum.
 
@@ -103,12 +121,18 @@ class ServerLogs(commands.Cog):
             guild_settings.drop_stale_chat_forum_logs(guild.id, 300)
         except Exception:
             pass
+        admin_cats = {}
+        try:
+            admin_cats = guild_settings.get_forum_log_config(guild.id) or {}
+        except Exception:
+            pass
         return {
             "cfg": cfg,
             "joins": guild_settings.get_unposted_server_events(guild.id, event_type="join"),
             "leaves": guild_settings.get_unposted_server_events(guild.id, event_type="leave"),
             "admins": guild_settings.get_unposted_server_events(guild.id, event_type="admin"),
             "chats": guild_settings.get_unposted_chat_forum_logs(guild.id),
+            "admin_cats": admin_cats,
         }
 
     async def _ensure_missing_threads(self, guild, cfg) -> None:
@@ -169,6 +193,47 @@ class ServerLogs(commands.Cog):
                         pass
                 else:
                     updates["admin_thread_id"] = tid
+        # Category threads for admin commands (mirror /setup-logs admin).
+        flcfg = guild_settings.get_forum_log_config(guild.id) or {}
+        if not flcfg.get("forum_id") or any(not flcfg.get(k) for k in ADMIN_CATEGORY_THREAD_KEY.values()):
+            admin_forum = guild.get_channel(flcfg.get("forum_id") or 0)
+            if not isinstance(admin_forum, discord.ForumChannel):
+                admin_forum = _forum_named(guild, "admin-logs")
+            if not isinstance(admin_forum, discord.ForumChannel):
+                try:
+                    admin_forum = await guild.create_forum_channel("admin-logs", topic=bot_i18n.t(guild.id, "forum_topic"))
+                except Exception:
+                    admin_forum = None
+            if isinstance(admin_forum, discord.ForumChannel):
+                cat_threads = {}
+                for cat, tkey in ADMIN_CATEGORY_THREAD_KEY.items():
+                    if flcfg.get(tkey):
+                        cat_threads[tkey] = flcfg.get(tkey)
+                        continue
+                    meta = ADMIN_CATEGORY_META[cat]
+                    tid = _find_thread_by_name(admin_forum, meta["kws"])
+                    if tid:
+                        cat_threads[tkey] = tid
+                        continue
+                    try:
+                        t = await admin_forum.create_thread(
+                            name=f"{meta['emoji']} {meta['label']}",
+                            content=bot_i18n.t(guild.id, "forum_thread_intro", label=meta["label"]))
+                        cat_threads[tkey] = t.id
+                    except Exception:
+                        continue
+                if cat_threads:
+                    try:
+                        guild_settings.set_forum_log_config(
+                            guild.id,
+                            admin_forum.id,
+                            cat_threads.get("thread_dino"),
+                            cat_threads.get("thread_gfi"),
+                            cat_threads.get("thread_player"),
+                            cat_threads.get("thread_gcm"),
+                            cat_threads.get("thread_other"))
+                    except Exception:
+                        pass
         if updates:
             try:
                 guild_settings.update_server_log_config(guild.id, **updates)
@@ -266,10 +331,22 @@ class ServerLogs(commands.Cog):
 
             if isinstance(admin_thread, discord.Thread):
                 admin_fails = 0
+                admin_cats = plan["admin_cats"] or {}
+                cat_targets = {}
                 for ev in plan["admins"]:
                     raw = (ev["raw_line"] or "").strip()
+                    category = guild_settings.detect_command_category(raw)
+                    tkey = ADMIN_CATEGORY_THREAD_KEY.get(category)
+                    target = cat_targets.get(tkey)
+                    if target is None and tkey and admin_cats.get(tkey):
+                        target = await self._resolve_thread(guild, admin_cats.get(tkey))
+                        await self._unarchive_thread(target)
+                        cat_targets[tkey] = target
+                    if not isinstance(target, discord.Thread):
+                        target = admin_thread
+                        await self._unarchive_thread(target)
                     try:
-                        await admin_thread.send(f"🛠️ {bot_i18n.t(guild.id, 'server_log_admin')}\n```{raw[:1700]}```")
+                        await target.send(f"🛠️ {bot_i18n.t(guild.id, 'server_log_admin')}\n```{raw[:1700]}```")
                         await asyncio.to_thread(guild_settings.mark_server_event_posted, ev["id"])
                     except Exception:
                         admin_fails += 1
