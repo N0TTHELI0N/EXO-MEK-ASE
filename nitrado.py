@@ -345,18 +345,19 @@ class NitradoClient:
         seed = ""
         for r in roots:
             code, entries = self.file_server_list(r)
-            if code != 200:
-                snippet = ""
-                if code != 429:
-                    snippet = " (check last list print)" if getattr(self, "_fs_list_printed", False) else ""
-                print(f"[nitrado-fs] root {r!r} HTTP={code}{snippet}", flush=True)
-                continue
-            print(f"[nitrado-fs] root {r!r} HTTP=200 entries={len(entries) if isinstance(entries, list) else '?'}", flush=True)
-            seed = r.rstrip("/") or "/"
-            break
+            n = len(entries) if isinstance(entries, list) else 0
+            if code == 200:
+                print(f"[nitrado-fs] root {r!r} HTTP=200 entries={n}", flush=True)
+                if n and not seed:
+                    seed = r.rstrip("/") or "/"
+            else:
+                print(f"[nitrado-fs] root {r!r} HTTP={code}", flush=True)
         if not seed:
-            print("[nitrado-fs] file_server/list unavailable for all roots — PS has no API file interface either", flush=True)
-            return ""
+            seed = "/"
+            print("[nitrado-fs] all root probes empty — no file tree entries returned for this service", flush=True)
+        if not seed:
+            seed = "/"
+            print("[nitrado-fs] all root probes empty — no file tree entries returned for this service", flush=True)
         queue = [seed]
         seen: set[str] = {seed}
         checked = 0
