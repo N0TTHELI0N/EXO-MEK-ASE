@@ -199,7 +199,9 @@ class ServerLogs(commands.Cog):
             if isinstance(join_thread, discord.Thread):
                 for ev in plan["joins"]:
                     name = ev["player_name"] or "?"
-                    ts = int(ev["created_at"].timestamp()) if getattr(ev["created_at"], "timestamp", None) else None
+                    ts = guild_settings.parse_log_timestamp(ev.get("raw_line"))
+                    if not ts:
+                        ts = int(ev["created_at"].timestamp()) if getattr(ev["created_at"], "timestamp", None) else None
                     ts_part = f" · <t:{ts}:f>" if ts else ""
                     try:
                         await join_thread.send(f"🟢 **{name}** — {bot_i18n.t(guild.id, 'server_event_join')}{ts_part}")
@@ -210,7 +212,9 @@ class ServerLogs(commands.Cog):
             if isinstance(leave_thread, discord.Thread):
                 for ev in plan["leaves"]:
                     name = ev["player_name"] or "?"
-                    ts = int(ev["created_at"].timestamp()) if getattr(ev["created_at"], "timestamp", None) else None
+                    ts = guild_settings.parse_log_timestamp(ev.get("raw_line"))
+                    if not ts:
+                        ts = int(ev["created_at"].timestamp()) if getattr(ev["created_at"], "timestamp", None) else None
                     ts_part = f" · <t:{ts}:f>" if ts else ""
                     try:
                         await leave_thread.send(f"🔴 **{name}** — {bot_i18n.t(guild.id, 'server_event_leave')}{ts_part}")
@@ -221,7 +225,9 @@ class ServerLogs(commands.Cog):
             if isinstance(admin_thread, discord.Thread):
                 for ev in plan["admins"]:
                     raw = (ev["raw_line"] or "").strip()
-                    ts = int(ev["created_at"].timestamp()) if getattr(ev["created_at"], "timestamp", None) else None
+                    ts = guild_settings.parse_log_timestamp(raw)
+                    if not ts:
+                        ts = int(ev["created_at"].timestamp()) if getattr(ev["created_at"], "timestamp", None) else None
                     ts_part = f" · <t:{ts}:f>" if ts else ""
                     try:
                         await admin_thread.send(f"🛠️ **{bot_i18n.t(guild.id, 'server_log_admin')}**{ts_part}\n```{raw[:1700]}```")
@@ -241,12 +247,14 @@ class ServerLogs(commands.Cog):
                     if age > 300:
                         stale.append(log["id"])
                         continue
-                    if posts >= 15:
+                    if posts >= 20:
                         break
                     player = log["player_name"] or "?"
                     icon = "➡️" if log["direction"] == "out" else "💬"
                     channel = (log["channel"] or "global").replace("[", "").replace("]", "")
-                    ts = int(log["relayed_at"].timestamp()) if getattr(log["relayed_at"], "timestamp", None) else None
+                    ts = guild_settings.parse_log_timestamp(log.get("raw_line"))
+                    if not ts:
+                        ts = int(log["relayed_at"].timestamp()) if getattr(log["relayed_at"], "timestamp", None) else None
                     ts_part = f" <t:{ts}:t>" if ts else ""
                     try:
                         await chat_thread.send(f"{icon} `{channel}` **{player}**{ts_part}: {log['message'][:1850]}")
@@ -259,6 +267,11 @@ class ServerLogs(commands.Cog):
                         await asyncio.to_thread(guild_settings.mark_chat_forum_posted_batch, guild.id, stale)
                     except Exception:
                         pass
+                if posts:
+                    nowp2 = time.time()
+                    if self._diag_ts.get(guild.id, 0) and nowp2 - self._diag_ts[guild.id] >= 30:
+                        print(f"[ServerLogs] gid={guild.id} posted chats={posts}", flush=True)
+                        self._diag_ts[guild.id] = nowp2
 
     @post_server_logs.before_loop
     async def before_post_server_logs(self):

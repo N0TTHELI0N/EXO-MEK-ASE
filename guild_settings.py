@@ -5,10 +5,41 @@ import hashlib
 import time
 import secrets
 import string
+import re
+import calendar
 from datetime import datetime, timezone
 
 import psycopg2
 from cryptography.fernet import Fernet
+
+
+def parse_log_timestamp(text: str) -> int | None:
+    """Best-effort UNIX epoch from an ARK console log line (assumes UTC):
+
+      2026-09-11 17:42:33   2026.09.11-17.42.33   [17:42:33]
+
+    Returns None when the line carries no recognisable timestamp, so callers
+    fall back to their stored insert time.
+    """
+    if not text:
+        return None
+    m = re.search(r"(\d{4})[./-](\d{1,2})[./-](\d{1,2})[ T](\d{1,2}):(\d{2}):(\d{2})", text)
+    if m:
+        try:
+            return calendar.timegm(tuple(int(g) for g in m.groups()))
+        except Exception:
+            return None
+    m = re.search(r"\[?(\d{1,2}):(\d{2}):(\d{2})\]?", text)
+    if m:
+        h, mi, s = (int(g) for g in m.groups())
+        if h > 23:
+            return None
+        y, mon, d = time.gmtime()[:3]
+        try:
+            return calendar.timegm((y, mon, d, h, mi, s))
+        except Exception:
+            return None
+    return None
 
 
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -1798,7 +1829,7 @@ def get_unposted_chat_forum_logs(guild_id: int, limit: int = 50):
     try:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT id, channel, player_name, message, direction, relayed_at
+                SELECT id, channel, player_name, message, direction, relayed_at, raw_line
                 FROM chat_logs
                 WHERE guild_id = %s AND posted_chat_forum = FALSE
                 ORDER BY id ASC
@@ -1806,7 +1837,7 @@ def get_unposted_chat_forum_logs(guild_id: int, limit: int = 50):
             """, (guild_id, limit))
             return [
                 {"id": r[0], "channel": r[1], "player_name": r[2], "message": r[3],
-                 "direction": r[4], "relayed_at": r[5]}
+                 "direction": r[4], "relayed_at": r[5], "raw_line": r[6]}
                 for r in cur.fetchall()
             ]
     finally:

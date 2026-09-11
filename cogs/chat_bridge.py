@@ -395,6 +395,8 @@ class ChatBridge(commands.Cog):
                         guild.id, "admin", "Server", text,
                     )
                     stats["admin"] += 1
+                    if len(stats.setdefault("adm_samples", [])) < 3:
+                        stats["adm_samples"].append(text[:140])
                 continue
             if kind == "tribe":
                 # Tribe events (kills/tames/raids) are handled by the dedicated
@@ -439,6 +441,8 @@ class ChatBridge(commands.Cog):
                 )
                 if stats["unparsed"]:
                     print("[ChatBridge] unparsed sample: " + " || ".join(stats["unparsed"]), flush=True)
+                if stats.get("adm_samples"):
+                    print("[ChatBridge] admin sample: " + " || ".join(stats["adm_samples"]), flush=True)
         return {"cfg": cfg, "posts": posts}
 
     @staticmethod
