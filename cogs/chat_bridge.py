@@ -201,6 +201,10 @@ class ChatBridge(commands.Cog):
         self.seen_lines = {}
         # avoid re-forwarding our own ServerChatMessage echoes
         self._echo_guard = deque(maxlen=200)
+        # never re-capture/re-post the same chat line within a short window,
+        # even if the cursor is lost (restart / log rotation).
+        self._capture_guard = {}
+        self._event_guard = {}
         # avoid flooding a Discord channel during a log burst
         self._post_guard = deque(maxlen=100)
         # chat auto-detection: rules cache + per (guild, player, word) cooldown
@@ -232,6 +236,33 @@ class ChatBridge(commands.Cog):
 
     def _remember_sent(self, channel, player, message):
         self._echo_guard.append((self._fp(channel, player, message), time.time()))
+
+    def _capture_seen(self, guild_id: int, fp: tuple, now: float = None, window: float = 300.0) -> bool:
+        """True if this chat fingerprint was already captured within `window` s."""
+        now = time.time() if now is None else now
+        seen = self._capture_guard.setdefault(guild_id, {})
+        if fp in seen and now - seen[fp] < window:
+            return True
+        seen[fp] = now
+        if len(seen) > 1500:
+            cutoff = now - window
+            for k in [k for k in seen if now - seen[k] > cutoff]:
+                seen.pop(k, None)
+        return False
+
+    def _event_seen(self, guild_id: int, kind: str, name: str, now: float = None, window: float = 120.0) -> bool:
+        """True if a join/leave/admin line for (kind, name) was seen recently."""
+        now = time.time() if now is None else now
+        seen = self._event_guard.setdefault(guild_id, {})
+        fp = (kind, name.strip().lower())
+        if fp in seen and now - seen[fp] < window:
+            return True
+        seen[fp] = now
+        if len(seen) > 1500:
+            cutoff = now - window
+            for k in [k for k in seen if now - seen[k] > cutoff]:
+                seen.pop(k, None)
+        return False
 
     def _is_new_line(self, guild_id, text):
         last = self.seen_lines.get(guild_id)
@@ -353,15 +384,17 @@ class ChatBridge(commands.Cog):
                 continue
             joined = _detect_join_leave(text)
             if joined:
-                guild_settings.add_server_event(guild.id, joined[0], joined[1], text)
-                stats[joined[0]] += 1
+                if not self._event_seen(guild.id, joined[0], joined[1], now5):
+                    guild_settings.add_server_event(guild.id, joined[0], joined[1], text)
+                    stats[joined[0]] += 1
                 continue
             kind = _classify_system_line(text)
             if kind == "admin":
-                guild_settings.add_server_event(
-                    guild.id, "admin", "Server", text,
-                )
-                stats["admin"] += 1
+                if not self._event_seen(guild.id, "admin", text[:80], now5):
+                    guild_settings.add_server_event(
+                        guild.id, "admin", "Server", text,
+                    )
+                    stats["admin"] += 1
                 continue
             if kind == "tribe":
                 # Tribe events (kills/tames/raids) are handled by the dedicated
@@ -387,6 +420,9 @@ class ChatBridge(commands.Cog):
             if self._is_echo(channel, player, message):
                 continue
             if _is_noise(player, message, channel):
+                continue
+            cap_fp = (channel or "", (player or "").strip().lower(), (message or "").strip().lower())
+            if self._capture_seen(guild.id, cap_fp, now5):
                 continue
             guild_settings.add_chat_log(
                 guild.id, channel, player, message,

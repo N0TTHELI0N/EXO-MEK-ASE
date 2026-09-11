@@ -5,6 +5,7 @@ import bot_i18n
 import guild_settings
 import nitrado
 import asyncio
+import time
 
 
 async def _normalize_thread(result):
@@ -43,6 +44,7 @@ class ServerLogs(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
+        self._diag_ts = {}
         self.post_server_logs.start()
 
     def cog_unload(self):
@@ -113,6 +115,12 @@ class ServerLogs(commands.Cog):
             if not plan:
                 continue
             cfg = plan["cfg"]
+            pending = (len(plan["chats"]), len(plan["joins"]), len(plan["leaves"]), len(plan["admins"]))
+            if any(pending):
+                nowp = time.time()
+                if guild.id not in self._diag_ts or nowp - self._diag_ts[guild.id] >= 60:
+                    self._diag_ts[guild.id] = nowp
+                    print(f"[ServerLogs] gid={guild.id} pending chats={pending[0]} joins={pending[1]} leaves={pending[2]} admins={pending[3]}", flush=True)
             join_thread = guild.get_thread(cfg.get("join_thread_id")) if cfg.get("join_thread_id") else None
             leave_thread = guild.get_thread(cfg.get("leave_thread_id")) if cfg.get("leave_thread_id") else None
             chat_thread = guild.get_thread(cfg.get("chat_thread_id")) if cfg.get("chat_thread_id") else None
