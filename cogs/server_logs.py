@@ -118,7 +118,27 @@ class ServerLogs(commands.Cog):
             gs = client._server_gs() or {}
             out.append(f"status={gs.get('status')} game={gs.get('game')} user={gs.get('username')}")
             user = str(gs.get("username") or "").strip()
-            roots = ["/", "/games", "/ftproot"]
+            try:
+                code, body = client._raw("GET", "/services")
+                svc = {}
+                if isinstance(body, dict) and isinstance(body.get("data"), dict):
+                    for s in body["data"].get("services") or []:
+                        if isinstance(s, dict) and str(s.get("id")) == str(client.service_id):
+                            svc = s
+                            break
+                out.append(f"ws_token={bool(svc.get('websocket_token'))}")
+                extra_flags = " ".join(f"{k}={v}" for k, v in svc.items() if any(t in k.lower() for t in ("websocket", "app_server", "container")))
+                if extra_flags:
+                    out.append("flags: " + extra_flags)
+                if isinstance(svc.get("game_specific"), dict):
+                    gall = svc.get("game_specific") or {}
+                    if isinstance(gall, dict):
+                        for k in ("features", "webinterface", "modlists"):
+                            if gall.get(k) is not None:
+                                out.append(f"game_specific.{k}={gall[k]}"[:300])
+            except Exception as e:
+                out.append(f"flags ERR {type(e).__name__}: {e}")
+            roots = ["/", "/games", "/ftproot", "Server", "arkps"]
             if user:
                 roots += [f"/games/{user}", f"/games/{user}/ftproot", f"/{user}"]
             res = []
@@ -127,30 +147,14 @@ class ServerLogs(commands.Cog):
                 n = len(entries) if isinstance(entries, list) else "?"
                 res.append(f"HTTP{code}:{n} {r}")
             out.append("roots = " + " | ".join(res))
-            # deep walk with entry names/types from the user root
-            walk = [(f"/games/{user}", 1)] if user else []
-            seen = {f"/games/{user}"} if user else set()
-            lines = 0
-            while walk and lines < 200:
-                d, depth = walk.pop(0)
-                code, entries = client.file_server_list(d)
-                if code != 200 or not isinstance(entries, list):
-                    out.append("  " * depth + f"{d} -> HTTP{code}")
-                    lines += 1
-                    continue
-                out.append("  " * depth + f"{d} ({len(entries)})")
-                lines += 1
-                for e in entries:
-                    if not isinstance(e, dict):
+            for base in (["/", "Server", "arkps"] + ([f"/games/{user}", f"/games/{user}/ftproot", f"/games/{user}/Server"] if user else [])):
+                for pat in ("ShooterGame.log", "ShooterGame_Last.log"):
+                    code, entries = client.file_server_list(base, search=pat)
+                    if not isinstance(entries, list):
                         continue
-                    if e.get("type") == "dir":
-                        p = str(e.get("path") or "")
-                        if p and p not in seen:
-                            seen.add(p)
-                            walk.append((p, depth + 1))
-                    else:
-                        out.append("  " * depth + f"- {e.get('name')} | {e.get('type')} | {e.get('size')} | {e.get('path')}")
-                        lines += 1
+                    names = "; ".join(f"{e.get('name')}|{e.get('type')}" for e in entries[:5] if isinstance(e, dict))
+                    if entries:
+                        out.append(f"search {pat!r}@{base}: HTTP{code} n={len(entries)} [{names}]")
             path = client._discover_log_path()
             out.append(f"discovered_log={path or 'NONE'}")
             if path:

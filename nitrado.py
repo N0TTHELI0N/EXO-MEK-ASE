@@ -296,10 +296,14 @@ class NitradoClient:
         ]
         return list(dict.fromkeys(cands))
 
-    def file_server_list(self, dir_path: str = "/") -> tuple[int, list]:
+    def file_server_list(self, dir_path: str = "/", search: str = None) -> tuple[int, list]:
         """List entries under a server path via the Nitrado file server API.
-        Returns (http_status, entries); empty list if the API is unavailable."""
-        code, body = self._raw("GET", f"{self.fs_base()}/list", params={"dir": dir_path})
+        With ``search`` set, list becomes a recursive file search (the
+        Nitrato SDK's doFileSearch). Returns (http_status, entries)."""
+        params: dict = {"dir": dir_path}
+        if search:
+            params["search"] = search
+        code, body = self._raw("GET", f"{self.fs_base()}/list", params=params)
         entries: list = []
         if isinstance(body, dict):
             inner = body.get("data", body)
@@ -313,11 +317,80 @@ class NitradoClient:
                 snippet = ""
                 if isinstance(body, dict):
                     snippet = str(body.get("_text") or body.get("message") or "")[:120]
-                print(f"[nitrado-fs] file_server/list dir={dir_path!r} HTTP={code} {snippet!r} entries=?", flush=True)
+                print(f"[nitrado-fs] file_server/list dir={dir_path!r} search={search!r} HTTP={code} {snippet!r} entries=?", flush=True)
             else:
                 n = len(entries) if isinstance(entries, list) else "?"
-                print(f"[nitrado-fs] file_server/list dir={dir_path!r} HTTP={code} entries={n}", flush=True)
+                print(f"[nitrado-fs] file_server/list dir={dir_path!r} search={search!r} HTTP={code} entries={n}", flush=True)
         return code, entries
+
+    def seek_tail(self, file: str, length: int = 1000000) -> str:
+        """Read the tail of a server file with file_server/seek (offset=negative).
+        Returns None while a rate-limit cooldown is active."""
+        if time.monotonic() < _nitrado_cooldown_until:
+            return None
+        if not _begin_request():
+            return None
+        try:
+            resp = requests.get(
+                f"{NITRADO_BASE_URL}{self.fs_base()}/seek",
+                params={"file": file, "offset": -length, "length": length, "mode": "raw"},
+                headers=self.headers, timeout=20,
+            )
+        except requests.RequestException:
+            return ""
+        if resp.status_code == 429:
+            _mark_429(str(resp.status_code))
+            return ""
+        if resp.status_code != 200:
+            if not getattr(self, "_seek_printed", False):
+                self._seek_printed = True
+                print(f"[nitrado-fs] seek HTTP={resp.status_code} file={file!r} body={resp.text[:150]!r}", flush=True)
+            return ""
+        try:
+            data = resp.json()
+        except Exception:
+            return ""
+        token_info = data.get("token") or data
+        token = token_info.get("token")
+        url = token_info.get("url")
+        if not token or not url:
+            return ""
+        try:
+            r = requests.get(url, params={"token": token}, timeout=40)
+        except requests.RequestException:
+            return ""
+        if r.status_code == 429:
+            _mark_429(str(r.status_code))
+            return ""
+        if r.status_code in (200, 206):
+            return r.text[: 4 * length]
+        print(f"[nitrado-fs] seek body HTTP={r.status_code} file={file!r}", flush=True)
+        return ""
+
+    def _search_log_path(self, filenames: tuple = ("ShooterGame.log", "ShooterGame_Last.log")) -> str:
+        """Recursive file_server search for an ARK log (the list `search` param)."""
+        gs = self._server_gs() or {}
+        user = str(gs.get("username") or "").strip()
+        bases = ["/", "Server", "arkps", "arkps/Server", "/games"]
+        if user:
+            bases += [f"/games/{user}", f"/games/{user}/ftproot", f"/games/{user}/Server",
+                      f"/games/{user}/Server/ShooterGame/Saved/Logs"]
+        for base in bases:
+            for fname in filenames:
+                code, entries = self.file_server_list(base, search=fname)
+                if code != 200 or not isinstance(entries, list):
+                    continue
+                for e in entries:
+                    if not isinstance(e, dict):
+                        continue
+                    if e.get("type") == "file" and str(e.get("name") or "") == fname:
+                        path = str(e.get("path") or "")
+                        if not path:
+                            path = f"{base.rstrip('/')}/{fname}" if base.strip("/") else fname
+                        self._fs_log_path = path
+                        print(f"[nitrado-fs] SEARCH-FOUND {fname} under {base!r} => {path!r}", flush=True)
+                        return path
+        return ""
 
     def _discover_log_path(
         self,
@@ -326,22 +399,25 @@ class NitradoClient:
     ) -> str:
         """Walk the file_server tree to locate an ARK log file.
 
-        Nitrado's own docs show the true filesystem root is likely under
-        ``/games/<user>/ftproot/...`` — the exact path is unknown per game, so
-        probe the known root prefixes first (print failures once), then run a
-        breadth-first search under the first root that responds.
-        Runs at most once per 10 minutes per client.
+        Tries a recursive ``list?search=`` lookup first, then probes the known
+        root prefixes (including the relative ``Server`` / ``arkps`` aliases the
+        web interface uses) and runs a breadth-first search under the first
+        root that lists entries. Runs at most once per 10 minutes per client.
         """
         now = time.time()
         cached = getattr(self, "_fs_discover_ts", 0.0)
         if now - cached < 600:
             return getattr(self, "_fs_log_path", "") or ""
         self._fs_discover_ts = now
+        found = self._search_log_path(filenames)
+        if found:
+            return found
         gs = self._server_gs() or {}
         user = str(gs.get("username") or "").strip()
-        roots = ["/", "/games", "/ftproot"]
+        roots = ["/", "/games", "/ftproot", "Server", "arkps", "arkps/Server"]
         if user:
-            roots += [f"/games/{user}", f"/games/{user}/ftproot", f"/{user}", f"/{user}/ftproot"]
+            roots += [f"/games/{user}", f"/games/{user}/ftproot", f"/{user}", f"/{user}/ftproot",
+                      f"/games/{user}/Server", f"/games/{user}/arkps", "/games/{user}/Server/ShooterGame/Saved/Logs", f"arkps/ShooterGame/Saved/Logs"]
         seed = ""
         for r in roots:
             code, entries = self.file_server_list(r)
@@ -394,10 +470,16 @@ class NitradoClient:
     def read_file_tail(self, file: str, tail_bytes: int = 1000000) -> str:
         """Read only the tail of a server file (last ~tail_bytes).
 
-        Downloads through the Nitrado file server; asks for a byte-range tail
-        and falls back to trimming the full body locally if ranges are ignored.
-        Returns None while a rate-limit cooldown is active (not a failure).
+        Primary: file_server/seek with a negative offset (fast, no full
+        download). Fallback: file download with a byte-range tail and trimming
+        the full body locally if ranges are ignored. Returns None while a
+        rate-limit cooldown is active (not a failure).
         """
+        tail = self.seek_tail(file, tail_bytes)
+        if tail is None:
+            return None
+        if tail:
+            return tail
         if time.monotonic() < _nitrado_cooldown_until:
             return None
         if not _begin_request():
