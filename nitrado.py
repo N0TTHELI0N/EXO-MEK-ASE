@@ -501,7 +501,7 @@ class NitradoClient:
             print(f"[nitrado-fs] file_server discovery error: {type(ex).__name__}: {ex}", flush=True)
         return ""
 
-    def read_file_tail(self, file: str, tail_bytes: int = 1000000) -> str:
+    def read_file_tail(self, file: str, tail_bytes: int = 320000) -> str:
         """Read only the tail of a server file (last ~tail_bytes).
 
         Primary: file_server/seek with a negative offset (fast, no full
@@ -571,7 +571,7 @@ class NitradoClient:
         print(f"[nitrado-fs] download body HTTP={resp.status_code} file={file!r}", flush=True)
         return ""
 
-    def _get_log_file_text(self, lines: int, tail_bytes: int = 1000000) -> str:
+    def _get_log_file_text(self, lines: int, tail_bytes: int = 320000) -> str:
         now = time.time()
         backoff = 300  # seconds after a full probe round
         for filename in ("ShooterGame_Last.log", "ShooterGame.log"):
@@ -595,7 +595,9 @@ class NitradoClient:
             if text:
                 self._probe_next_idx[filename] = 0
                 self._log_fail_ts.pop(filename, None)
-                print(f"[nitrado-fs] using log file path={path!r} chars={len(text)}", flush=True)
+                if time.time() - getattr(self, "_logpath_print_ts", 0.0) >= 60:
+                    self._logpath_print_ts = time.time()
+                    print(f"[nitrado-fs] using log file path={path!r} chars={len(text)}", flush=True)
                 return "\n".join(text.splitlines()[-lines:])
             # Failed this path — advance one step per tick to stay far below
             # Nitrado's rate limits (probing all paths at once re-tripped 429).
@@ -682,7 +684,9 @@ class NitradoClient:
         if path:
             text = self.read_file_tail(path)
             if text:
-                print(f"[nitrado-fs] using log file path={path!r} chars={len(text)}", flush=True)
+                if time.time() - getattr(self, "_logpath_print_ts", 0.0) >= 60:
+                    self._logpath_print_ts = time.time()
+                    print(f"[nitrado-fs] using log file path={path!r} chars={len(text)}", flush=True)
                 return "\n".join(text.splitlines()[-lines:])
         # The latest_log endpoint is not available for every game (PlayStation
         # services expose no file interface at all). Trying every game slug

@@ -29,40 +29,66 @@ _PLAIN_CAT = re.compile(r"^[^:]+:\s*(.*)$")
 _CHAT_BODY = re.compile(r"^(?:\[(?P<channel>[^\]]+)\]\s*)?(?P<player>[^:\]]+?)\s*:\s*(?P<msg>.+)$")
 
 # Player join / leave the server, detected in the same ARK log stream.
-# The exact wording differs between ARK versions / hosts, so we match the
-# sentinel phrase and pull the name from the text that precedes it:
+# PS hosts phrase it as "<name> left this ARK!", "<name> joined the server"
+# (plus legacy formats), so we match the phrase and take the name from the
+# text that precedes it:
+#   [..][848]2026.09.11_00.08.24: VxV-818 left this ARK!
 #   [..][ 4]LogServerPlayerJoined: 'Name' joined the server
-#   [..][ 5] 'Name' joined the server
-#   [..][ 6]LogServerPlayerLeft: (PlayerName) left the server
-#   [..][ 7] PlayerName disconnected from the server
-_JOIN_SENTINEL = re.compile(r"\bjoined the server\b", re.I)
-_LEAVE_SENTINEL = re.compile(r"\b(?:left|disconnected)\b[^\n]{0,40}?\bthe server\b", re.I)
-_PREFIX_STRIP = re.compile(
-    r"^.*?\b(?:Log[A-Za-z]*Player(?:Joined|Left)|LogGameSession|LogWorld|LogServerStatus|LogPlayerConnection|LogNet)\s*[:#]?\s*",
+_JOIN_PHRASE = re.compile(r"\bjoined\s+(?:this\s+|the\s+)?(?:ARK|server|game|world)\b", re.I)
+_LEAVE_PHRASE = re.compile(r"\b(?:left|disconnected(?:\s+from)?|quit)\s+(?:this\s+|the\s+)?(?:ARK|server|game|world)\b", re.I)
+_NAME_JUNK_BR = re.compile(r"^(?:\[[^\]]*\]\s*)+")
+_NAME_JUNK_TS = re.compile(
+    r"^\d{4}[.\-/]\d{2}[.\-/]\d{2}_\d{2}[.\-/]\d{2}[.\-/]\d{2}\s*:\s*"
+    r"|^Log[A-Za-z]*Player(?:Joined|Left)\s*[:#]?\s*",
     re.I,
 )
-_HEADER_STRIP = re.compile(r"^(\[[^\]]*\]\s*)+|^[\s\x00-\x1f]+")
 
 
 def _detect_join_leave(line: str):
     """Return (event_type, player_name) if the line is a player join/leave event."""
-    m = _JOIN_SENTINEL.search(line)
+    m = _JOIN_PHRASE.search(line)
     if m:
         ev_type = "join"
         prefix = line[: m.start()]
     else:
-        m = _LEAVE_SENTINEL.search(line)
+        m = _LEAVE_PHRASE.search(line)
         if m:
             ev_type = "leave"
             prefix = line[: m.start()]
         else:
             return None
-    name = _PREFIX_STRIP.sub("", prefix)
-    name = _HEADER_STRIP.sub("", name)
+    name = _NAME_JUNK_BR.sub("", prefix)
+    name = _NAME_JUNK_TS.sub("", name)
     name = name.strip().strip("'\"()[]{}").strip()
     if not name or len(name) < 2 or len(name) > 40:
         return None
     return ev_type, name
+
+
+# System/tribe announcements (raid/death/tame/timeline broadcasts always end up
+# in the shared log stream) are NOT player chat. Detected by content markers or
+# the in-game timeline prefix "Tribe X, ID N: Day N, HH:MM:SS:".
+_SYS_RICH = re.compile(r"<richcolor", re.I)
+_SYS_DAILY = re.compile(r":\s*day\s+\d{1,2},\s*\d{1,2}:\d{2}:\d{2}\s*:", re.I)
+_SYS_MARKERS = (
+    "<richcolor", "tamed a ", "tamed an ", "was killed by", "was tamed by",
+    "killed your", "destroyed your", "destroyed their", "was destroyed by",
+    "added to the tribe", "was added to the tribe", "left the tribe ",
+    "froze a ", "froze an ", "was frozen", "-> ", "[killed]", "[tamed]",
+)
+_LOG_HEADER = re.compile(r"^(?:\[[^\]]*\]\s*)+|^\d{4}[.\-/]\d{2}[.\-/]\d{2}_\d{2}[.\-/]\d{2}[.\-/]\d{2}\s*:\s*", re.I)
+
+
+def _is_system_announcement(text: str) -> bool:
+    """True when the log line is a server/tribe broadcast, not player chat."""
+    body = _LOG_HEADER.sub("", text or "").strip()
+    low = body.lower()
+    if _SYS_RICH.search(low) or _SYS_DAILY.search(body):
+        return True
+    for m in _SYS_MARKERS:
+        if m in low:
+            return True
+    return False
 
 
 def _detect_console_command(line: str):
@@ -141,13 +167,17 @@ def _parse_chat_line(line: str):
 
 
 def _is_noise(player: str, message: str, channel: str) -> bool:
-    low_p = player.lower()
-    low_m = message.lower()
+    low_p = (player or "").lower()
+    low_m = (message or "").lower()
     if low_p in ("server", "console", "admin"):
         return True
     if any(x in low_p for x in ("[developer]", "[dev]", "serverchatmessage")):
         return True
+    if (player or "").startswith("/") or "?name=" in low_p or "$" in low_p:
+        return True
     if low_m.startswith(("serverchatmessage", "?setadminpassword", "?adminpassword")):
+        return True
+    if "frozen by id" in low_m:
         return True
     if "chat command sent to server" in low_m:
         return True
@@ -201,9 +231,31 @@ class ChatBridge(commands.Cog):
             return True
         if text == last:
             return False
-        # accept any new line within a bounded window; cursor is the last seen line
         self.seen_lines[guild_id] = text
         return True
+
+    def _split_new_lines(self, guild_id: int, lines: list[str]) -> list[str]:
+        """Return only the lines that are NEW since the last poll.
+
+        The ARK tail re-reads the same lines every tick, so a naive cursor
+        compare would re-process (and re-post) the whole tail forever. We keep a
+        single cursor line and return everything strictly after it.
+        """
+        if not lines:
+            return []
+        cursor = self.seen_lines.get(guild_id)
+        if cursor is None:
+            self.seen_lines[guild_id] = lines[-1]
+            return []
+        try:
+            idx = lines.index(cursor)
+        except ValueError:
+            # cursor not in this tail (log rotated or >N lines since last poll).
+            # replay only a bounded chunk so a big offline gap can't flood Discord.
+            self.seen_lines[guild_id] = lines[-1]
+            return lines[-60:]
+        self.seen_lines[guild_id] = lines[-1]
+        return lines[idx + 1:]
 
     def _pick_auto_service(self, guild_id: int) -> str | None:
         """Pick a working ARK service id for this guild, with a 10-minute cache.
@@ -263,7 +315,7 @@ class ChatBridge(commands.Cog):
         if client is None:
             return None
         try:
-            raw = client.get_logs(400)
+            raw = client.get_logs(250)
         except Exception:
             raw = None
         if not raw:
@@ -271,7 +323,7 @@ class ChatBridge(commands.Cog):
             if sid is not None and str(sid) != str(client.service_id):
                 client = nitrado.NitradoClient(client.api_token, sid)
                 try:
-                    raw = client.get_logs(400)
+                    raw = client.get_logs(250)
                 except Exception:
                     raw = None
         if not raw:
@@ -284,24 +336,19 @@ class ChatBridge(commands.Cog):
         if guild.id not in self._hb_ts or now5 - self._hb_ts[guild.id] >= 300:
             self._hb_ts[guild.id] = now5
             print(f"[ChatBridge] guild={guild.id} service={client.service_id} log_lines={len(raw.splitlines())}", flush=True)
-        lines = (raw or "").splitlines()
-        # First run: just remember the latest line so we only capture NEW chat.
-        if guild.id not in self.seen_lines:
-            if lines:
-                self.seen_lines[guild.id] = lines[-1].strip()
-            return None
+        lines = [(l or "").strip() for l in (raw or "").splitlines()]
         posts = []
-        stats = {"join": 0, "leave": 0, "chat": 0, "unparsed": []}
-        for line in lines:
-            text = (line or "").strip()
+        stats = {"join": 0, "leave": 0, "chat": 0, "system": 0, "unparsed": []}
+        for text in self._split_new_lines(guild.id, [l for l in lines if l]):
             if not text:
-                continue
-            if not self._is_new_line(guild.id, text):
                 continue
             joined = _detect_join_leave(text)
             if joined:
                 guild_settings.add_server_event(guild.id, joined[0], joined[1], text)
                 stats[joined[0]] += 1
+                continue
+            if _is_system_announcement(text):
+                stats["system"] += 1
                 continue
             parsed = _parse_chat_line(text)
             if not parsed:
@@ -320,17 +367,19 @@ class ChatBridge(commands.Cog):
             channel, player, message = parsed
             if self._is_echo(channel, player, message):
                 continue
+            if _is_noise(player, message, channel):
+                continue
             guild_settings.add_chat_log(
                 guild.id, channel, player, message,
                 tribe_name=player, raw_line=text, direction="in",
             )
             posts.append({"channel": channel, "player": player, "message": message})
             stats["chat"] += 1
-        if stats["join"] or stats["leave"] or stats["unparsed"]:
+        if stats["join"] or stats["leave"] or stats["unparsed"] or stats["system"]:
             if guild.id not in self._diag_ts or now5 - self._diag_ts[guild.id] >= 60:
                 self._diag_ts[guild.id] = now5
                 print(
-                    f"[ChatBridge] guild={guild.id} new lines: chat={stats['chat']} join={stats['join']} leave={stats['leave']} unparsed={len(stats['unparsed'])}",
+                    f"[ChatBridge] guild={guild.id} new lines: chat={stats['chat']} join={stats['join']} leave={stats['leave']} sys_skip={stats['system']} unparsed={len(stats['unparsed'])}",
                     flush=True,
                 )
                 if stats["unparsed"]:
