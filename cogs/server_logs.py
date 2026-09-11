@@ -105,6 +105,56 @@ class ServerLogs(commands.Cog):
             "chats": guild_settings.get_unposted_chat_forum_logs(guild.id),
         }
 
+    async def _ensure_missing_threads(self, guild, cfg) -> None:
+        """Create server-log threads when their ids are missing (e.g. only
+        /setup-logs chat ran before). Matches existing threads by name and
+        only creates what is actually absent."""
+        forum = guild.get_channel(cfg.get("server_forum_id") or 0)
+        if not isinstance(forum, discord.ForumChannel):
+            forum = _forum_named(guild, "server-logs")
+        updates = {}
+        plan_threads = {
+            "join_thread_id": (bot_i18n.t(guild.id, "server_logs_thread_join"),
+                               ("join", "دخول", "انضمام")),
+            "leave_thread_id": (bot_i18n.t(guild.id, "server_logs_thread_leave"),
+                                ("leave", "خروج", "مغادرة")),
+            "chat_thread_id": (bot_i18n.t(guild.id, "chat_forum_thread_name"),
+                               ("شات", "chat", "رسائل", "messages")),
+        }
+        for key, (name, kws) in plan_threads.items():
+            if cfg.get(key):
+                continue
+            if not isinstance(forum, discord.ForumChannel):
+                continue
+            tid = _find_thread_by_name(forum, kws)
+            if tid:
+                updates[key] = tid
+                continue
+            try:
+                t = await forum.create_thread(name=name, content=bot_i18n.t(guild.id, "server_logs_thread_intro"))
+                updates[key] = t.id
+            except Exception:
+                continue
+        if not cfg.get("admin_thread_id"):
+            admin_forum = _forum_named(guild, "admin-logs")
+            if isinstance(admin_forum, discord.ForumChannel):
+                tid = _find_thread_by_name(admin_forum, ("admin", "ادارة", "إدارة"))
+                if not tid:
+                    try:
+                        t = await admin_forum.create_thread(
+                            name=bot_i18n.t(guild.id, "server_logs_thread_admin"),
+                            content=bot_i18n.t(guild.id, "server_logs_thread_intro_admin"))
+                        updates["admin_thread_id"] = t.id
+                    except Exception:
+                        pass
+                else:
+                    updates["admin_thread_id"] = tid
+        if updates:
+            try:
+                guild_settings.update_server_log_config(guild.id, **updates)
+            except Exception:
+                pass
+
     @tasks.loop(seconds=15)
     async def post_server_logs(self):
         for guild in self.bot.guilds:
@@ -115,12 +165,18 @@ class ServerLogs(commands.Cog):
             if not plan:
                 continue
             cfg = plan["cfg"]
+            try:
+                await self._ensure_missing_threads(guild, cfg)
+                cfg = guild_settings.get_server_log_config(guild.id) or cfg
+            except Exception:
+                pass
             pending = (len(plan["chats"]), len(plan["joins"]), len(plan["leaves"]), len(plan["admins"]))
             if any(pending):
                 nowp = time.time()
                 if guild.id not in self._diag_ts or nowp - self._diag_ts[guild.id] >= 60:
                     self._diag_ts[guild.id] = nowp
-                    print(f"[ServerLogs] gid={guild.id} pending chats={pending[0]} joins={pending[1]} leaves={pending[2]} admins={pending[3]}", flush=True)
+                    print(f"[ServerLogs] gid={guild.id} pending chats={pending[0]} joins={pending[1]} leaves={pending[2]} admins={pending[3]} "
+                          f"join_t={cfg.get('join_thread_id')} leave_t={cfg.get('leave_thread_id')} chat_t={cfg.get('chat_thread_id')} admin_t={cfg.get('admin_thread_id')}", flush=True)
             join_thread = guild.get_thread(cfg.get("join_thread_id")) if cfg.get("join_thread_id") else None
             leave_thread = guild.get_thread(cfg.get("leave_thread_id")) if cfg.get("leave_thread_id") else None
             chat_thread = guild.get_thread(cfg.get("chat_thread_id")) if cfg.get("chat_thread_id") else None
