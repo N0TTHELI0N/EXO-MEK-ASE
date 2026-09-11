@@ -29,6 +29,41 @@ def _log_path_should_print(now: float = None) -> bool:
             return True
         return False
 
+
+# Several background loops read the game log (chat bridge, anti-abuse IPs,
+# tribe log monitor) and would otherwise hit the Nitrado file server on every
+# tick. Share one short-lived fetch per service+line-count.
+_LOGS_CACHE: dict[str, tuple[float, str]] = {}
+_LOGS_CACHE_TTL = 12.0
+
+
+def get_logs_cached(client, lines: int = 250, ttl: float = None) -> str:
+    """Fetch client.get_logs(lines), reusing the result for ~ttl seconds so the
+    concurrent loops don't each download the tail separately."""
+    ttl = _LOGS_CACHE_TTL if ttl is None else ttl
+    key = f"{getattr(client, 'service_id', '?')}:{lines}"
+    now = time.time()
+    hit = _LOGS_CACHE.get(key)
+    if hit and now - hit[0] < ttl:
+        return hit[1]
+    text = client.get_logs(lines)
+    _LOGS_CACHE[key] = (time.time(), text)
+    return text
+
+
+_seek_print_lock = threading.Lock()
+_seek_print_ts = 0.0
+
+
+def _seek_should_print(now: float = None) -> bool:
+    global _seek_print_ts
+    now = time.time() if now is None else now
+    with _seek_print_lock:
+        if now - _seek_print_ts >= 900:
+            _seek_print_ts = now
+            return True
+        return False
+
 # Global Nitrado request throttle + backoff. Heavy probing (or the dashboard
 # polling) tripped Cloudflare ("429 Just a moment..."), so we enforce a minimum
 # gap between every API call and a hard cooldown after any 429.
@@ -396,8 +431,7 @@ class NitradoClient:
         if resp.status_code != 200:
             _SEEK_BROKEN[file] = time.time()  # skip seek for a while
             self._seek_broken[file] = time.time()
-            if not getattr(self, "_seek_printed", False):
-                self._seek_printed = True
+            if _seek_should_print():
                 print(f"[nitrado-fs] seek HTTP={resp.status_code} file={file!r} body={resp.text[:150]!r}", flush=True)
             return ""
         try:

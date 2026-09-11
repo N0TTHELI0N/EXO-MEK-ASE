@@ -258,7 +258,7 @@ class Tribelog(commands.Cog):
                 client = nitrado.get_client(guild.id)
                 if client is not None:
                     try:
-                        raw = await asyncio_to_thread(client.get_logs, 300)
+                        raw = await asyncio_to_thread(nitrado.get_logs_cached, client, 300)
                         if raw:
                             lines = raw.splitlines()
                     except Exception:

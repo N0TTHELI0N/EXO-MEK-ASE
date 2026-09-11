@@ -324,7 +324,7 @@ class ChatBridge(commands.Cog):
         if client is None:
             return None
         try:
-            raw = client.get_logs(250)
+            raw = nitrado.get_logs_cached(client, 250)
         except Exception:
             raw = None
         if not raw:
@@ -332,7 +332,7 @@ class ChatBridge(commands.Cog):
             if sid is not None and str(sid) != str(client.service_id):
                 client = nitrado.NitradoClient(client.api_token, sid)
                 try:
-                    raw = client.get_logs(250)
+                    raw = nitrado.get_logs_cached(client, 250)
                 except Exception:
                     raw = None
         if not raw:

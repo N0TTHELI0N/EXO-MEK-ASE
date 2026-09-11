@@ -63,7 +63,7 @@ class AntiAbuse(commands.Cog):
         if client is None:
             return None
         try:
-            raw = client.get_logs(300)
+            raw = nitrado.get_logs_cached(client, 300)
         except Exception:
             return None
         lines = (raw or "").splitlines()
