@@ -130,6 +130,7 @@ class ServerLogs(commands.Cog):
                 extra_flags = " ".join(f"{k}={v}" for k, v in svc.items() if any(t in k.lower() for t in ("websocket", "app_server", "container")))
                 if extra_flags:
                     out.append("flags: " + extra_flags)
+                out.append("svc_keys=" + str(sorted(k for k in svc.keys() if not str(k).startswith("_")))[:300])
                 if isinstance(svc.get("game_specific"), dict):
                     gall = svc.get("game_specific") or {}
                     if isinstance(gall, dict):
@@ -138,6 +139,18 @@ class ServerLogs(commands.Cog):
                                 out.append(f"game_specific.{k}={gall[k]}"[:300])
             except Exception as e:
                 out.append(f"flags ERR {type(e).__name__}: {e}")
+            try:
+                code2, body2 = client._raw("GET", f"/services/{client.service_id}/gameservers/app_server")
+                if isinstance(body2, dict):
+                    shown = dict(body2)
+                    for k, v in shown.items():
+                        if isinstance(v, str) and any(t in k.lower() for t in ("token", "key", "secret", "socket", "url")):
+                            shown[k] = f"{v[:10]}...({len(v)})"
+                    out.append(f"app_server HTTP={code2} " + str(shown)[:700])
+                else:
+                    out.append(f"app_server HTTP={code2} body={str(body2)[:200]}")
+            except Exception as e:
+                out.append(f"app_server ERR {type(e).__name__}: {e}")
             roots = ["/", "/games", "/ftproot", "Server", "arkps"]
             if user:
                 roots += [f"/games/{user}", f"/games/{user}/ftproot", f"/{user}"]
