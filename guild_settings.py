@@ -1665,9 +1665,16 @@ def add_chat_log(guild_id: int, channel: str, player_name: str, message: str,
         with conn.cursor() as cur:
             cur.execute("""
                 INSERT INTO chat_logs (guild_id, channel, player_name, tribe_name, message, raw_line, direction)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """, (guild_id, channel, player_name, tribe_name, message, raw_line, direction))
+                SELECT %s, %s, %s, %s, %s, %s, %s
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM chat_logs
+                    WHERE guild_id = %s AND raw_line = %s
+                      AND relayed_at > NOW() - interval '5 minutes'
+                )
+            """, (guild_id, channel, player_name, tribe_name, message, raw_line, direction, guild_id, raw_line))
+            inserted = cur.rowcount > 0
         conn.commit()
+        return inserted
     finally:
         conn.close()
 
@@ -1777,11 +1784,18 @@ def add_server_event(guild_id: int, event_type: str, player_name: str, raw_line:
     conn = get_conn()
     try:
         with conn.cursor() as cur:
-            cur.execute(
-                "INSERT INTO server_events (guild_id, event_type, player_name, raw_line) VALUES (%s, %s, %s, %s)",
-                (guild_id, event_type, player_name, raw_line),
-            )
+            cur.execute("""
+                INSERT INTO server_events (guild_id, event_type, player_name, raw_line)
+                SELECT %s, %s, %s, %s
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM server_events
+                    WHERE guild_id = %s AND raw_line = %s
+                      AND created_at > NOW() - interval '5 minutes'
+                )
+            """, (guild_id, event_type, player_name, raw_line, guild_id, raw_line))
+            inserted = cur.rowcount > 0
         conn.commit()
+        return inserted
     finally:
         conn.close()
 

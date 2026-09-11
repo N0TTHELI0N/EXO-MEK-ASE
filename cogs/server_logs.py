@@ -46,7 +46,7 @@ class ServerLogs(commands.Cog):
         self.bot = bot
         self._diag_ts = {}
         self._posted_ts = {}
-        print("[ServerLogs] build=3f619b2", flush=True)
+        print("[ServerLogs] build=7a1c9e4", flush=True)
         self.post_server_logs.start()
 
     def cog_unload(self):
@@ -175,6 +175,34 @@ class ServerLogs(commands.Cog):
             except Exception:
                 pass
 
+    @staticmethod
+    async def _resolve_thread(guild, thread_id) -> discord.Thread | None:
+        """Resolve a thread by id, falling back to an API fetch.
+
+        ``guild.get_thread`` only sees the cached threads (and archived threads
+        are often missing from the guild cache after a restart), which made the
+        admin forum thread silently unresolvable. Falling back to
+        ``guild.fetch_channel`` still finds archived threads.
+        """
+        if not thread_id:
+            return None
+        t = guild.get_thread(thread_id)
+        if isinstance(t, discord.Thread):
+            return t
+        try:
+            ch = await guild.fetch_channel(thread_id)
+        except Exception:
+            return None
+        return ch if isinstance(ch, discord.Thread) else None
+
+    @staticmethod
+    async def _unarchive_thread(thread: discord.Thread) -> None:
+        if isinstance(thread, discord.Thread) and thread.archived:
+            try:
+                await thread.edit(archived=False, auto_archive_duration=10080)
+            except Exception:
+                pass
+
     @tasks.loop(seconds=15)
     async def post_server_logs(self):
         for guild in self.bot.guilds:
@@ -197,10 +225,24 @@ class ServerLogs(commands.Cog):
                     self._diag_ts[guild.id] = nowp
                     print(f"[ServerLogs] gid={guild.id} pending chats={pending[0]} joins={pending[1]} leaves={pending[2]} admins={pending[3]} "
                           f"join_t={cfg.get('join_thread_id')} leave_t={cfg.get('leave_thread_id')} chat_t={cfg.get('chat_thread_id')} admin_t={cfg.get('admin_thread_id')}", flush=True)
-            join_thread = guild.get_thread(cfg.get("join_thread_id")) if cfg.get("join_thread_id") else None
-            leave_thread = guild.get_thread(cfg.get("leave_thread_id")) if cfg.get("leave_thread_id") else None
-            chat_thread = guild.get_thread(cfg.get("chat_thread_id")) if cfg.get("chat_thread_id") else None
-            admin_thread = guild.get_thread(cfg.get("admin_thread_id")) if cfg.get("admin_thread_id") else None
+            join_thread = await self._resolve_thread(guild, cfg.get("join_thread_id"))
+            leave_thread = await self._resolve_thread(guild, cfg.get("leave_thread_id"))
+            chat_thread = await self._resolve_thread(guild, cfg.get("chat_thread_id"))
+            admin_thread = await self._resolve_thread(guild, cfg.get("admin_thread_id"))
+            # Self-heal: ids that no longer resolve (thread deleted/renamed) are
+            # dropped so _ensure_missing_threads recreates them next tick.
+            stale = {}
+            for key, th in (("join_thread_id", join_thread), ("leave_thread_id", leave_thread),
+                            ("chat_thread_id", chat_thread), ("admin_thread_id", admin_thread)):
+                if cfg.get(key) and th is None:
+                    stale[key] = None
+            if stale:
+                try:
+                    guild_settings.update_server_log_config(guild.id, **stale)
+                except Exception:
+                    pass
+            for th in (join_thread, leave_thread, chat_thread, admin_thread):
+                await self._unarchive_thread(th)
 
             if isinstance(join_thread, discord.Thread):
                 for ev in plan["joins"]:
@@ -213,7 +255,7 @@ class ServerLogs(commands.Cog):
                         await join_thread.send(f"🟢 **{name}** — {bot_i18n.t(guild.id, 'server_event_join')}{ts_part}")
                         await asyncio.to_thread(guild_settings.mark_server_event_posted, ev["id"])
                     except Exception:
-                        break
+                        continue
 
             if isinstance(leave_thread, discord.Thread):
                 for ev in plan["leaves"]:
@@ -226,9 +268,10 @@ class ServerLogs(commands.Cog):
                         await leave_thread.send(f"🔴 **{name}** — {bot_i18n.t(guild.id, 'server_event_leave')}{ts_part}")
                         await asyncio.to_thread(guild_settings.mark_server_event_posted, ev["id"])
                     except Exception:
-                        break
+                        continue
 
             if isinstance(admin_thread, discord.Thread):
+                admin_fails = 0
                 for ev in plan["admins"]:
                     raw = (ev["raw_line"] or "").strip()
                     ts = guild_settings.parse_log_timestamp(raw)
@@ -239,7 +282,10 @@ class ServerLogs(commands.Cog):
                         await admin_thread.send(f"🛠️ **{bot_i18n.t(guild.id, 'server_log_admin')}**{ts_part}\n```{raw[:1700]}```")
                         await asyncio.to_thread(guild_settings.mark_server_event_posted, ev["id"])
                     except Exception:
-                        break
+                        admin_fails += 1
+                        continue
+                if admin_fails:
+                    print(f"[ServerLogs] gid={guild.id} admin send failures={admin_fails} thread={admin_thread.id}", flush=True)
 
             if isinstance(chat_thread, discord.Thread):
                 posts = 0
@@ -267,7 +313,7 @@ class ServerLogs(commands.Cog):
                         await asyncio.to_thread(guild_settings.mark_chat_forum_posted, log["id"])
                         posts += 1
                     except Exception:
-                        break
+                        continue
                 if stale:
                     try:
                         await asyncio.to_thread(guild_settings.mark_chat_forum_posted_batch, guild.id, stale)

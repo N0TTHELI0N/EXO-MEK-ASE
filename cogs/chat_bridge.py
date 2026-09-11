@@ -199,7 +199,7 @@ class ChatBridge(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
-        print("[ChatBridge] build=3f619b2", flush=True)
+        print("[ChatBridge] build=7a1c9e4", flush=True)
         self.seen_lines = {}
         # avoid re-forwarding our own ServerChatMessage echoes
         self._echo_guard = deque(maxlen=200)
@@ -290,7 +290,12 @@ class ChatBridge(commands.Cog):
             self.seen_lines[guild_id] = lines[-1]
             return []
         try:
-            idx = lines.index(cursor)
+            # Match the LAST occurrence of the cursor line: verbatim repeats in
+            # the tail (common broadcasts) would otherwise match at their FIRST
+            # position and re-return (and re-post) everything after it.
+            rev = lines[::-1]
+            ridx = rev.index(cursor)
+            idx = len(lines) - 1 - ridx
         except ValueError:
             # cursor not in this tail (log rotated or >N lines since last poll).
             # replay only a bounded chunk so a big offline gap can't flood Discord.
@@ -388,18 +393,18 @@ class ChatBridge(commands.Cog):
             joined = _detect_join_leave(text)
             if joined:
                 if not self._event_seen(guild.id, joined[0], joined[1], now5):
-                    guild_settings.add_server_event(guild.id, joined[0], joined[1], text)
-                    stats[joined[0]] += 1
+                    if guild_settings.add_server_event(guild.id, joined[0], joined[1], text):
+                        stats[joined[0]] += 1
                 continue
             kind = _classify_system_line(text)
             if kind == "admin":
                 if not self._event_seen(guild.id, "admin", text[:80], now5):
-                    guild_settings.add_server_event(
+                    if guild_settings.add_server_event(
                         guild.id, "admin", "Server", text,
-                    )
-                    stats["admin"] += 1
-                    if len(stats.setdefault("adm_samples", [])) < 3:
-                        stats["adm_samples"].append(text[:140])
+                    ):
+                        stats["admin"] += 1
+                        if len(stats.setdefault("adm_samples", [])) < 3:
+                            stats["adm_samples"].append(text[:140])
                 continue
             if kind == "tribe":
                 # Tribe events (kills/tames/raids) are handled by the dedicated
@@ -429,10 +434,11 @@ class ChatBridge(commands.Cog):
             cap_fp = (channel or "", (player or "").strip().lower(), (message or "").strip().lower())
             if self._capture_seen(guild.id, cap_fp, now5):
                 continue
-            guild_settings.add_chat_log(
+            if not guild_settings.add_chat_log(
                 guild.id, channel, player, message,
                 tribe_name=player, raw_line=text, direction="in",
-            )
+            ):
+                continue
             posts.append({"channel": channel, "player": player, "message": message})
             stats["chat"] += 1
         if stats["join"] or stats["leave"] or stats["admin"] or stats["tribe"] or stats["chat"] or stats["unparsed"]:
