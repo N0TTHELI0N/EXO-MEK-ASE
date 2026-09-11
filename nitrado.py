@@ -68,6 +68,32 @@ class NitradoClient:
         self._probe_next_idx = {"ShooterGame_Last.log": 0, "ShooterGame.log": 0}
         self._sftp_fail_ts = 0.0
 
+    def _extract_token_url(self, payload) -> tuple[str, str]:
+        """Pull (token, url) from a file_server response payload.
+
+        Nitrado wraps upload/download/seek responses as
+        {"status": "success", "data": {"token": {"token": ..., "url": ...}}}
+        (the body may itself already be that data node). Returns ("", "") if
+        the token/url pair can't be found.
+        """
+        if not isinstance(payload, dict):
+            return "", ""
+        node = payload
+        for _ in range(3):
+            if isinstance(node, dict) and isinstance(node.get("data"), dict):
+                node = node["data"]
+            else:
+                break
+        if isinstance(node, dict):
+            tk = node.get("token")
+            if isinstance(tk, dict):
+                return str(tk.get("token") or ""), str(tk.get("url") or "")
+            if isinstance(tk, str) and tk:
+                return tk, str(node.get("url") or "")
+            if isinstance(node.get("url"), str) and node["url"]:
+                return "", node["url"]
+        return "", ""
+
     # ── low-level ─────────────────────────────────────────────
 
     def _request(self, method: str, endpoint: str, **kwargs) -> dict:
@@ -350,9 +376,7 @@ class NitradoClient:
             data = resp.json()
         except Exception:
             return ""
-        token_info = data.get("token") or data
-        token = token_info.get("token")
-        url = token_info.get("url")
+        token, url = self._extract_token_url(data)
         if not token or not url:
             return ""
         try:
@@ -504,9 +528,7 @@ class NitradoClient:
                 print(f"[nitrado-fs] download-list HTTP={raw.status_code} file={file!r}", flush=True)
             return ""
         data = raw.json()
-        token_info = data.get("token") or data
-        token = token_info.get("token")
-        url = token_info.get("url")
+        token, url = self._extract_token_url(data)
         if not token or not url:
             return ""
         if time.monotonic() < _nitrado_cooldown_until:
@@ -869,9 +891,7 @@ class NitradoClient:
             f"{self.fs_base()}/upload",
             json={"path": path, "file": name},
         )
-        token_info = data.get("token") or data
-        token = token_info.get("token")
-        url = token_info.get("url")
+        token, url = self._extract_token_url(data)
         if not token or not url:
             return False
         return self._post_binary(url, token, content)
@@ -886,9 +906,7 @@ class NitradoClient:
             return ""
         print(f"[nitrado-fs] download?file={file!r} HTTP={raw.status_code} text={raw.text[:300]!r}")
         data = raw.json() if raw.text.startswith("{") else {}
-        token_info = data.get("token") or data
-        token = token_info.get("token")
-        url = token_info.get("url")
+        token, url = self._extract_token_url(data)
         if not token or not url:
             return ""
         return self._get_binary(url, token)
@@ -1067,9 +1085,7 @@ class NitradoClient:
             return b""
         print(f"[nitrado-fs] download_bytes?file={file!r} HTTP={raw.status_code} text={raw.text[:200]!r}")
         data = raw.json() if raw.text.startswith("{") else {}
-        token_info = data.get("token") or data
-        token = token_info.get("token")
-        url = token_info.get("url")
+        token, url = self._extract_token_url(data)
         if not token or not url:
             return b""
         return self._get_bytes(url, token)
@@ -1464,42 +1480,71 @@ def server_name(guild_id: int) -> str:
     return name
 
 
+def _game_api_result(client, method: str, action: str, name: str) -> str:
+    """Call the Nitrado game whitelist/banlist endpoint (the API route that
+    works for PlayStation servers, unlike the app_server console).
+
+    Whitelist:   POST   .../games/whitelist?identifier=<psn>
+    Ban/Unban:   POST/DELETE .../games/banlist?identifier=<psn>
+    """
+    code, body = client._raw(
+        method,
+        f"/services/{client.service_id}/gameservers/games/{action}",
+        params={"identifier": name},
+    )
+    if code == 429 or (isinstance(body, dict) and body.get("throttled")):
+        return "Rate limited, try again shortly"
+    status = str(body.get("status", "")) if isinstance(body, dict) else ""
+    msg = str(body.get("message", "")) if isinstance(body, dict) else ""
+    if status == "success":
+        return "OK"
+    already = action == "whitelist" and msg == "Can't add the user to the whitelist."
+    if already:
+        return "OK"
+    if msg == "User could not be found.":
+        return "Player not found"
+    return f"Failed{(': ' + msg) if msg else (f' (HTTP {code})' if code != 200 else '')}"
+
+
 def ban_player(guild_id: int, name: str) -> str:
-    """Ban a player by name via ARK RCON. Returns a status message."""
+    """Ban a player on the Nitrado server. Uses the game banlist API (works on
+    PlayStation), falling back to the console command when it's unavailable."""
     client = get_client(guild_id)
     if not client:
         return "Nitrado not configured"
+    result = _game_api_result(client, "POST", "banlist", name)
+    if result == "OK":
+        return "Banned"
     try:
         client.send_command(f"Ban {name}")
         return "Banned"
     except Exception as e:
-        return "Failed: " + type(e).__name__
+        return result if result != "Failed" else "Failed: " + type(e).__name__
 
 
 def unban_player(guild_id: int, name: str) -> str:
-    """Unban a player by name via ARK RCON. Returns a status message."""
+    """Unban a player on the Nitrado server via the game banlist API."""
     client = get_client(guild_id)
     if not client:
         return "Nitrado not configured"
+    result = _game_api_result(client, "DELETE", "banlist", name)
+    if result == "OK":
+        return "Unbanned"
     try:
         client.send_command(f"Unban {name}")
         return "Unbanned"
     except Exception as e:
-        return "Failed: " + type(e).__name__
+        return result if result != "Failed" else "Failed: " + type(e).__name__
 
 
 def whitelist_player(guild_id: int, name: str) -> str:
-    """Add a player to the Nitrado whitelist. Best-effort; returns a status message."""
+    """Add a player to the Nitrado whitelist via the game whitelist API
+    (the route that works for PlayStation services). Returns a status message."""
     client = get_client(guild_id)
     if not client:
         return "Nitrado not configured"
-    try:
-        data = client._request(
-            "POST",
-            f"/services/{client.service_id}/gameservers/games/whitelist",
-            json={"add": name},
-        )
-        return "Whitelisted" if data else "Failed"
-    except Exception as e:
-        return "Failed: " + type(e).__name__
+    result = _game_api_result(client, "POST", "whitelist", name)
+    if result == "OK":
+        return "Whitelisted"
+    return result
 
