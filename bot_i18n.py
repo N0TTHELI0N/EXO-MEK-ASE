@@ -278,6 +278,86 @@ STRINGS = {
         "ar": "**PSN:** `{psn}`\n**الحالة:** {status}",
         "en": "**PSN:** `{psn}`\n**Status:** {status}",
     },
+    "psn_setup_code": {
+        "ar": "⚠️ اذهب إلى إعدادات الـ PS:\n> Users and Accounts → Account → Profile → About/About Me\n\nاضبطها على **`{code}`**\n\nسيتم التحقق خلال ~5 دقائق.",
+        "en": "⚠️ Go to PS Settings:\n> Users and Accounts → Account → Profile → About/About Me\n\nSet it to **`{code}`**\n\nIt will be checked in ~5 minutes.",
+    },
+    "psn_link_processing": {
+        "ar": "🔄 جارٍ التحقق من PSN **{psn}**... قد يستغرق ذلك حتى 5 دقائق.",
+        "en": "🔄 Verifying PSN **{psn}**... this may take up to 5 minutes.",
+    },
+    "psn_link_success": {
+        "ar": "✅ تحقّق ناجح! تم ربط **{psn}** مع {member}.",
+        "en": "✅ Verified and linked **{psn}** to {member}.",
+    },
+    "psn_link_failed_match": {
+        "ar": "❌ فشل التحقق. كانت About Me الحالية: `{about}`",
+        "en": "❌ Verification failed. Your About Me was: `{about}`",
+    },
+    "psn_link_failed_expired": {
+        "ar": "⏱️ انتهت مهلة التحقق لـ **{psn}**.",
+        "en": "⏱️ Verification timed out for **{psn}**.",
+    },
+    "psn_link_failed_psn": {
+        "ar": "❌ تعذر العثور على PSN **{psn}** أو خطأ في واجهة البرمجة.",
+        "en": "❌ Could not find PSN **{psn}** or API error.",
+    },
+    "psn_already_linked": {
+        "ar": "هذا الـ PSN مربوط بحساب Discord آخر بالفعل.",
+        "en": "This PSN is already linked to another Discord account.",
+    },
+    "psn_no_token": {
+        "ar": "❌ التحقق من PSN غير مضبوط (بوت owner لم يضبط PSN_AWP_TOKEN).",
+        "en": "❌ PSN verification is not configured (BOT OWNER hasn't set PSN_AWP_TOKEN).",
+    },
+    "wl_token_added": {
+        "ar": "{member} لديه الآن **`{count}x`** توكين usable for whitelist.",
+        "en": "{member} now has **`{count}x`** token(s) for whitelist.",
+    },
+    "wl_token_balance": {
+        "ar": "💰 رصيدك: **{tokens}** توكين(ات)",
+        "en": "💰 Your balance: **{tokens}** token(s)",
+    },
+    "wl_redeemed_list": {
+        "ar": "🕹️ PSN المعاد شراؤها: {list}",
+        "en": "🕹️ Redeemed PSNs: {list}",
+    },
+    "wl_no_redeemed": {
+        "ar": "لا يوجد PSN معاد شراؤه بعد.",
+        "en": "No redeemed PSNs yet.",
+    },
+    "wl_token_insufficient": {
+        "ar": "❌ رصيد توكينات غير كافٍ.",
+        "en": "❌ Insufficient token balance.",
+    },
+    "wl_redeem_ok": {
+        "ar": "✅ تمت إضافة **{gamertag}** للوايت ليست. الرصيد المتبقي: `{left}`",
+        "en": "✅ **{gamertag}** whitelisted. `{left}` token(s) left.",
+    },
+    "wl_redeem_failed": {
+        "ar": "❌ تعذر إضافة **{gamertag}**: {reason}",
+        "en": "❌ Could not whitelist **{gamertag}**: {reason}",
+    },
+    "wl_refresh_ok": {
+        "ar": "🔄 أُعيد تطبيق الوايت ليست لـ **{count}** gamertag(s).",
+        "en": "🔄 Re-applied whitelist for **{count}** gamertag(s).",
+    },
+    "wl_token_count_added": {
+        "ar": "تم إضافة **{count}** توكين(ات) إلى {member}.",
+        "en": "Added **{count}** token(s) to {member}.",
+    },
+    "wl_no_nitrado": {
+        "ar": "❌ Nitrado غير مُعد لهذا السيرفر.",
+        "en": "❌ Nitrado is not configured for this server.",
+    },
+    "vanity_set_ok": {
+        "ar": "✅ قنوات العداد:\n👥 Total Users → {users}\n🖥️ Total Discords → {discords}",
+        "en": "✅ Counter channels:\n👥 Total Users → {users}\n🖥️ Total Discords → {discords}",
+    },
+    "vanity_disabled": {
+        "ar": "معطّل",
+        "en": "disabled",
+    },
     "tribelog_no_entries": {
         "ar": "لا توجد سجلات قبيلة.",
         "en": "No tribe log entries found.",

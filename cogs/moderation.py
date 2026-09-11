@@ -1,3 +1,4 @@
+import asyncio
 import os
 import discord
 from discord.ext import commands, tasks
@@ -221,7 +222,7 @@ class Moderation(commands.Cog):
         results = []
         for p_name, p_id in players:
             safe_name = sanitize_rcon_name(p_name)
-            result = await _send_rcon(interaction.guild_id, f"Ban {safe_name}")
+            result = await asyncio.to_thread(nitrado.ban_player, interaction.guild_id, p_name)
             punishment_id = guild_settings.add_punishment(
                 interaction.guild_id, p_name, punishment_type, reason, interaction.user.id,
                 scope=scope_val, player_id=p_id, tribe_name=player if scope_val == "tribe" else None,

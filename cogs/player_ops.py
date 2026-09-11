@@ -150,13 +150,11 @@ class PlayerOps(commands.Cog):
         added = guild_settings.add_ip_ban(interaction.guild_id, ip, reason, interaction.user.id, player_name=player)
         msg = bot_i18n.t(interaction.guild_id, "ip_banned", ip=ip) if added else bot_i18n.t(interaction.guild_id, "ip_already_banned", ip=ip)
 
-        # If a linked player name is given, also kick + ban their account via RCON
+        # If a linked player name is given, also ban their account via the game API
         if player:
-            safe = sanitize_rcon_name(player)
-            kick = await _asyncio_to_thread(nitrado.send_rcon, interaction.guild_id, f"KickPlayer {safe}")
-            ban = await _asyncio_to_thread(nitrado.send_rcon, interaction.guild_id, f"Ban {safe}")
+            ban = await _asyncio_to_thread(nitrado.ban_player, interaction.guild_id, player)
             guild_settings.add_punishment(interaction.guild_id, player, "ban", f"IP ban: {reason}", interaction.user.id)
-            if kick or ban is not None:
+            if ban:
                 msg += bot_i18n.t(interaction.guild_id, "ip_linked_account_kicked", player=player)
 
         _log(interaction.guild_id, "ip_ban", "ip_ban", interaction.user, player, details={"ip": ip, "reason": reason})

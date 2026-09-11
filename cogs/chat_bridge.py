@@ -373,20 +373,20 @@ class ChatBridge(commands.Cog):
                 guild_settings.add_warning(guild_id, player, reason, 0)
                 await self._send_punish_alert(guild_id, bot_i18n.t(guild_id, "auto_warned_chat", player=player, reason=reason))
             elif punishment == "blacklist":
-                await asyncio_to_thread(nitrado.send_rcon, guild_id, f"Ban {safe}")
+                await asyncio_to_thread(nitrado.ban_player, guild_id, player)
                 guild_settings.add_blacklist(guild_id, player, reason, 0, scope="player")
                 guild_settings.add_punishment(guild_id, player, "ban", reason, 0, scope="player")
                 await self._send_punish_alert(guild_id, bot_i18n.t(guild_id, "auto_blacklisted_chat", player=player, reason=reason))
             elif punishment == "tempban":
                 hours = int(rule.get("tempban_hours") or guild_settings.get_setting(guild_id, "warning_tempban_hours", 24) or 24)
                 expires = datetime.now(timezone.utc) + timedelta(hours=hours)
-                resp = await asyncio_to_thread(nitrado.send_rcon, guild_id, f"Ban {safe}")
+                resp = await asyncio_to_thread(nitrado.ban_player, guild_id, player)
                 pid = guild_settings.add_punishment(guild_id, player, "tempban", reason, 0, expires_at=expires)
                 if resp:
                     guild_settings.mark_punishment_executed(pid)
                 await self._send_punish_alert(guild_id, bot_i18n.t(guild_id, "auto_tempbanned_chat", player=player, hours=hours, reason=reason))
             elif punishment == "ban":
-                await asyncio_to_thread(nitrado.send_rcon, guild_id, f"Ban {safe}")
+                await asyncio_to_thread(nitrado.ban_player, guild_id, player)
                 guild_settings.add_punishment(guild_id, player, "ban", reason, 0)
                 await self._send_punish_alert(guild_id, bot_i18n.t(guild_id, "auto_banned_chat", player=player, reason=reason))
         except Exception:

@@ -141,7 +141,7 @@ class AntiAbuse(commands.Cog):
 
         reason = f"Auto-ban: returned on alt account(s) ({', '.join(sorted(distinct)[:5])})"
         try:
-            result = nitrado.send_rcon(guild.id, f"Ban {sanitize_rcon_name(player)}")
+            await _asyncio_to_thread(nitrado.ban_player, guild.id, player)
         except Exception as e:
             print(f"[AntiAbuse] Auto-ban RCON failed: {e}")
             return

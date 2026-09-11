@@ -43,6 +43,7 @@ def run_bot():
         "cogs.playtime",
         "cogs.player_ops",
         "cogs.anti_abuse",
+        "cogs.vanity",
     ]
 
     # Discord allows max 100 global slash commands. These cogs hold the

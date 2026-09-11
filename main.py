@@ -121,6 +121,7 @@ EXTENSIONS = [
     "cogs.chat_bridge",
 
     "cogs.help",
+    "cogs.vanity",
 ]
 
 

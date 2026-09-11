@@ -43,3 +43,6 @@ BOT_OWNER_ID = int(os.getenv("BOT_OWNER_ID", "852876663617572884"))
 
 # ---------- TopServers ----------
 TOPSERVERS_API_KEY = os.getenv("TOPSERVERS_API_KEY", "")
+
+# ---------- PSN (About Me verification / PSNAWP) ----------
+PSN_AWP_TOKEN = os.getenv("PSN_AWP_TOKEN", "")
