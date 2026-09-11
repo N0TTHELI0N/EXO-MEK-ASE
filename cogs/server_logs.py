@@ -37,24 +37,32 @@ class ServerLogs(commands.Cog):
         cfg = guild_settings.get_server_log_config(guild.id)
         if not cfg or cfg.get("enabled") is False:
             return None
-        # Self-heal: a "server-logs" forum exists but its thread ids are not
-        # saved yet (e.g. no /setup-logs run on this build). Resolve them now.
-        if not (cfg.get("join_thread_id") or cfg.get("leave_thread_id") or cfg.get("chat_thread_id")):
+        cfg = dict(cfg or {})
+        # Self-heal: some thread ids may be missing (e.g. only "/setup-logs chat"
+        # ran, or thread names changed). Resolve the missing ones now from the
+        # "server-logs" forum, matching name keywords rather than exact names.
+        missing = [k for k in ("join_thread_id", "leave_thread_id", "chat_thread_id") if not cfg.get(k)]
+        if missing:
             forum = guild.get_channel(cfg.get("server_forum_id") or 0)
             if not isinstance(forum, discord.ForumChannel):
                 forum = discord.utils.get(guild.channels, name="server-logs")
             if isinstance(forum, discord.ForumChannel):
                 ids = {}
                 for t in forum.threads:
-                    if "دخول" in t.name:
-                        ids["join_thread_id"] = t.id
-                    elif "خروج" in t.name:
-                        ids["leave_thread_id"] = t.id
-                    elif "شات" in t.name or "chat" in t.name.lower():
-                        ids["chat_thread_id"] = t.id
+                    tn = str(t.name or "").lower()
+                    if "join" in tn or "دخول" in tn or "انضمام" in tn:
+                        ids.setdefault("join_thread_id", t.id)
+                    elif "leave" in tn or "خروج" in tn or "مغادرة" in tn:
+                        ids.setdefault("leave_thread_id", t.id)
+                    elif "شات" in tn or "chat" in tn or "رسائل" in tn or "messages" in tn or "global" in tn:
+                        ids.setdefault("chat_thread_id", t.id)
                 if ids:
-                    ids["server_forum_id"] = forum.id
-                    guild_settings.update_server_log_config(guild.id, **ids)
+                    if not cfg.get("server_forum_id"):
+                        ids["server_forum_id"] = forum.id
+                    try:
+                        guild_settings.update_server_log_config(guild.id, **ids)
+                    except Exception:
+                        pass
                     cfg = guild_settings.get_server_log_config(guild.id)
         return {
             "cfg": cfg,
@@ -223,12 +231,12 @@ class ServerLogs(commands.Cog):
                 text = client.read_file_tail(path)
                 out.append(f"tail_chars={len(text) if text else 0}")
                 if text:
-                    out.append("sample:\n" + "\n".join(text.splitlines()[-3:])[:600])
+                    out.append("sample:\n" + "\n".join(text.splitlines()[-30:])[:1200])
             else:
                 text = client.get_logs(400)
                 out.append(f"get_logs_chars={len(text) if text else 0}")
                 if text:
-                    out.append("sample:\n" + "\n".join(text.splitlines()[-3:])[:600])
+                    out.append("sample:\n" + "\n".join(text.splitlines()[-30:])[:1200])
             return "\n".join(out)[:1900]
 
         try:

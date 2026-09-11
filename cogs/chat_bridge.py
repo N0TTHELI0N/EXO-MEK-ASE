@@ -29,23 +29,40 @@ _PLAIN_CAT = re.compile(r"^[^:]+:\s*(.*)$")
 _CHAT_BODY = re.compile(r"^(?:\[(?P<channel>[^\]]+)\]\s*)?(?P<player>[^:\]]+?)\s*:\s*(?P<msg>.+)$")
 
 # Player join / leave the server, detected in the same ARK log stream.
-_JOIN_LEAVE_PATTERNS = [
-    (re.compile(r"'(?P<name>[^']+)'.*?joined the server", re.I), "join"),
-    (re.compile(r"Player (?P<name>[^']{2,40}?) joined the server", re.I), "join"),
-    (re.compile(r"'(?P<name>[^']+)'.*?(?:left|disconnected)(?:\s+from)?\s+the server", re.I), "leave"),
-    (re.compile(r"Player (?P<name>[^']{2,40}?)\s+(?:left|disconnected)(?:\s+from)?\s+the server", re.I), "leave"),
-]
+# The exact wording differs between ARK versions / hosts, so we match the
+# sentinel phrase and pull the name from the text that precedes it:
+#   [..][ 4]LogServerPlayerJoined: 'Name' joined the server
+#   [..][ 5] 'Name' joined the server
+#   [..][ 6]LogServerPlayerLeft: (PlayerName) left the server
+#   [..][ 7] PlayerName disconnected from the server
+_JOIN_SENTINEL = re.compile(r"\bjoined the server\b", re.I)
+_LEAVE_SENTINEL = re.compile(r"\b(?:left|disconnected)\b[^\n]{0,40}?\bthe server\b", re.I)
+_PREFIX_STRIP = re.compile(
+    r"^.*?\b(?:Log[A-Za-z]*Player(?:Joined|Left)|LogGameSession|LogWorld|LogServerStatus|LogPlayerConnection|LogNet)\s*[:#]?\s*",
+    re.I,
+)
+_HEADER_STRIP = re.compile(r"^(\[[^\]]*\]\s*)+|^[\s\x00-\x1f]+")
 
 
 def _detect_join_leave(line: str):
     """Return (event_type, player_name) if the line is a player join/leave event."""
-    for regex, ev_type in _JOIN_LEAVE_PATTERNS:
-        m = regex.search(line)
+    m = _JOIN_SENTINEL.search(line)
+    if m:
+        ev_type = "join"
+        prefix = line[: m.start()]
+    else:
+        m = _LEAVE_SENTINEL.search(line)
         if m:
-            name = m.group("name").strip().strip("'\"").strip()
-            if name:
-                return ev_type, name
-    return None
+            ev_type = "leave"
+            prefix = line[: m.start()]
+        else:
+            return None
+    name = _PREFIX_STRIP.sub("", prefix)
+    name = _HEADER_STRIP.sub("", name)
+    name = name.strip().strip("'\"()[]{}").strip()
+    if not name or len(name) < 2 or len(name) > 40:
+        return None
+    return ev_type, name
 
 
 def _detect_console_command(line: str):
@@ -157,6 +174,7 @@ class ChatBridge(commands.Cog):
         self._auto_service_ts = {}
         self._hb_ts = {}
         self._empty_ts = {}
+        self._diag_ts = {}
         self.chat_monitor.start()
 
     # ── helpers ──────────────────────────────────────────────
@@ -273,6 +291,7 @@ class ChatBridge(commands.Cog):
                 self.seen_lines[guild.id] = lines[-1].strip()
             return None
         posts = []
+        stats = {"join": 0, "leave": 0, "chat": 0, "unparsed": []}
         for line in lines:
             text = (line or "").strip()
             if not text:
@@ -282,6 +301,7 @@ class ChatBridge(commands.Cog):
             joined = _detect_join_leave(text)
             if joined:
                 guild_settings.add_server_event(guild.id, joined[0], joined[1], text)
+                stats[joined[0]] += 1
                 continue
             parsed = _parse_chat_line(text)
             if not parsed:
@@ -294,6 +314,8 @@ class ChatBridge(commands.Cog):
                         details={"command": cmd, "source": "game console"},
                         log_category=cat,
                     )
+                elif len(stats["unparsed"]) < 3:
+                    stats["unparsed"].append(text[:160])
                 continue
             channel, player, message = parsed
             if self._is_echo(channel, player, message):
@@ -303,6 +325,16 @@ class ChatBridge(commands.Cog):
                 tribe_name=player, raw_line=text, direction="in",
             )
             posts.append({"channel": channel, "player": player, "message": message})
+            stats["chat"] += 1
+        if stats["join"] or stats["leave"] or stats["unparsed"]:
+            if guild.id not in self._diag_ts or now5 - self._diag_ts[guild.id] >= 60:
+                self._diag_ts[guild.id] = now5
+                print(
+                    f"[ChatBridge] guild={guild.id} new lines: chat={stats['chat']} join={stats['join']} leave={stats['leave']} unparsed={len(stats['unparsed'])}",
+                    flush=True,
+                )
+                if stats["unparsed"]:
+                    print("[ChatBridge] unparsed sample: " + " || ".join(stats["unparsed"]), flush=True)
         return {"cfg": cfg, "posts": posts}
 
     @staticmethod

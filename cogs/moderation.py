@@ -465,57 +465,110 @@ class Moderation(commands.Cog):
     async def server_status(self, interaction: discord.Interaction):
         await interaction.response.defer()
 
-        headers, service_id = _get_nitrado_headers(interaction.guild_id)
-        if not headers or not service_id:
-            return await interaction.followup.send(bot_i18n.t(interaction.guild_id, "nitrado_not_configured"), ephemeral=True)
+        async def _collect():
+            info, players, settings, sname = {}, [], {}, ""
+            try:
+                info = nitrado.get_server_info(interaction.guild_id) or {}
+            except Exception:
+                info = {}
+            try:
+                client = nitrado.get_client(interaction.guild_id)
+                if client:
+                    players = client.get_player_list() or []
+            except Exception:
+                players = []
+            try:
+                settings = nitrado.get_ark_settings(interaction.guild_id) or {}
+            except Exception:
+                settings = {}
+            try:
+                sname = nitrado.server_name(interaction.guild_id) or ""
+            except Exception:
+                sname = ""
+            return info, players, settings, sname
 
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    f"https://api.nitrado.net/services/{service_id}/gameservers",
-                    headers=headers, timeout=aiohttp.ClientTimeout(total=10),
-                ) as resp:
-                    resp.raise_for_status()
-                    raw = await resp.json()
-                    print(f"[server-status] raw type={type(raw).__name__} keys={list(raw.keys())[:10] if isinstance(raw, dict) else len(raw) if isinstance(raw, list) else '?'}", flush=True)
-                    data = raw
-                    inner = data.get("data", data) if isinstance(data, dict) else data
-                    if isinstance(inner, list):
-                        inner = inner[0] if inner else {}
-                    server = inner.get("gameserver", inner) if isinstance(inner, dict) else {}
-                    if not isinstance(server, dict):
-                        server = {}
-
-            status = server.get("status", "unknown")
-            query = server.get("query", {})
-            if not isinstance(query, dict):
-                query = {}
-            players = query.get("players", {})
-            if not isinstance(players, dict):
-                players = {}
-            player_current = players.get("current", 0)
-            player_max = players.get("max", 0)
-            player_list = players.get("player", [])
-            if not isinstance(player_list, list):
-                player_list = []
-
-            embed = discord.Embed(title=bot_i18n.t(interaction.guild_id, "server_status_title"), color=discord.Color.green() if status == "started" else discord.Color.red())
-            embed.add_field(name=bot_i18n.t(interaction.guild_id, "field_status"), value=f"{'🟢' if status == 'started' else '🔴'} {status}", inline=True)
-            embed.add_field(name=bot_i18n.t(interaction.guild_id, "field_players"), value=f"{player_current}/{player_max}", inline=True)
-            if player_list:
-                names = []
-                for p in player_list[:20]:
-                    if isinstance(p, dict):
-                        names.append(p.get("name", "Unknown"))
-                    else:
-                        names.append(str(p))
-                embed.add_field(name=bot_i18n.t(interaction.guild_id, "field_player_list"), value="\n".join(names) or "None", inline=False)
-
-            _log(interaction.guild_id, "server", "status_check", interaction.user, None)
-            await interaction.followup.send(embed=embed)
+            info, players, settings, server_name = await asyncio.to_thread(_collect)
         except Exception as e:
-            print(f"[server-status] error: {type(e).__name__}: {e}", flush=True)
-            await interaction.followup.send(bot_i18n.t(interaction.guild_id, "server_status_error", error=e), ephemeral=True)
+            return await interaction.followup.send(
+                bot_i18n.t(interaction.guild_id, "server_status_error", error=e),
+                ephemeral=True,
+            )
+
+        inner = info.get("data", info) if isinstance(info, dict) else {}
+        server = inner.get("gameserver", inner) if isinstance(inner, dict) else {}
+        if not isinstance(server, dict):
+            server = {}
+        status = server.get("status", "unknown")
+        query = server.get("query", {})
+        if not isinstance(query, dict):
+            query = {}
+
+        p = query.get("players", {})
+        if not isinstance(p, dict):
+            p = {}
+        player_current = p.get("current", 0) if p else 0
+        player_max = p.get("max", 0) if p else 0
+        if not p:
+            online = [x for x in players if x.get("online")]
+            player_current = player_current or len(online)
+            player_max = player_max or 70
+
+        pings = [int(x.get("ping") or 0) for x in players if x.get("ping")]
+        ping_avg = int(sum(pings) / len(pings)) if pings else None
+
+        def _sval(*keys, default=""):
+            for k in keys:
+                v = settings.get(k)
+                if v not in (None, "", {}):
+                    return v
+            return default
+
+        def _fmt_map(raw):
+            raw = str(raw or "")
+            if not raw:
+                return ""
+            if "preinstalled," in raw or ("preinstalled" in raw and raw.count(",") >= 2):
+                parts = [pp for pp in raw.split(",") if pp and pp != "preinstalled"]
+                for pp in parts:
+                    if not pp.isdigit():
+                        return pp.strip()
+            return raw.strip()
+
+        _map = _fmt_map(_sval("MapPlayerDedicatedServer", "MapName", "map", "Map"))
+        if not _map:
+            _map = _fmt_map(query.get("map") or server.get("map") or "")
+
+        embed = discord.Embed(
+            title=bot_i18n.t(interaction.guild_id, "server_status_title"),
+            color=discord.Color.green() if status == "started" else discord.Color.red(),
+        )
+        embed.add_field(name=bot_i18n.t(interaction.guild_id, "field_status"),
+                        value=f"{'🟢' if status == 'started' else '🔴'} {status}", inline=True)
+        embed.add_field(name=bot_i18n.t(interaction.guild_id, "field_players"),
+                        value=f"{player_current}/{player_max}", inline=True)
+        if server_name:
+            embed.add_field(name=bot_i18n.t(interaction.guild_id, "field_server_name"),
+                            value=server_name[:100], inline=False)
+        if _map:
+            embed.add_field(name=bot_i18n.t(interaction.guild_id, "field_map"),
+                            value=_map[:60], inline=True)
+        if ping_avg is not None:
+            embed.add_field(name=bot_i18n.t(interaction.guild_id, "field_ping"),
+                            value=f"{ping_avg} ms", inline=True)
+        online_names = [x.get("name") for x in players if x.get("online") and x.get("name")]
+        if not online_names and players:
+            online_names = [x.get("name") for x in players if x.get("name")]
+        shown = online_names[:20]
+        if shown:
+            joined = "\n".join(str(n) for n in shown)
+            if len(online_names) > 20:
+                joined += f"\n… +{len(online_names)-20}"
+            embed.add_field(name=bot_i18n.t(interaction.guild_id, "field_player_list"),
+                            value=joined or "None", inline=False)
+
+        _log(interaction.guild_id, "server", "status_check", interaction.user, None)
+        await interaction.followup.send(embed=embed)
 
     @app_commands.command(name="find-server", description="Find the correct Nitrado service ID for the ARK server (Admin)")
     @app_commands.describe(apply="Automatically set the working service ID (default: True)")

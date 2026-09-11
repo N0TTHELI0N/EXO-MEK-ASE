@@ -704,6 +704,18 @@ STRINGS = {
         "ar": "قائمة اللاعبين",
         "en": "Player List",
     },
+    "field_server_name": {
+        "ar": "اسم السيرفر",
+        "en": "Server Name",
+    },
+    "field_map": {
+        "ar": "الخريطة",
+        "en": "Map",
+    },
+    "field_ping": {
+        "ar": "البنق",
+        "en": "Ping",
+    },
     "server_status_error": {
         "ar": "❌ خطأ في جلب الحالة: `{error}`",
         "en": "❌ Error fetching status: `{error}`",
