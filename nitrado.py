@@ -3,6 +3,7 @@
 # (the FileServer/backup flows replace the old SFTP approach).
 
 import time
+import threading
 import requests
 import guild_settings
 
@@ -10,6 +11,23 @@ import guild_settings
 NITRADO_BASE_URL = "https://api.nitrado.net"
 
 _ERR_LOG_THROTTLE = {}
+
+# Log-path discovery print is noisy when several loops (chat bridge, server
+# status, admin tools) hit the FileServer at once, so it is rate-limited
+# process-wide instead of per client instance (instances get recreated on TTL
+# expiry and would reset the timestamp).
+_print_lock = threading.Lock()
+_log_path_print_ts = 0.0
+
+
+def _log_path_should_print(now: float = None) -> bool:
+    global _log_path_print_ts
+    now = time.time() if now is None else now
+    with _print_lock:
+        if now - _log_path_print_ts >= 60:
+            _log_path_print_ts = now
+            return True
+        return False
 
 # Global Nitrado request throttle + backoff. Heavy probing (or the dashboard
 # polling) tripped Cloudflare ("429 Just a moment..."), so we enforce a minimum
@@ -595,8 +613,7 @@ class NitradoClient:
             if text:
                 self._probe_next_idx[filename] = 0
                 self._log_fail_ts.pop(filename, None)
-                if time.time() - getattr(self, "_logpath_print_ts", 0.0) >= 60:
-                    self._logpath_print_ts = time.time()
+                if _log_path_should_print():
                     print(f"[nitrado-fs] using log file path={path!r} chars={len(text)}", flush=True)
                 return "\n".join(text.splitlines()[-lines:])
             # Failed this path — advance one step per tick to stay far below
@@ -684,8 +701,7 @@ class NitradoClient:
         if path:
             text = self.read_file_tail(path)
             if text:
-                if time.time() - getattr(self, "_logpath_print_ts", 0.0) >= 60:
-                    self._logpath_print_ts = time.time()
+                if _log_path_should_print():
                     print(f"[nitrado-fs] using log file path={path!r} chars={len(text)}", flush=True)
                 return "\n".join(text.splitlines()[-lines:])
         # The latest_log endpoint is not available for every game (PlayStation
