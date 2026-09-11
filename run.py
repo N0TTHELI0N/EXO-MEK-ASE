@@ -42,9 +42,13 @@ def run_bot():
         "cogs.help",
         "cogs.playtime",
         "cogs.player_ops",
-        "cogs.anti_abuse",
         "cogs.vanity",
     ]
+
+    # cogs.anti_abuse is loaded AFTER the global command carve (its commands
+    # must fit under the 100 global-cap once the guild-only commands have been
+    # removed from the global tree).
+    LATE_EXTENSION = "cogs.anti_abuse"
 
     # Discord allows max 100 global slash commands. These cogs hold the
     # commands that spill over the limit, so they are registered per-guild
@@ -68,8 +72,21 @@ def run_bot():
                 print(f"[Bot] ERROR building guild-scoped {mod_name}: {e}", flush=True)
         return scoped
 
+    _ready_done = False
+    _guild_moved_cmds = []
+
+    GUILD_ONLY_COMMANDS = {
+        "token-add", "wl-redeem", "wl-refresh", "wl-check",
+        "set-vanity-channels",
+    }
+
     @bot.event
     async def on_ready():
+        nonlocal _ready_done
+        if _ready_done:
+            print("[Bot] on_ready re-fired — skipping duplicate load/sync", flush=True)
+            return
+        _ready_done = True
         print(f"[Bot] Logged in as {bot.user} ({bot.user.id})")
         print(f"[Bot] Guilds: {len(bot.guilds)}")
         # Load cogs (async in discord.py 2.4) before syncing so commands are registered
@@ -79,11 +96,32 @@ def run_bot():
                 print(f"[Bot] Loaded extension {ext}", flush=True)
             except Exception as e:
                 print(f"[Bot] ERROR loading {ext}: {e}", flush=True)
+        # Keep the global tree under Discord's 100-command cap: carve the
+        # low-priority commands out of global scope and register them per-guild.
+        moved = []
+        for name in GUILD_ONLY_COMMANDS:
+            cmd = bot.tree.remove_command(name)
+            if cmd is not None:
+                moved.append(cmd)
+        try:
+            await bot.load_extension(LATE_EXTENSION)
+            print(f"[Bot] Loaded late extension {LATE_EXTENSION}", flush=True)
+        except Exception as e:
+            print(f"[Bot] ERROR loading late {LATE_EXTENSION}: {e}", flush=True)
         try:
             synced = await bot.tree.sync()
             print(f"[Bot] Synced {len(synced)} slash commands globally", flush=True)
         except Exception as e:
             print(f"[Bot] Global sync error: {e}", flush=True)
+        if moved:
+            for guild in bot.guilds:
+                for cmd in moved:
+                    try:
+                        bot.tree.add_command(cmd, guild=guild, override=True)
+                    except Exception as e:
+                        print(f"[Bot] Guild-scoped carve error {cmd.name} in {guild.name}: {e}", flush=True)
+            _guild_moved_cmds.extend(moved)
+            print(f"[Bot] Moved {len(moved)} commands to guild scope", flush=True)
         guild_scoped = await _register_guild_scoped(bot)
         print(f"[Bot] Guild-scoped commands ready: {len(guild_scoped)}", flush=True)
         # Commands over the global limit live in guild scope. Syncing a guild
@@ -110,6 +148,8 @@ def run_bot():
                 cog = getattr(mod, cls_name)(bot)
                 for cmd in cog.get_app_commands():
                     bot.tree.add_command(cmd, guild=guild, override=True)
+            for cmd in _guild_moved_cmds:
+                bot.tree.add_command(cmd, guild=guild, override=True)
             synced = await bot.tree.sync(guild=guild)
             print(f"[Bot] Synced {len(synced)} guild commands for {guild.name}", flush=True)
         except Exception as e:

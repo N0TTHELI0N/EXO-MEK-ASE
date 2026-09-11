@@ -67,6 +67,7 @@ class NitradoClient:
         self._gs_cached = None
         self._probe_next_idx = {"ShooterGame_Last.log": 0, "ShooterGame.log": 0}
         self._sftp_fail_ts = 0.0
+        self._seek_broken = {}
 
     def _extract_token_url(self, payload) -> tuple[str, str]:
         """Pull (token, url) from a file_server response payload.
@@ -368,6 +369,7 @@ class NitradoClient:
             _mark_429(str(resp.status_code))
             return ""
         if resp.status_code != 200:
+            self._seek_broken[file] = time.time()  # skip seek for a while
             if not getattr(self, "_seek_printed", False):
                 self._seek_printed = True
                 print(f"[nitrado-fs] seek HTTP={resp.status_code} file={file!r} body={resp.text[:150]!r}", flush=True)
@@ -499,9 +501,11 @@ class NitradoClient:
         the full body locally if ranges are ignored. Returns None while a
         rate-limit cooldown is active (not a failure).
         """
-        tail = self.seek_tail(file, tail_bytes)
-        if tail is None:
-            return None
+        tail = ""
+        if time.time() - self._seek_broken.get(file, 0) >= 300:
+            tail = self.seek_tail(file, tail_bytes)
+            if tail is None:
+                return None
         if tail:
             return tail
         if time.monotonic() < _nitrado_cooldown_until:

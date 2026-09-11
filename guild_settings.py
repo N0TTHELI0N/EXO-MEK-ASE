@@ -58,6 +58,101 @@ def _cache_drop(cache, key):
         cache.pop(key, None)
 
 
+# ---------------------------------------------------------------------------
+# Small warm-connection pool for Postgres.
+# Every write path (add_chat_log, add_ip_record, ...) used to open a brand
+# new psycopg2 connection; with Render's Postgres that connect takes hundreds
+# of ms to seconds (TCP + SSL) and was run synchronously ON the event loop,
+# stalling Discord heartbeats and causing "did not respond"/disconnects.
+# get_conn() now hands out reusable connections from a small pool; close()
+# returns them to the pool instead of dropping the socket.
+# ---------------------------------------------------------------------------
+
+_pool_lock = _threading.Lock()
+_pool_idle = []            # list of (raw connection, monotonic time)
+_POOL_MAX_IDLE = 4
+
+
+def _pool_trim():
+    _pool_idle[:] = [(c, ts) for c, ts in _pool_idle if not c.closed]
+    while len(_pool_idle) > _POOL_MAX_IDLE:
+        c, _ = _pool_idle.pop(0)
+        try:
+            c.close()
+        except Exception:
+            pass
+
+
+class _PooledConnection:
+    __slots__ = ("_raw",)
+
+    def __init__(self, raw):
+        object.__setattr__(self, "_raw", raw)
+
+    def close(self):
+        raw = object.__getattribute__(self, "_raw")
+        object.__setattr__(self, "_raw", None)
+        if raw is None or raw.closed:
+            return
+        try:
+            if raw.in_transaction:
+                raw.rollback()
+        except Exception:
+            try:
+                raw.close()
+            except Exception:
+                pass
+            return
+        with _pool_lock:
+            _pool_idle.append((raw, _clock.monotonic()))
+            _pool_trim()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        if exc_type is None:
+            try:
+                object.__getattribute__(self, "_raw").commit()
+            except Exception:
+                pass
+        return False
+
+    def __getattr__(self, name):
+        raw = object.__getattribute__(self, "_raw")
+        if raw is None:
+            raise RuntimeError("database connection already returned to the pool")
+        return getattr(raw, name)
+
+
+def get_conn():
+    if not DATABASE_URL:
+        raise RuntimeError("DATABASE_URL not set")
+    raw = None
+    with _pool_lock:
+        if _pool_idle:
+            raw = _pool_idle.pop()[0]
+            _pool_trim()
+    if raw is None or raw.closed:
+        # Short connect timeout so an unreachable Postgres can't hang startup/requests
+        # (this was causing Render "Port scan timeout" deploys).
+        raw = psycopg2.connect(
+            DATABASE_URL, connect_timeout=5,
+            keepalives=1, keepalives_idle=120, keepalives_interval=30, keepalives_count=4,
+        )
+    return _PooledConnection(raw)
+
+
+def _close_all_pool():
+    with _pool_lock:
+        for c, _ in _pool_idle:
+            try:
+                c.close()
+            except Exception:
+                pass
+        _pool_idle.clear()
+
+
 def _encrypt(value: str) -> str:
     if not _fernet or not value:
         return value
@@ -70,14 +165,6 @@ def _decrypt(value: str) -> str:
     if not _fernet:
         return value
     return _fernet.decrypt(value[4:].encode()).decode()
-
-
-def get_conn():
-    if not DATABASE_URL:
-        raise RuntimeError("DATABASE_URL not set")
-    # Short connect timeout so an unreachable Postgres can't hang startup/requests
-    # (this was causing Render "Port scan timeout" deploys).
-    return psycopg2.connect(DATABASE_URL, connect_timeout=5)
 
 
 def init_db():
