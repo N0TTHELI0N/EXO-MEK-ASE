@@ -357,13 +357,17 @@ class ChatBridge(commands.Cog):
                 stats[joined[0]] += 1
                 continue
             kind = _classify_system_line(text)
-            if kind in ("admin", "tribe"):
+            if kind == "admin":
                 guild_settings.add_server_event(
-                    guild.id, kind,
-                    "Server" if kind == "admin" else "Tribe",
-                    text,
+                    guild.id, "admin", "Server", text,
                 )
-                stats[kind] += 1
+                stats["admin"] += 1
+                continue
+            if kind == "tribe":
+                # Tribe events (kills/tames/raids) are handled by the dedicated
+                # tribelog cog into per-tribe threads; posting them here too
+                # would duplicate every event.
+                stats["tribe"] += 1
                 continue
             parsed = _parse_chat_line(text)
             if not parsed:

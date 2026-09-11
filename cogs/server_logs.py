@@ -82,24 +82,13 @@ class ServerLogs(commands.Cog):
                     except Exception:
                         pass
                     cfg = guild_settings.get_server_log_config(guild.id)
-        # Resolve the admin / tribe event threads from their dedicated forums
-        # (fall back to the server-logs forum if a dedicated one is missing).
+        # Resolve the admin event thread from its dedicated forum.
         special = {}
         if not cfg.get("admin_thread_id"):
             admin_forum = _forum_named(guild, "admin-logs")
             tid = _find_thread_by_name(admin_forum, ("admin", "ادارة", "إدارة", "logs"))
             if tid:
                 special["admin_thread_id"] = tid
-        if not cfg.get("tribe_thread_id"):
-            tribe_forum = _forum_named(guild, "tribe-logs")
-            tid = _find_thread_by_name(tribe_forum, ("tribe", "قبيلة", "قبائل", "تبيض"))
-            if not tid and (_forum_named(guild, "tribe-logs") is None):
-                server_forum = guild.get_channel(cfg.get("server_forum_id") or 0)
-                if not isinstance(server_forum, discord.ForumChannel):
-                    server_forum = _forum_named(guild, "server-logs")
-                tid = _find_thread_by_name(server_forum, ("tribe", "قبيلة", "قبائل"))
-            if tid:
-                special["tribe_thread_id"] = tid
         if special:
             try:
                 guild_settings.update_server_log_config(guild.id, **special)
@@ -111,7 +100,6 @@ class ServerLogs(commands.Cog):
             "joins": guild_settings.get_unposted_server_events(guild.id, event_type="join"),
             "leaves": guild_settings.get_unposted_server_events(guild.id, event_type="leave"),
             "admins": guild_settings.get_unposted_server_events(guild.id, event_type="admin"),
-            "tribes": guild_settings.get_unposted_server_events(guild.id, event_type="tribe"),
             "chats": guild_settings.get_unposted_chat_forum_logs(guild.id),
         }
 
@@ -129,7 +117,6 @@ class ServerLogs(commands.Cog):
             leave_thread = guild.get_thread(cfg.get("leave_thread_id") or cfg.get("server_events_thread_id")) if cfg.get("leave_thread_id") or cfg.get("server_events_thread_id") else None
             chat_thread = guild.get_thread(cfg.get("chat_thread_id")) if cfg.get("chat_thread_id") else None
             admin_thread = guild.get_thread(cfg.get("admin_thread_id")) if cfg.get("admin_thread_id") else None
-            tribe_thread = guild.get_thread(cfg.get("tribe_thread_id")) if cfg.get("tribe_thread_id") else None
 
             if isinstance(join_thread, discord.Thread):
                 for ev in plan["joins"]:
@@ -158,15 +145,6 @@ class ServerLogs(commands.Cog):
                     raw = (ev["raw_line"] or "").strip()
                     try:
                         await admin_thread.send(f"🛠️ **{bot_i18n.t(guild.id, 'server_log_admin')}**\n```{raw[:1700]}```")
-                        await asyncio.to_thread(guild_settings.mark_server_event_posted, ev["id"])
-                    except Exception:
-                        break
-
-            if isinstance(tribe_thread, discord.Thread):
-                for ev in plan["tribes"]:
-                    raw = (ev["raw_line"] or "").strip()
-                    try:
-                        await tribe_thread.send(f"🗡️ **{bot_i18n.t(guild.id, 'server_log_tribe')}**\n```{raw[:1700]}```")
                         await asyncio.to_thread(guild_settings.mark_server_event_posted, ev["id"])
                     except Exception:
                         break

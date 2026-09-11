@@ -409,26 +409,16 @@ class CustomCommands(commands.Cog):
         return forum, join_tid, leave_tid, chat_tid
 
     async def _ensure_special_log_threads(self, guild: discord.Guild):
-        """Admin events thread inside the admin-logs forum + tribe events thread
-        inside the tribe-logs forum. Returns (admin_tid, tribe_tid)."""
-        admin_tid = tribe_tid = None
+        """Admin events thread inside the admin-logs forum. Returns admin_tid."""
         admin_forum = await self._get_or_create_forum(
             guild, "admin-logs", bot_i18n.t(guild.id, "forum_topic"),
             "Admin log forum - created by setup-logs")
         if admin_forum is not None:
-            admin_tid = await self._ensure_forum_thread(
+            return await self._ensure_forum_thread(
                 admin_forum,
                 bot_i18n.t(guild.id, "server_logs_thread_admin"),
                 bot_i18n.t(guild.id, "server_logs_thread_intro_admin"))
-        tribe_forum = await self._get_or_create_forum(
-            guild, "tribe-logs", bot_i18n.t(guild.id, "tribe_forum_topic"),
-            "Tribe log forum - created by setup-logs")
-        if tribe_forum is not None:
-            tribe_tid = await self._ensure_forum_thread(
-                tribe_forum,
-                bot_i18n.t(guild.id, "server_logs_thread_tribe"),
-                bot_i18n.t(guild.id, "server_logs_thread_intro_tribe"))
-        return admin_tid, tribe_tid
+        return None
 
     async def _setup_server_logs(self, guild: discord.Guild, channel=None):
         forum, join_tid, leave_tid, chat_tid = await self._ensure_server_log_threads(guild, channel)
@@ -436,22 +426,19 @@ class CustomCommands(commands.Cog):
             return None, "server-logs: " + bot_i18n.t(guild.id, "forum_error", error="create failed")
         if not (join_tid and leave_tid and chat_tid):
             return None, "server-logs: " + bot_i18n.t(guild.id, "forum_error", error="thread failed")
-        admin_tid, tribe_tid = await self._ensure_special_log_threads(guild)
+        admin_tid = await self._ensure_special_log_threads(guild)
         guild_settings.update_server_log_config(guild.id, enabled=True,
                                                 server_forum_id=forum.id,
                                                 join_thread_id=join_tid,
                                                 leave_thread_id=leave_tid,
                                                 chat_forum_id=forum.id,
                                                 chat_thread_id=chat_tid,
-                                                admin_thread_id=admin_tid,
-                                                tribe_thread_id=tribe_tid)
+                                                admin_thread_id=admin_tid)
         # The in-game monitoring that captures events must run to feed this forum.
         guild_settings.update_chat_bridge_config(guild.id, enabled=True)
         extra = []
         if admin_tid:
             extra.append(f"🛠️ <#{admin_tid}>")
-        if tribe_tid:
-            extra.append(f"🗡️ <#{tribe_tid}>")
         tail = f" · {' · '.join(extra)}" if extra else ""
         return bot_i18n.t(guild.id, "server_logs_forum_ready", forum=forum.mention,
                           join=join_tid, leave=leave_tid) + tail, None
@@ -463,7 +450,7 @@ class CustomCommands(commands.Cog):
         if not chat_tid:
             return None, "game-chat: " + bot_i18n.t(guild.id, "forum_error", error="thread failed")
         cfg = guild_settings.get_server_log_config(guild.id)
-        admin_tid, tribe_tid = await self._ensure_special_log_threads(guild)
+        admin_tid = await self._ensure_special_log_threads(guild)
         guild_settings.update_server_log_config(guild.id, enabled=True,
                                                 server_forum_id=forum.id,
                                                 join_thread_id=join_tid or cfg.get("join_thread_id"),
@@ -471,14 +458,11 @@ class CustomCommands(commands.Cog):
                                                 chat_forum_id=forum.id,
                                                 chat_thread_id=chat_tid,
                                                 admin_thread_id=admin_tid or cfg.get("admin_thread_id"),
-                                                tribe_thread_id=tribe_tid or cfg.get("tribe_thread_id"),
                                                 server_events_thread_id=cfg.get("server_events_thread_id"))
         guild_settings.update_chat_bridge_config(guild.id, enabled=True)
         extra = []
         if admin_tid:
             extra.append(f"🛠️ <#{admin_tid}>")
-        if tribe_tid:
-            extra.append(f"🗡️ <#{tribe_tid}>")
         tail = f" · {' · '.join(extra)}" if extra else ""
         return bot_i18n.t(guild.id, "chat_forum_ready", forum=forum.mention, thread=f"<#{chat_tid}>") + tail, None
 
