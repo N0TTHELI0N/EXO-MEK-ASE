@@ -1823,6 +1823,22 @@ def mark_chat_forum_posted(log_id: int):
         conn.close()
 
 
+def mark_chat_forum_posted_batch(guild_id: int, log_ids: list[int]):
+    """Drop stale queued chat-log rows in one UPDATE (backlog cleanup)."""
+    if not log_ids:
+        return
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE chat_logs SET posted_chat_forum = TRUE WHERE guild_id = %s AND id = ANY(%s)",
+                (guild_id, log_ids),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 # ============================================================
 #  CHAT AUTO-DETECTION RULES (word -> auto punishment)
 # ============================================================

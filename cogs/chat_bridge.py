@@ -470,10 +470,20 @@ class ChatBridge(commands.Cog):
                 except Exception:
                     pass
             # Forward to the one-way log channel (capped at 15/tick, rate-guarded).
+            # If the target is the same thread the server_logs forum posts to,
+            # skip it — the forum post is the canonical copy (else each line is
+            # sent twice to the same thread).
+            try:
+                slcfg = guild_settings.get_server_log_config(guild.id) or {}
+            except Exception:
+                slcfg = {}
+            forum_chat_tid = int(slcfg.get("chat_thread_id") or 0)
             posts_this_tick = 0
             for post in posts:
                 target = self._resolve_target(guild, cfg, post)
                 if target is None:
+                    continue
+                if forum_chat_tid and isinstance(target, discord.Thread) and target.id == forum_chat_tid:
                     continue
                 if posts_this_tick >= 15:
                     break

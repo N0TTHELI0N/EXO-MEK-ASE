@@ -161,7 +161,16 @@ class ServerLogs(commands.Cog):
 
             if isinstance(chat_thread, discord.Thread):
                 posts = 0
+                nowc = time.time()
+                stale = []
                 for log in plan["chats"]:
+                    # Old backlog (queued for hours/days) is dropped, not replayed:
+                    # replaying it floods the chat thread with stale posts.
+                    rel = log.get("relayed_at")
+                    age = (nowc - rel.timestamp()) if getattr(rel, "timestamp", None) else -1
+                    if age > 300:
+                        stale.append(log["id"])
+                        continue
                     if posts >= 15:
                         break
                     player = log["player_name"] or "?"
@@ -175,6 +184,11 @@ class ServerLogs(commands.Cog):
                         posts += 1
                     except Exception:
                         break
+                if stale:
+                    try:
+                        await asyncio.to_thread(guild_settings.mark_chat_forum_posted_batch, guild.id, stale)
+                    except Exception:
+                        pass
 
     @post_server_logs.before_loop
     async def before_post_server_logs(self):
