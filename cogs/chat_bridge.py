@@ -157,6 +157,7 @@ class ChatBridge(commands.Cog):
         self._auto_service_ts = {}
         self._hb_ts = {}
         self._empty_ts = {}
+        self.chat_monitor.start()
 
     # ── helpers ──────────────────────────────────────────────
 
