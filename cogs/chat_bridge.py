@@ -199,7 +199,7 @@ class ChatBridge(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
-        print("[ChatBridge] build=7a1c9e4", flush=True)
+        print("[ChatBridge] build=c217e83", flush=True)
         self.seen_lines = {}
         # avoid re-forwarding our own ServerChatMessage echoes
         self._echo_guard = deque(maxlen=200)
