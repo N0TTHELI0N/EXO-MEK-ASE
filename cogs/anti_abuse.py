@@ -55,51 +55,62 @@ class AntiAbuse(commands.Cog):
         self.ip_monitor.cancel()
 
     # ── Background: harvest IPs from ARK server logs ──────────
+    def _ip_cycle_sync(self, guild):
+        """Synchronous worker thread: Nitrado reads + Postgres writes only."""
+        if not guild_settings.get_bool_setting(guild.id, "anti_abuse_ip_auto", False):
+            return None
+        client = nitrado.get_client(guild.id)
+        if client is None:
+            return None
+        try:
+            raw = client.get_logs(300)
+        except Exception:
+            return None
+        lines = (raw or "").splitlines()
+        last = self._last_log_pos.get(guild.id)
+        start = 0
+        if last is not None:
+            try:
+                start = lines.index(last) + 1
+            except ValueError:
+                start = 0
+        new_lines = lines[start:]
+        if lines:
+            self._last_log_pos[guild.id] = lines[-1].strip()
+
+        alts = []
+        for line in new_lines:
+            text = (line or "").strip()
+            low = text.lower()
+            if not any(m in low for m in _JOIN_MARKERS):
+                continue
+            match = _IP_RE.search(text)
+            if not match:
+                continue
+            ip = match.group(1)
+            player = self._guess_player(text)
+            if not player:
+                continue
+            guild_settings.add_ip_record(guild.id, player, ip, source="log")
+            for alt in guild_settings.find_alts(guild.id, player):
+                if alt != player:
+                    alts.append((player, ip, alt))
+        return alts
+
     @tasks.loop(seconds=IP_PARSE_INTERVAL)
     async def ip_monitor(self):
         for guild in self.bot.guilds:
-            if not guild_settings.get_bool_setting(guild.id, "anti_abuse_ip_auto", False):
-                continue
-            client = nitrado.get_client(guild.id)
-            if client is None:
-                continue
             try:
-                raw = await _asyncio_to_thread(client.get_logs, 300)
+                alts = await _asyncio_to_thread(self._ip_cycle_sync, guild)
             except Exception:
                 continue
-            lines = (raw or "").splitlines()
-            # Only process newly-seen lines (naive cursor).
-            last = self._last_log_pos.get(guild.id)
-            start = 0
-            if last is not None:
+            if not alts:
+                continue
+            for player, ip, alt in alts:
                 try:
-                    start = lines.index(last) + 1
-                except ValueError:
-                    start = 0
-            new_lines = lines[start:]
-            if lines:
-                self._last_log_pos[guild.id] = lines[-1].strip()
-
-            for line in new_lines:
-                text = (line or "").strip()
-                low = text.lower()
-                if not any(m in low for m in _JOIN_MARKERS):
+                    await self._notify_alt(guild, player, ip, alt)
+                except Exception:
                     continue
-                match = _IP_RE.search(text)
-                if not match:
-                    continue
-                ip = match.group(1)
-                # Try to extract a player-ish name from the same line.
-                player = self._guess_player(text)
-                if not player:
-                    continue
-                guild_settings.add_ip_record(guild.id, player, ip, source="log")
-                # Auto alt-detection: check whether this IP is already linked to a
-                # different tracked player. If so, this looks like an alt joining.
-                alts = guild_settings.find_alts(guild.id, player)
-                for alt in alts:
-                    if alt != player:
-                        await self._notify_alt(guild, player, ip, alt)
 
     async def _notify_alt(self, guild, player, ip, alt):
         """Push an alt-account alert to the configured anti-abuse log channel."""

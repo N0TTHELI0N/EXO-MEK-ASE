@@ -40,6 +40,13 @@ def _mark_429(reason: str = ""):
     _nitrado_cooldown_until = time.monotonic() + 180.0
 
 
+# Broken-seek marker shared across ALL NitradoClient instances. get_client()
+# used to hand out a fresh instance every call, so an instance-local marker
+# (and an instance-local log-path discovery timestamp) reset every call and
+# caused the seek HTTP 500 + full 12-path probe to repeat every tick.
+_SEEK_BROKEN = {}
+
+
 def _log_error_once(status, endpoint, body):
     """Log a Nitrado error at most once per (status, endpoint) window (process-wide)."""
     import time as _t
@@ -369,7 +376,8 @@ class NitradoClient:
             _mark_429(str(resp.status_code))
             return ""
         if resp.status_code != 200:
-            self._seek_broken[file] = time.time()  # skip seek for a while
+            _SEEK_BROKEN[file] = time.time()  # skip seek for a while
+            self._seek_broken[file] = time.time()
             if not getattr(self, "_seek_printed", False):
                 self._seek_printed = True
                 print(f"[nitrado-fs] seek HTTP={resp.status_code} file={file!r} body={resp.text[:150]!r}", flush=True)
@@ -502,7 +510,8 @@ class NitradoClient:
         rate-limit cooldown is active (not a failure).
         """
         tail = ""
-        if time.time() - self._seek_broken.get(file, 0) >= 300:
+        broken = _SEEK_BROKEN.get(file, self._seek_broken.get(file, 0.0))
+        if time.time() - broken >= 300:
             tail = self.seek_tail(file, tail_bytes)
             if tail is None:
                 return None
@@ -1172,6 +1181,10 @@ class NitradoClient:
 _heal_cache: dict[int, float] = {}
 _HEAL_TTL = 300.0
 _HEAL_BAD_STATUS = {"suspended", "decommissioned", "deleted", "closed"}
+# guild_id -> (NitradoClient, created_monotonic). Reusing the instance keeps its
+# per-client log-path / seek-broken / gameserver caches alive between calls.
+_client_cache: dict[int, tuple] = {}
+_CLIENT_TTL = 300.0
 
 
 def _extract_gameserver_status(code, body) -> str:
@@ -1234,6 +1247,12 @@ def _ark_services_for_token(token: str, max_probes: int = 12) -> list[dict]:
 def get_client(guild_id: int) -> NitradoClient | None:
     """Get a Nitrado client for a guild. Returns None if not configured.
 
+    The client is CACHED per guild for 5 minutes. Its instance caches
+    (_fs_discover_ts log-path discovery, _seek_broken tips, _gs_cached server
+    status) were being wiped on every call because each call built a fresh
+    instance — that made chat_monitor re-run a 12-path file_server probe and a
+    full 1 MB log download every tick. Reusing one client fixes that flood.
+
     Self-heals: at most once every 5 minutes it re-checks the active service's
     gameserver status; if the service is suspended/decommissioned or the
     endpoint is erroring, it promotes a healthy ARK service under the same
@@ -1243,8 +1262,14 @@ def get_client(guild_id: int) -> NitradoClient | None:
     token = config.get("api_token")
     service_id = config.get("service_id")
     if not token or not service_id:
+        _client_cache.pop(guild_id, None)
         return None
     now = time.time()
+    cached = _client_cache.get(guild_id)
+    if cached and now - cached[1] < _CLIENT_TTL:
+        c = cached[0]
+        if c.api_token == token and str(c.service_id) == str(service_id):
+            return c
     last = _heal_cache.get(guild_id, 0.0)
     if now - last >= _HEAL_TTL:
         _heal_cache[guild_id] = now
@@ -1267,6 +1292,8 @@ def get_client(guild_id: int) -> NitradoClient | None:
                 print(f"[nitrado] guild={guild_id} active service {service_id} unhealthy; no healthy ARK service under this token", flush=True)
     client = NitradoClient(token, service_id)
     client.guild_id = guild_id
+    _heal_cache[guild_id] = now
+    _client_cache[guild_id] = (client, time.time())
     return client
 
 

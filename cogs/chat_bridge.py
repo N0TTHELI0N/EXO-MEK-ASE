@@ -232,83 +232,111 @@ class ChatBridge(commands.Cog):
         return False
 
     # ── background monitor: game -> Discord/log ─────────────
+    #
+    # All of the blocking work (Nitrado HTTP + Postgres reads/writes) runs in a
+    # worker thread via asyncio_to_thread; only the Discord sends stay on the
+    # event loop. Running this synchronously on the loop stalled the gateway
+    # heartbeat for 10-30s and caused "The application did not respond".
+    def _monitor_cycle_sync(self, guild):
+        cfg = guild_settings.get_chat_bridge_config(guild.id)
+        if not cfg or cfg.get("enabled") is False:
+            return None
+        client = nitrado.get_client(guild.id)
+        if client is None:
+            return None
+        try:
+            raw = client.get_logs(400)
+        except Exception:
+            raw = None
+        if not raw:
+            sid = self._pick_auto_service(guild.id)
+            if sid is not None and str(sid) != str(client.service_id):
+                client = nitrado.NitradoClient(client.api_token, sid)
+                try:
+                    raw = client.get_logs(400)
+                except Exception:
+                    raw = None
+        if not raw:
+            now_empty = time.time()
+            if guild.id not in self._empty_ts or now_empty - self._empty_ts[guild.id] >= 60:
+                self._empty_ts[guild.id] = now_empty
+                print(f"[ChatBridge] guild={guild.id} service={client.service_id} NO_LOG_DATA (file + latest_log empty)", flush=True)
+            return None
+        now5 = time.time()
+        if guild.id not in self._hb_ts or now5 - self._hb_ts[guild.id] >= 300:
+            self._hb_ts[guild.id] = now5
+            print(f"[ChatBridge] guild={guild.id} service={client.service_id} log_lines={len(raw.splitlines())}", flush=True)
+        lines = (raw or "").splitlines()
+        # First run: just remember the latest line so we only capture NEW chat.
+        if guild.id not in self.seen_lines:
+            if lines:
+                self.seen_lines[guild.id] = lines[-1].strip()
+            return None
+        posts = []
+        for line in lines:
+            text = (line or "").strip()
+            if not text:
+                continue
+            if not self._is_new_line(guild.id, text):
+                continue
+            joined = _detect_join_leave(text)
+            if joined:
+                guild_settings.add_server_event(guild.id, joined[0], joined[1], text)
+                continue
+            parsed = _parse_chat_line(text)
+            if not parsed:
+                cmd_detect = _detect_console_command(text)
+                if cmd_detect:
+                    cmd, cat = cmd_detect
+                    guild_settings.log_action(
+                        guild.id, "admin_command", None, "Server Console", None,
+                        command=cmd, sub_type="console",
+                        details={"command": cmd, "source": "game console"},
+                        log_category=cat,
+                    )
+                continue
+            channel, player, message = parsed
+            if self._is_echo(channel, player, message):
+                continue
+            guild_settings.add_chat_log(
+                guild.id, channel, player, message,
+                tribe_name=player, raw_line=text, direction="in",
+            )
+            posts.append({"channel": channel, "player": player, "message": message})
+        return {"cfg": cfg, "posts": posts}
+
+    @staticmethod
+    def _resolve_target(guild, cfg, post):
+        relay_channel = guild.get_channel(cfg.get("relay_channel_id") or 0)
+        log_channel = guild.get_channel(cfg.get("log_channel_id") or 0)
+        if cfg.get("relay_out") and isinstance(relay_channel, discord.TextChannel):
+            return relay_channel
+        if isinstance(log_channel, discord.TextChannel):
+            return log_channel
+        return None
+
     @tasks.loop(seconds=CHAT_BRIDGE_INTERVAL_SECONDS)
     async def chat_monitor(self):
-        import discord as _d
         for guild in self.bot.guilds:
-            cfg = guild_settings.get_chat_bridge_config(guild.id)
-            if not cfg or cfg.get("enabled") is False:
-                continue
-            client = nitrado.get_client(guild.id)
-            if client is None:
-                continue
             try:
-                raw = await asyncio_to_thread(client.get_logs, 400)
-            except Exception:
-                raw = None
-            if not raw:
-                sid = self._pick_auto_service(guild.id)
-                if sid is not None and str(sid) != str(client.service_id):
-                    client = nitrado.NitradoClient(client.api_token, sid)
-                    try:
-                        raw = await asyncio_to_thread(client.get_logs, 400)
-                    except Exception:
-                        raw = None
-            if not raw:
-                now_empty = time.time()
-                if guild.id not in self._empty_ts or now_empty - self._empty_ts[guild.id] >= 60:
-                    self._empty_ts[guild.id] = now_empty
-                    print(f"[ChatBridge] guild={guild.id} service={client.service_id} NO_LOG_DATA (file + latest_log empty)", flush=True)
+                plan = await asyncio_to_thread(self._monitor_cycle_sync, guild)
+            except Exception as e:
+                print(f"[ChatBridge] guild={guild.id} monitor error: {type(e).__name__}: {e}", flush=True)
                 continue
-            now5 = time.time()
-            if guild.id not in self._hb_ts or now5 - self._hb_ts[guild.id] >= 300:
-                self._hb_ts[guild.id] = now5
-                print(f"[ChatBridge] guild={guild.id} service={client.service_id} log_lines={len(raw.splitlines())}", flush=True)
-            lines = (raw or "").splitlines()
-            # First run: just remember the latest line so we only capture NEW chat.
-            if guild.id not in self.seen_lines:
-                if lines:
-                    self.seen_lines[guild.id] = lines[-1].strip()
+            if not plan:
                 continue
-            log_channel = guild.get_channel(cfg.get("log_channel_id") or 0)
-            relay_channel = guild.get_channel(cfg.get("relay_channel_id") or 0)
+            cfg = plan["cfg"]
+            posts = plan["posts"]
+            # Auto-detection runs for every parsed chat line (unchanged).
+            for post in posts:
+                try:
+                    await self._check_auto_rules(guild.id, post["player"], post["message"])
+                except Exception:
+                    pass
+            # Forward to the one-way log channel (capped at 15/tick, rate-guarded).
             posts_this_tick = 0
-            for line in lines:
-                text = (line or "").strip()
-                if not text:
-                    continue
-                if not self._is_new_line(guild.id, text):
-                    continue
-                joined = _detect_join_leave(text)
-                if joined:
-                    guild_settings.add_server_event(guild.id, joined[0], joined[1], text)
-                    continue
-                parsed = _parse_chat_line(text)
-                if not parsed:
-                    cmd_detect = _detect_console_command(text)
-                    if cmd_detect:
-                        cmd, cat = cmd_detect
-                        guild_settings.log_action(
-                            guild.id, "admin_command", None, "Server Console", None,
-                            command=cmd, sub_type="console",
-                            details={"command": cmd, "source": "game console"},
-                            log_category=cat,
-                        )
-                    continue
-                channel, player, message = parsed
-                if self._is_echo(channel, player, message):
-                    continue
-                guild_settings.add_chat_log(
-                    guild.id, channel, player, message,
-                    tribe_name=player, raw_line=text, direction="in",
-                )
-                await self._check_auto_rules(guild.id, player, message)
-                # forward to one-way log channel
-                target = None
-                if cfg.get("relay_out") and isinstance(relay_channel, _d.TextChannel):
-                    target = relay_channel
-                elif isinstance(log_channel, _d.TextChannel):
-                    target = log_channel
+            for post in posts:
+                target = self._resolve_target(guild, cfg, post)
                 if target is None:
                     continue
                 if posts_this_tick >= 15:
@@ -318,7 +346,7 @@ class ChatBridge(commands.Cog):
                 self._post_guard.append((1, time.time()))
                 try:
                     await target.send(
-                        bot_i18n.t(guild.id, "chat_forward_line", channel=channel, player=player, message=message[:1900])
+                        bot_i18n.t(guild.id, "chat_forward_line", channel=post["channel"], player=post["player"], message=post["message"][:1900])
                     )
                     posts_this_tick += 1
                 except Exception:

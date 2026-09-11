@@ -69,18 +69,30 @@ def _cache_drop(cache, key):
 # ---------------------------------------------------------------------------
 
 _pool_lock = _threading.Lock()
+_pool_cond = _threading.Condition(_pool_lock)
 _pool_idle = []            # list of (raw connection, monotonic time)
+_pool_open = 0             # total live connections (idle + borrowed)
 _POOL_MAX_IDLE = 4
+_POOL_MAX_OPEN = 8
+_POOL_WAIT_S = 6.0
 
 
-def _pool_trim():
+def _pool_trim_locked():
+    global _pool_open
     _pool_idle[:] = [(c, ts) for c, ts in _pool_idle if not c.closed]
     while len(_pool_idle) > _POOL_MAX_IDLE:
         c, _ = _pool_idle.pop(0)
+        _pool_open -= 1
         try:
             c.close()
         except Exception:
             pass
+
+
+def _pool_dec():
+    global _pool_open
+    with _pool_lock:
+        _pool_open = max(0, _pool_open - 1)
 
 
 class _PooledConnection:
@@ -102,10 +114,12 @@ class _PooledConnection:
                 raw.close()
             except Exception:
                 pass
+            _pool_dec()
             return
         with _pool_lock:
             _pool_idle.append((raw, _clock.monotonic()))
-            _pool_trim()
+            _pool_trim_locked()
+        _pool_cond.notify()
 
     def __enter__(self):
         return self
@@ -126,24 +140,42 @@ class _PooledConnection:
 
 
 def get_conn():
+    global _pool_open
     if not DATABASE_URL:
         raise RuntimeError("DATABASE_URL not set")
+    start = _clock.monotonic()
     raw = None
-    with _pool_lock:
+    with _pool_cond:
+        while not _pool_idle and _pool_open >= _POOL_MAX_OPEN \
+                and _clock.monotonic() - start < _POOL_WAIT_S:
+            _pool_cond.wait(0.2)
         if _pool_idle:
             raw = _pool_idle.pop()[0]
-            _pool_trim()
+            _pool_trim_locked()
+        else:
+            # After the wait a new connection is opened even past the soft cap
+            # so a leaked connection can never wedge the pool permanently.
+            _pool_open += 1
     if raw is None or raw.closed:
+        if raw is not None and raw.closed:
+            with _pool_lock:
+                _pool_open = max(0, _pool_open - 1)
+            raw = None
         # Short connect timeout so an unreachable Postgres can't hang startup/requests
         # (this was causing Render "Port scan timeout" deploys).
-        raw = psycopg2.connect(
-            DATABASE_URL, connect_timeout=5,
-            keepalives=1, keepalives_idle=120, keepalives_interval=30, keepalives_count=4,
-        )
+        try:
+            raw = psycopg2.connect(
+                DATABASE_URL, connect_timeout=5,
+                keepalives=1, keepalives_idle=120, keepalives_interval=30, keepalives_count=4,
+            )
+        except Exception:
+            _pool_dec()
+            raise
     return _PooledConnection(raw)
 
 
 def _close_all_pool():
+    global _pool_open
     with _pool_lock:
         for c, _ in _pool_idle:
             try:
@@ -151,6 +183,7 @@ def _close_all_pool():
             except Exception:
                 pass
         _pool_idle.clear()
+        _pool_open = 0
 
 
 def _encrypt(value: str) -> str:

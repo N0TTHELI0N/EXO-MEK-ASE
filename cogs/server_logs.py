@@ -32,60 +32,76 @@ class ServerLogs(commands.Cog):
 
     # ── background poster ────────────────────────────────────
 
+    def _server_logs_cycle_sync(self, guild) -> dict | None:
+        """Sync worker thread: Postgres reads + self-heal only (no Discord I/O)."""
+        cfg = guild_settings.get_server_log_config(guild.id)
+        if not cfg or cfg.get("enabled") is False:
+            return None
+        # Self-heal: a "server-logs" forum exists but its thread ids are not
+        # saved yet (e.g. no /setup-logs run on this build). Resolve them now.
+        if not (cfg.get("join_thread_id") or cfg.get("leave_thread_id") or cfg.get("chat_thread_id")):
+            forum = guild.get_channel(cfg.get("server_forum_id") or 0)
+            if not isinstance(forum, discord.ForumChannel):
+                forum = discord.utils.get(guild.channels, name="server-logs")
+            if isinstance(forum, discord.ForumChannel):
+                ids = {}
+                for t in forum.threads:
+                    if "دخول" in t.name:
+                        ids["join_thread_id"] = t.id
+                    elif "خروج" in t.name:
+                        ids["leave_thread_id"] = t.id
+                    elif "شات" in t.name or "chat" in t.name.lower():
+                        ids["chat_thread_id"] = t.id
+                if ids:
+                    ids["server_forum_id"] = forum.id
+                    guild_settings.update_server_log_config(guild.id, **ids)
+                    cfg = guild_settings.get_server_log_config(guild.id)
+        return {
+            "cfg": cfg,
+            "joins": guild_settings.get_unposted_server_events(guild.id, event_type="join"),
+            "leaves": guild_settings.get_unposted_server_events(guild.id, event_type="leave"),
+            "chats": guild_settings.get_unposted_chat_forum_logs(guild.id),
+        }
+
     @tasks.loop(seconds=15)
     async def post_server_logs(self):
         for guild in self.bot.guilds:
-            cfg = guild_settings.get_server_log_config(guild.id)
-            if not cfg or cfg.get("enabled") is False:
+            try:
+                plan = await asyncio.to_thread(self._server_logs_cycle_sync, guild)
+            except Exception:
                 continue
-            # Self-heal: a "server-logs" forum exists but its thread ids are not
-            # saved yet (e.g. no /setup-logs run on this build). Resolve them now.
-            if not (cfg.get("join_thread_id") or cfg.get("leave_thread_id") or cfg.get("chat_thread_id")):
-                forum = guild.get_channel(cfg.get("server_forum_id") or 0)
-                if not isinstance(forum, discord.ForumChannel):
-                    forum = discord.utils.get(guild.channels, name="server-logs")
-                if isinstance(forum, discord.ForumChannel):
-                    ids = {}
-                    for t in forum.threads:
-                        if "دخول" in t.name:
-                            ids["join_thread_id"] = t.id
-                        elif "خروج" in t.name:
-                            ids["leave_thread_id"] = t.id
-                        elif "شات" in t.name or "chat" in t.name.lower():
-                            ids["chat_thread_id"] = t.id
-                    if ids:
-                        ids["server_forum_id"] = forum.id
-                        guild_settings.update_server_log_config(guild.id, **ids)
-                        cfg = guild_settings.get_server_log_config(guild.id)
+            if not plan:
+                continue
+            cfg = plan["cfg"]
             join_thread = guild.get_thread(cfg.get("join_thread_id") or cfg.get("server_events_thread_id")) if cfg.get("join_thread_id") or cfg.get("server_events_thread_id") else None
             leave_thread = guild.get_thread(cfg.get("leave_thread_id") or cfg.get("server_events_thread_id")) if cfg.get("leave_thread_id") or cfg.get("server_events_thread_id") else None
             chat_thread = guild.get_thread(cfg.get("chat_thread_id")) if cfg.get("chat_thread_id") else None
 
             if isinstance(join_thread, discord.Thread):
-                for ev in guild_settings.get_unposted_server_events(guild.id, event_type="join"):
+                for ev in plan["joins"]:
                     name = ev["player_name"] or "?"
                     ts = int(ev["created_at"].timestamp()) if getattr(ev["created_at"], "timestamp", None) else None
                     ts_part = f" · <t:{ts}:f>" if ts else ""
                     try:
                         await join_thread.send(f"🟢 **{name}** — {bot_i18n.t(guild.id, 'server_event_join')}{ts_part}")
-                        guild_settings.mark_server_event_posted(ev["id"])
+                        await asyncio.to_thread(guild_settings.mark_server_event_posted, ev["id"])
                     except Exception:
                         break
 
             if isinstance(leave_thread, discord.Thread):
-                for ev in guild_settings.get_unposted_server_events(guild.id, event_type="leave"):
+                for ev in plan["leaves"]:
                     name = ev["player_name"] or "?"
                     ts = int(ev["created_at"].timestamp()) if getattr(ev["created_at"], "timestamp", None) else None
                     ts_part = f" · <t:{ts}:f>" if ts else ""
                     try:
                         await leave_thread.send(f"🔴 **{name}** — {bot_i18n.t(guild.id, 'server_event_leave')}{ts_part}")
-                        guild_settings.mark_server_event_posted(ev["id"])
+                        await asyncio.to_thread(guild_settings.mark_server_event_posted, ev["id"])
                     except Exception:
                         break
 
             if isinstance(chat_thread, discord.Thread):
                 posts = 0
-                for log in guild_settings.get_unposted_chat_forum_logs(guild.id):
+                for log in plan["chats"]:
                     if posts >= 15:
                         break
                     player = log["player_name"] or "?"
@@ -93,7 +109,7 @@ class ServerLogs(commands.Cog):
                     channel = (log["channel"] or "global").replace("[", "").replace("]", "")
                     try:
                         await chat_thread.send(f"{icon} `{channel}` **{player}**: {log['message'][:1900]}")
-                        guild_settings.mark_chat_forum_posted(log["id"])
+                        await asyncio.to_thread(guild_settings.mark_chat_forum_posted, log["id"])
                         posts += 1
                     except Exception:
                         break

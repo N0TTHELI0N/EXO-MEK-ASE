@@ -108,11 +108,18 @@ class CustomCommands(commands.Cog):
     async def post_forum_logs(self):
         for guild in self.bot.guilds:
             # Admin-log forum (command categories).
-            cfg = guild_settings.get_forum_log_config(guild.id)
+            try:
+                cfg = await asyncio.to_thread(guild_settings.get_forum_log_config, guild.id)
+            except Exception:
+                cfg = None
             if cfg and cfg["forum_id"]:
                 forum = guild.get_channel(cfg["forum_id"])
                 if forum:
-                    for entry in guild_settings.get_unposted_forum_logs(guild.id):
+                    try:
+                        entries = await asyncio.to_thread(guild_settings.get_unposted_forum_logs, guild.id)
+                    except Exception:
+                        entries = []
+                    for entry in entries:
                         cat = entry.get("log_category") or "other"
                         meta = CATEGORY_META.get(cat, CATEGORY_META["other"])
                         thread_id = cfg.get(meta["thread"])
@@ -122,15 +129,22 @@ class CustomCommands(commands.Cog):
                         try:
                             embed = await self._log_forum_message(guild.id, entry)
                             await target.send(embed=embed)
-                            guild_settings.mark_log_posted(entry["id"])
+                            await asyncio.to_thread(guild_settings.mark_log_posted, entry["id"])
                         except Exception:
                             continue
             # Shop forum (done / pending deliveries)
-            scfg = guild_settings.get_shop_forum_config(guild.id)
+            try:
+                scfg = await asyncio.to_thread(guild_settings.get_shop_forum_config, guild.id)
+            except Exception:
+                scfg = None
             if scfg and scfg["forum_id"]:
                 forum = guild.get_channel(scfg["forum_id"])
                 if forum:
-                    for entry in guild_settings.get_unposted_shop_logs(guild.id):
+                    try:
+                        entries = await asyncio.to_thread(guild_settings.get_unposted_shop_logs, guild.id)
+                    except Exception:
+                        entries = []
+                    for entry in entries:
                         sub = entry.get("sub_type")
                         thread_key = "thread_pending" if sub == "purchase_pending" else "thread_done"
                         thread_id = scfg.get(thread_key)
@@ -140,7 +154,7 @@ class CustomCommands(commands.Cog):
                         try:
                             embed = await self._shop_forum_message(guild.id, entry)
                             await target.send(embed=embed)
-                            guild_settings.mark_shop_log_posted(entry["id"])
+                            await asyncio.to_thread(guild_settings.mark_shop_log_posted, entry["id"])
                         except Exception:
                             continue
 
