@@ -125,9 +125,11 @@ class NitradoClient:
         }
         self._log_fail_ts = {}
         self._gs_cached = None
-        self._probe_next_idx = {"ShooterGame_Last.log": 0, "ShooterGame.log": 0}
+        self._probe_next_idx = {"ShooterGame.log": 0, "ShooterGame_Last.log": 0}
         self._sftp_fail_ts = 0.0
         self._seek_broken = {}
+        self._tail_sigs = {}
+        self._tail_same = {}
 
     def _extract_token_url(self, payload) -> tuple[str, str]:
         """Pull (token, url) from a file_server response payload.
@@ -626,7 +628,10 @@ class NitradoClient:
     def _get_log_file_text(self, lines: int, tail_bytes: int = 320000) -> str:
         now = time.time()
         backoff = 300  # seconds after a full probe round
-        for filename in ("ShooterGame_Last.log", "ShooterGame.log"):
+        # Try the LIVE log (ShooterGame.log) first: on ARK ASE, _Last.log is the
+        # previous session and stays frozen forever. If a file's tail is identical
+        # on several polls it's stale/rotated, so we advance to the next candidate.
+        for filename in ("ShooterGame.log", "ShooterGame_Last.log"):
             last = self._log_fail_ts.get(filename)
             if last and now - last < backoff:
                 continue
@@ -645,6 +650,21 @@ class NitradoClient:
             if text is None:
                 return ""  # a cooldown is active — stay quiet this tick
             if text:
+                sig = text[-96:]
+                if self._tail_sigs.get(filename) == sig:
+                    same = self._tail_same.get(filename, 0) + 1
+                    self._tail_same[filename] = same
+                    if same >= 3:
+                        self._tail_same[filename] = 0
+                        self._tail_sigs.pop(filename, None)
+                        self._probe_next_idx[filename] = 0
+                        self._log_fail_ts[filename] = now
+                        if _log_path_should_print():
+                            print(f"[nitrado-fs] log file {path!r} is FROZEN (identical tail on {same} polls) - switching candidate", flush=True)
+                        continue
+                else:
+                    self._tail_same[filename] = 0
+                self._tail_sigs[filename] = sig
                 self._probe_next_idx[filename] = 0
                 self._log_fail_ts.pop(filename, None)
                 if _log_path_should_print():

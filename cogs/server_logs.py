@@ -46,7 +46,7 @@ class ServerLogs(commands.Cog):
         self.bot = bot
         self._diag_ts = {}
         self._posted_ts = {}
-        print("[ServerLogs] build=9f22e26", flush=True)
+        print("[ServerLogs] build=3f619b2", flush=True)
         self.post_server_logs.start()
 
     def cog_unload(self):

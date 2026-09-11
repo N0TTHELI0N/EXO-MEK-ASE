@@ -1,5 +1,6 @@
 import re
 import time
+import hashlib
 from collections import deque
 from datetime import datetime, timezone, timedelta
 
@@ -198,7 +199,7 @@ class ChatBridge(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
-        print("[ChatBridge] build=9f22e26", flush=True)
+        print("[ChatBridge] build=3f619b2", flush=True)
         self.seen_lines = {}
         # avoid re-forwarding our own ServerChatMessage echoes
         self._echo_guard = deque(maxlen=200)
@@ -376,7 +377,8 @@ class ChatBridge(commands.Cog):
         now5 = time.time()
         if guild.id not in self._hb_ts or now5 - self._hb_ts[guild.id] >= 300:
             self._hb_ts[guild.id] = now5
-            print(f"[ChatBridge] guild={guild.id} service={client.service_id} log_lines={len(raw.splitlines())}", flush=True)
+            tsig = hashlib.sha1((raw or "").encode("utf-8", "ignore")).hexdigest()[:8]
+            print(f"[ChatBridge] guild={guild.id} service={client.service_id} log_lines={len(raw.splitlines())} tail_sig={tsig}", flush=True)
         lines = [(l or "").strip() for l in (raw or "").splitlines()]
         posts = []
         stats = {"join": 0, "leave": 0, "admin": 0, "tribe": 0, "chat": 0, "unparsed": []}
