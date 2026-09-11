@@ -403,6 +403,8 @@ def init_db():
             cur.execute("CREATE INDEX IF NOT EXISTS idx_server_events_guild ON server_events(guild_id, id)")
             cur.execute("ALTER TABLE server_log_config ADD COLUMN IF NOT EXISTS join_thread_id BIGINT")
             cur.execute("ALTER TABLE server_log_config ADD COLUMN IF NOT EXISTS leave_thread_id BIGINT")
+            cur.execute("ALTER TABLE server_log_config ADD COLUMN IF NOT EXISTS admin_thread_id BIGINT")
+            cur.execute("ALTER TABLE server_log_config ADD COLUMN IF NOT EXISTS tribe_thread_id BIGINT")
             cur.execute("ALTER TABLE forum_log_config ADD COLUMN IF NOT EXISTS thread_other BIGINT")
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS chat_auto_rules (
@@ -1689,7 +1691,7 @@ def get_server_log_config(guild_id: int) -> dict:
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT enabled, server_forum_id, server_events_thread_id, chat_forum_id, chat_thread_id, "
-                "join_thread_id, leave_thread_id "
+                "join_thread_id, leave_thread_id, admin_thread_id, tribe_thread_id "
                 "FROM server_log_config WHERE guild_id = %s",
                 (guild_id,),
             )
@@ -1703,6 +1705,8 @@ def get_server_log_config(guild_id: int) -> dict:
                     "chat_thread_id": row[4],
                     "join_thread_id": row[5],
                     "leave_thread_id": row[6],
+                    "admin_thread_id": row[7],
+                    "tribe_thread_id": row[8],
                 }
             return {
                 "enabled": True,
@@ -1712,6 +1716,8 @@ def get_server_log_config(guild_id: int) -> dict:
                 "chat_thread_id": None,
                 "join_thread_id": None,
                 "leave_thread_id": None,
+                "admin_thread_id": None,
+                "tribe_thread_id": None,
             }
     finally:
         conn.close()
@@ -1719,7 +1725,7 @@ def get_server_log_config(guild_id: int) -> dict:
 
 def update_server_log_config(guild_id: int, **kwargs):
     allowed = {"enabled", "server_forum_id", "server_events_thread_id", "chat_forum_id",
-               "chat_thread_id", "join_thread_id", "leave_thread_id"}
+               "chat_thread_id", "join_thread_id", "leave_thread_id", "admin_thread_id", "tribe_thread_id"}
     conn = get_conn()
     try:
         with conn.cursor() as cur:

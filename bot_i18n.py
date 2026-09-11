@@ -1198,6 +1198,30 @@ STRINGS = {
         "ar": "🔴 خروج",
         "en": "🔴 Leaves",
     },
+    "server_logs_thread_admin": {
+        "ar": "🛠️ لوقات الإدارة",
+        "en": "🛠️ Admin Events",
+    },
+    "server_logs_thread_tribe": {
+        "ar": "🗡️ أحداث القبائل",
+        "en": "🗡️ Tribe Events",
+    },
+    "server_logs_thread_intro_admin": {
+        "ar": "أوامر وأحداث الإدارة (AdminCmd) من سجل اللعبة.",
+        "en": "Admin commands and events (AdminCmd) from the game log.",
+    },
+    "server_logs_thread_intro_tribe": {
+        "ar": "أحداث القبائل (قتل/تبيض/لقافة) من سجل اللعبة.",
+        "en": "Tribe events (kills/tames/raids) from the game log.",
+    },
+    "server_log_admin": {
+        "ar": "لوق إدارة",
+        "en": "Admin log",
+    },
+    "server_log_tribe": {
+        "ar": "لوق قبيلة",
+        "en": "Tribe log",
+    },
     "server_logs_forum_ready": {
         "ar": "✅ فوروم سجلات السيرفر جاهز.\nالفوروم: {forum}\nالمواضيع: 🟢 دخول <#{join}> · 🔴 خروج <#{leave}>",
         "en": "✅ Server-logs forum ready.\nForum: {forum}\nThreads: 🟢 Joins <#{join}> · 🔴 Leaves <#{leave}>",

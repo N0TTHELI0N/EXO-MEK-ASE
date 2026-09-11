@@ -79,16 +79,25 @@ _SYS_MARKERS = (
 _LOG_HEADER = re.compile(r"^(?:\[[^\]]*\]\s*)+|^\d{4}[.\-/]\d{2}[.\-/]\d{2}_\d{2}[.\-/]\d{2}[.\-/]\d{2}\s*:\s*", re.I)
 
 
-def _is_system_announcement(text: str) -> bool:
-    """True when the log line is a server/tribe broadcast, not player chat."""
+def _classify_system_line(text: str) -> str | None:
+    """Classify a non-chat log line: 'admin', 'tribe' — or None if it is player chat.
+
+    Admin echoes (AdminCmd → rename/destroy/ban...) go to the admin forum; tribe
+    broadcasts (Tribe timeline, tame/kill/freeze/destroy announcements) go to the
+    tribe forum. Anything else is left to the chat parser.
+    """
     body = _LOG_HEADER.sub("", text or "").strip()
     low = body.lower()
+    if "admincmd" in low:
+        return "admin"
     if _SYS_RICH.search(low) or _SYS_DAILY.search(body):
-        return True
+        return "tribe"
     for m in _SYS_MARKERS:
         if m in low:
-            return True
-    return False
+            return "tribe"
+    if re.search(r"\btribe\b[^:]{0,80}:\s*day\s+\d", body, re.I):
+        return "tribe"
+    return None
 
 
 def _detect_console_command(line: str):
@@ -338,7 +347,7 @@ class ChatBridge(commands.Cog):
             print(f"[ChatBridge] guild={guild.id} service={client.service_id} log_lines={len(raw.splitlines())}", flush=True)
         lines = [(l or "").strip() for l in (raw or "").splitlines()]
         posts = []
-        stats = {"join": 0, "leave": 0, "chat": 0, "system": 0, "unparsed": []}
+        stats = {"join": 0, "leave": 0, "admin": 0, "tribe": 0, "chat": 0, "unparsed": []}
         for text in self._split_new_lines(guild.id, [l for l in lines if l]):
             if not text:
                 continue
@@ -347,8 +356,14 @@ class ChatBridge(commands.Cog):
                 guild_settings.add_server_event(guild.id, joined[0], joined[1], text)
                 stats[joined[0]] += 1
                 continue
-            if _is_system_announcement(text):
-                stats["system"] += 1
+            kind = _classify_system_line(text)
+            if kind in ("admin", "tribe"):
+                guild_settings.add_server_event(
+                    guild.id, kind,
+                    "Server" if kind == "admin" else "Tribe",
+                    text,
+                )
+                stats[kind] += 1
                 continue
             parsed = _parse_chat_line(text)
             if not parsed:
@@ -375,11 +390,11 @@ class ChatBridge(commands.Cog):
             )
             posts.append({"channel": channel, "player": player, "message": message})
             stats["chat"] += 1
-        if stats["join"] or stats["leave"] or stats["unparsed"] or stats["system"]:
+        if stats["join"] or stats["leave"] or stats["admin"] or stats["tribe"] or stats["unparsed"]:
             if guild.id not in self._diag_ts or now5 - self._diag_ts[guild.id] >= 60:
                 self._diag_ts[guild.id] = now5
                 print(
-                    f"[ChatBridge] guild={guild.id} new lines: chat={stats['chat']} join={stats['join']} leave={stats['leave']} sys_skip={stats['system']} unparsed={len(stats['unparsed'])}",
+                    f"[ChatBridge] guild={guild.id} new lines: chat={stats['chat']} join={stats['join']} leave={stats['leave']} admin={stats['admin']} tribe={stats['tribe']} unparsed={len(stats['unparsed'])}",
                     flush=True,
                 )
                 if stats["unparsed"]:

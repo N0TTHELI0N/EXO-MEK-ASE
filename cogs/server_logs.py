@@ -16,11 +16,29 @@ async def _normalize_thread(result):
     return result if isinstance(result, discord.Thread) else None
 
 
+def _find_thread_by_name(forum, keywords) -> int | None:
+    """Return the id of the first forum thread whose name matches any keyword."""
+    if forum is None:
+        return None
+    for t in forum.threads:
+        tn = str(t.name or "").lower()
+        if any(k in tn for k in keywords):
+            return t.id
+    return None
+
+
+def _forum_named(guild, name) -> discord.ForumChannel | None:
+    for ch in guild.channels:
+        if isinstance(ch, discord.ForumChannel) and str(ch.name or "").lower() == name:
+            return ch
+    return None
+
+
 class ServerLogs(commands.Cog):
     """Server-logs forum (player join/leave) + game-chat forum.
 
     Events are captured by cogs/chat_bridge.py from the ARK server log; this
-    cog owns the two forums and posts the queued entries to their threads.
+    cog owns the forums and posts the queued entries to their threads.
     """
 
     def __init__(self, bot):
@@ -40,12 +58,12 @@ class ServerLogs(commands.Cog):
         cfg = dict(cfg or {})
         # Self-heal: some thread ids may be missing (e.g. only "/setup-logs chat"
         # ran, or thread names changed). Resolve the missing ones now from the
-        # "server-logs" forum, matching name keywords rather than exact names.
+        # log forums, matching name keywords rather than exact names.
         missing = [k for k in ("join_thread_id", "leave_thread_id", "chat_thread_id") if not cfg.get(k)]
         if missing:
             forum = guild.get_channel(cfg.get("server_forum_id") or 0)
             if not isinstance(forum, discord.ForumChannel):
-                forum = discord.utils.get(guild.channels, name="server-logs")
+                forum = _forum_named(guild, "server-logs")
             if isinstance(forum, discord.ForumChannel):
                 ids = {}
                 for t in forum.threads:
@@ -64,10 +82,36 @@ class ServerLogs(commands.Cog):
                     except Exception:
                         pass
                     cfg = guild_settings.get_server_log_config(guild.id)
+        # Resolve the admin / tribe event threads from their dedicated forums
+        # (fall back to the server-logs forum if a dedicated one is missing).
+        special = {}
+        if not cfg.get("admin_thread_id"):
+            admin_forum = _forum_named(guild, "admin-logs")
+            tid = _find_thread_by_name(admin_forum, ("admin", "ادارة", "إدارة", "logs"))
+            if tid:
+                special["admin_thread_id"] = tid
+        if not cfg.get("tribe_thread_id"):
+            tribe_forum = _forum_named(guild, "tribe-logs")
+            tid = _find_thread_by_name(tribe_forum, ("tribe", "قبيلة", "قبائل", "تبيض"))
+            if not tid and (_forum_named(guild, "tribe-logs") is None):
+                server_forum = guild.get_channel(cfg.get("server_forum_id") or 0)
+                if not isinstance(server_forum, discord.ForumChannel):
+                    server_forum = _forum_named(guild, "server-logs")
+                tid = _find_thread_by_name(server_forum, ("tribe", "قبيلة", "قبائل"))
+            if tid:
+                special["tribe_thread_id"] = tid
+        if special:
+            try:
+                guild_settings.update_server_log_config(guild.id, **special)
+            except Exception:
+                pass
+            cfg = guild_settings.get_server_log_config(guild.id)
         return {
             "cfg": cfg,
             "joins": guild_settings.get_unposted_server_events(guild.id, event_type="join"),
             "leaves": guild_settings.get_unposted_server_events(guild.id, event_type="leave"),
+            "admins": guild_settings.get_unposted_server_events(guild.id, event_type="admin"),
+            "tribes": guild_settings.get_unposted_server_events(guild.id, event_type="tribe"),
             "chats": guild_settings.get_unposted_chat_forum_logs(guild.id),
         }
 
@@ -84,6 +128,8 @@ class ServerLogs(commands.Cog):
             join_thread = guild.get_thread(cfg.get("join_thread_id") or cfg.get("server_events_thread_id")) if cfg.get("join_thread_id") or cfg.get("server_events_thread_id") else None
             leave_thread = guild.get_thread(cfg.get("leave_thread_id") or cfg.get("server_events_thread_id")) if cfg.get("leave_thread_id") or cfg.get("server_events_thread_id") else None
             chat_thread = guild.get_thread(cfg.get("chat_thread_id")) if cfg.get("chat_thread_id") else None
+            admin_thread = guild.get_thread(cfg.get("admin_thread_id")) if cfg.get("admin_thread_id") else None
+            tribe_thread = guild.get_thread(cfg.get("tribe_thread_id")) if cfg.get("tribe_thread_id") else None
 
             if isinstance(join_thread, discord.Thread):
                 for ev in plan["joins"]:
@@ -103,6 +149,24 @@ class ServerLogs(commands.Cog):
                     ts_part = f" · <t:{ts}:f>" if ts else ""
                     try:
                         await leave_thread.send(f"🔴 **{name}** — {bot_i18n.t(guild.id, 'server_event_leave')}{ts_part}")
+                        await asyncio.to_thread(guild_settings.mark_server_event_posted, ev["id"])
+                    except Exception:
+                        break
+
+            if isinstance(admin_thread, discord.Thread):
+                for ev in plan["admins"]:
+                    raw = (ev["raw_line"] or "").strip()
+                    try:
+                        await admin_thread.send(f"🛠️ **{bot_i18n.t(guild.id, 'server_log_admin')}**\n```{raw[:1700]}```")
+                        await asyncio.to_thread(guild_settings.mark_server_event_posted, ev["id"])
+                    except Exception:
+                        break
+
+            if isinstance(tribe_thread, discord.Thread):
+                for ev in plan["tribes"]:
+                    raw = (ev["raw_line"] or "").strip()
+                    try:
+                        await tribe_thread.send(f"🗡️ **{bot_i18n.t(guild.id, 'server_log_tribe')}**\n```{raw[:1700]}```")
                         await asyncio.to_thread(guild_settings.mark_server_event_posted, ev["id"])
                     except Exception:
                         break
