@@ -198,6 +198,7 @@ class ChatBridge(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
+        print("[ChatBridge] build=9f22e26", flush=True)
         self.seen_lines = {}
         # avoid re-forwarding our own ServerChatMessage echoes
         self._echo_guard = deque(maxlen=200)
@@ -432,7 +433,7 @@ class ChatBridge(commands.Cog):
             )
             posts.append({"channel": channel, "player": player, "message": message})
             stats["chat"] += 1
-        if stats["join"] or stats["leave"] or stats["admin"] or stats["tribe"] or stats["unparsed"]:
+        if stats["join"] or stats["leave"] or stats["admin"] or stats["tribe"] or stats["chat"] or stats["unparsed"]:
             if guild.id not in self._diag_ts or now5 - self._diag_ts[guild.id] >= 60:
                 self._diag_ts[guild.id] = now5
                 print(

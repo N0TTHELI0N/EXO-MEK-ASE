@@ -45,6 +45,8 @@ class ServerLogs(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self._diag_ts = {}
+        self._posted_ts = {}
+        print("[ServerLogs] build=9f22e26", flush=True)
         self.post_server_logs.start()
 
     def cog_unload(self):
@@ -97,6 +99,10 @@ class ServerLogs(commands.Cog):
             except Exception:
                 pass
             cfg = guild_settings.get_server_log_config(guild.id)
+        try:
+            guild_settings.drop_stale_chat_forum_logs(guild.id, 300)
+        except Exception:
+            pass
         return {
             "cfg": cfg,
             "joins": guild_settings.get_unposted_server_events(guild.id, event_type="join"),
@@ -269,9 +275,9 @@ class ServerLogs(commands.Cog):
                         pass
                 if posts:
                     nowp2 = time.time()
-                    if self._diag_ts.get(guild.id, 0) and nowp2 - self._diag_ts[guild.id] >= 30:
+                    if guild.id not in self._posted_ts or nowp2 - self._posted_ts[guild.id] >= 30:
                         print(f"[ServerLogs] gid={guild.id} posted chats={posts}", flush=True)
-                        self._diag_ts[guild.id] = nowp2
+                        self._posted_ts[guild.id] = nowp2
 
     @post_server_logs.before_loop
     async def before_post_server_logs(self):

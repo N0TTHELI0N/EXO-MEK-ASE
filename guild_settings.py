@@ -1870,6 +1870,23 @@ def mark_chat_forum_posted_batch(guild_id: int, log_ids: list[int]):
         conn.close()
 
 
+def drop_stale_chat_forum_logs(guild_id: int, max_age_seconds: int = 300):
+    """Permanently delete queued (unposted) chat rows older than max_age. Used
+    so a large historical backlog can never flood a forum thread."""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                DELETE FROM chat_logs
+                WHERE guild_id = %s
+                  AND posted_chat_forum = FALSE
+                  AND relayed_at < NOW() - make_interval(secs => %s)
+            """, (guild_id, max_age_seconds))
+        conn.commit()
+    finally:
+        conn.close()
+
+
 # ============================================================
 #  CHAT AUTO-DETECTION RULES (word -> auto punishment)
 # ============================================================
