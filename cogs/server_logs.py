@@ -127,6 +127,30 @@ class ServerLogs(commands.Cog):
                 n = len(entries) if isinstance(entries, list) else "?"
                 res.append(f"HTTP{code}:{n} {r}")
             out.append("roots = " + " | ".join(res))
+            # deep walk with entry names/types from the user root
+            walk = [(f"/games/{user}", 1)] if user else []
+            seen = {f"/games/{user}"} if user else set()
+            lines = 0
+            while walk and lines < 200:
+                d, depth = walk.pop(0)
+                code, entries = client.file_server_list(d)
+                if code != 200 or not isinstance(entries, list):
+                    out.append("  " * depth + f"{d} -> HTTP{code}")
+                    lines += 1
+                    continue
+                out.append("  " * depth + f"{d} ({len(entries)})")
+                lines += 1
+                for e in entries:
+                    if not isinstance(e, dict):
+                        continue
+                    if e.get("type") == "dir":
+                        p = str(e.get("path") or "")
+                        if p and p not in seen:
+                            seen.add(p)
+                            walk.append((p, depth + 1))
+                    else:
+                        out.append("  " * depth + f"- {e.get('name')} | {e.get('type')} | {e.get('size')} | {e.get('path')}")
+                        lines += 1
             path = client._discover_log_path()
             out.append(f"discovered_log={path or 'NONE'}")
             if path:
@@ -139,7 +163,7 @@ class ServerLogs(commands.Cog):
                 out.append(f"get_logs_chars={len(text) if text else 0}")
                 if text:
                     out.append("sample:\n" + "\n".join(text.splitlines()[-3:])[:600])
-            return "\n".join(out)[:1600]
+            return "\n".join(out)[:1900]
 
         try:
             result = await asyncio.to_thread(_run)

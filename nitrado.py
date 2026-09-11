@@ -372,7 +372,8 @@ class NitradoClient:
                     if not isinstance(e, dict):
                         continue
                     name = str(e.get("name") or "")
-                    if e.get("type") == "file" and name in filenames:
+                    is_log = name in filenames or (name.startswith("ShooterGame") and name.endswith(".log"))
+                    if e.get("type") == "file" and is_log:
                         path = str(e.get("path") or "")
                         if path:
                             self._fs_log_path = path
