@@ -3,6 +3,8 @@ from discord.ext import commands, tasks
 from discord import app_commands
 import bot_i18n
 import guild_settings
+import nitrado
+import asyncio
 
 
 async def _normalize_thread(result):
@@ -101,6 +103,50 @@ class ServerLogs(commands.Cog):
         await self.bot.wait_until_ready()
 
     # ── /server-logs-enable ──────────────────────────────────
+    @app_commands.command(name="nitrado-debug", description="Diagnose Nitrado log reading (Admin)")
+    async def nitrado_debug(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.administrator:
+            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
+        await interaction.response.defer(ephemeral=True)
+        gid = interaction.guild_id
+
+        def _run():
+            client = nitrado.get_client(gid)
+            if client is None:
+                return "No Nitrado client — add token + service in the dashboard before this guild can read logs."
+            out = [f"service_id={client.service_id}", f"token?={bool(client.api_token)}"]
+            gs = client._server_gs() or {}
+            out.append(f"status={gs.get('status')} game={gs.get('game')} user={gs.get('username')}")
+            user = str(gs.get("username") or "").strip()
+            roots = ["/", "/games", "/ftproot"]
+            if user:
+                roots += [f"/games/{user}", f"/games/{user}/ftproot", f"/{user}"]
+            res = []
+            for r in roots:
+                code, entries = client.file_server_list(r)
+                n = len(entries) if isinstance(entries, list) else "?"
+                res.append(f"HTTP{code}:{n} {r}")
+            out.append("roots = " + " | ".join(res))
+            path = client._discover_log_path()
+            out.append(f"discovered_log={path or 'NONE'}")
+            if path:
+                text = client.read_file_tail(path)
+                out.append(f"tail_chars={len(text) if text else 0}")
+                if text:
+                    out.append("sample:\n" + "\n".join(text.splitlines()[-3:])[:600])
+            else:
+                text = client.get_logs(400)
+                out.append(f"get_logs_chars={len(text) if text else 0}")
+                if text:
+                    out.append("sample:\n" + "\n".join(text.splitlines()[-3:])[:600])
+            return "\n".join(out)[:1600]
+
+        try:
+            result = await asyncio.to_thread(_run)
+        except Exception as e:
+            result = f"EXC {type(e).__name__}: {e}"
+        await interaction.followup.send(f"```{result}```", ephemeral=True)
+
     @app_commands.command(name="server-logs-enable", description="Enable or disable posting to server-logs & game-chat forums (Admin)")
     @app_commands.describe(enabled="Enable or disable")
     async def server_logs_enable(self, interaction: discord.Interaction, enabled: bool):
