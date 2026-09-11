@@ -151,6 +151,39 @@ class ServerLogs(commands.Cog):
                     out.append(f"app_server HTTP={code2} body={str(body2)[:200]}")
             except Exception as e:
                 out.append(f"app_server ERR {type(e).__name__}: {e}")
+            if user:
+                try:
+                    restart = client.read_file_tail(f"/games/{user}/ftproot/restart.log", 5000)
+                    if restart:
+                        out.append("restart.log:\n" + restart[:500])
+                    else:
+                        out.append("restart.log: EMPTY or UNREACHABLE")
+                except Exception as e:
+                    out.append(f"restart.log ERR {type(e).__name__}: {e}")
+            try:
+                code3, body3 = client._raw("GET", f"/services/{client.service_id}/webinterface_login")
+                if isinstance(body3, dict):
+                    wi = body3.get("data", body3)
+                    url = wi.get("url", "") if isinstance(wi, dict) else ""
+                    expires = wi.get("expires_at") if isinstance(wi, dict) else None
+                    out.append(f"webinterface_login HTTP={code3} url={url[:120]} expires={expires}")
+                else:
+                    out.append(f"webinterface_login HTTP={code3} body={str(body3)[:200]}")
+            except Exception as e:
+                out.append(f"webinterface_login ERR {type(e).__name__}: {e}")
+            for ep in ("log", "logs", "players"):
+                try:
+                    code4, body4 = client._raw("GET", f"/services/{client.service_id}/gameservers/games/arkps/{ep}")
+                    if isinstance(body4, dict):
+                        d = body4.get("data", body4)
+                        content = d.get("content", "") if isinstance(d, dict) else ""
+                        out.append(f"arkps/{ep} HTTP={code4} content_len={len(content)}")
+                        if content:
+                            out.append("sample:\n" + "\n".join(content.split("\n")[-3:])[:400])
+                    else:
+                        out.append(f"arkps/{ep} HTTP={code4} body={str(body4)[:200]}")
+                except Exception as e:
+                    out.append(f"arkps/{ep} ERR {type(e).__name__}: {e}")
             roots = ["/", "/games", "/ftproot", "Server", "arkps"]
             if user:
                 roots += [f"/games/{user}", f"/games/{user}/ftproot", f"/{user}"]
