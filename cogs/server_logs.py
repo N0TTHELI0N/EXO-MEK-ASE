@@ -112,7 +112,16 @@ class ServerLogs(commands.Cog):
         forum = guild.get_channel(cfg.get("server_forum_id") or 0)
         if not isinstance(forum, discord.ForumChannel):
             forum = _forum_named(guild, "server-logs")
+        made_forum = False
+        if not isinstance(forum, discord.ForumChannel):
+            try:
+                forum = await guild.create_forum_channel("server-logs", topic=bot_i18n.t(guild.id, "server_logs_topic"))
+                made_forum = True
+            except Exception:
+                forum = None
         updates = {}
+        if made_forum and forum is not None:
+            updates["server_forum_id"] = forum.id
         plan_threads = {
             "join_thread_id": (bot_i18n.t(guild.id, "server_logs_thread_join"),
                                ("join", "دخول", "انضمام")),
@@ -137,6 +146,11 @@ class ServerLogs(commands.Cog):
                 continue
         if not cfg.get("admin_thread_id"):
             admin_forum = _forum_named(guild, "admin-logs")
+            if not isinstance(admin_forum, discord.ForumChannel):
+                try:
+                    admin_forum = await guild.create_forum_channel("admin-logs", topic=bot_i18n.t(guild.id, "forum_topic"))
+                except Exception:
+                    admin_forum = None
             if isinstance(admin_forum, discord.ForumChannel):
                 tid = _find_thread_by_name(admin_forum, ("admin", "ادارة", "إدارة"))
                 if not tid:
