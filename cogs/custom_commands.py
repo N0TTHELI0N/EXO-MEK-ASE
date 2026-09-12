@@ -10,6 +10,7 @@ import nitrado
 CATEGORY_META = {
     "dino_spawn": {"emoji": "🦖", "label": "Dino Spawning", "thread": "thread_dino"},
     "gfi": {"emoji": "🎁", "label": "GFI Commands", "thread": "thread_gfi"},
+    "teleport": {"emoji": "🧭", "label": "Teleports", "thread": "thread_teleport"},
     "player": {"emoji": "🧍", "label": "Player Features", "thread": "thread_player"},
     "gcm": {"emoji": "🎮", "label": "GCM", "thread": "thread_gcm"},
     "other": {"emoji": "🗂️", "label": "Other", "thread": "thread_other"},
@@ -218,6 +219,7 @@ class CustomCommands(commands.Cog):
     @app_commands.choices(category=[
         app_commands.Choice(name="Dino Spawning", value="dino_spawn"),
         app_commands.Choice(name="GFI Commands", value="gfi"),
+        app_commands.Choice(name="Teleports", value="teleport"),
         app_commands.Choice(name="Player Features", value="player"),
         app_commands.Choice(name="GCM", value="gcm"),
     ])
@@ -360,11 +362,11 @@ class CustomCommands(commands.Cog):
         guild_settings.set_forum_log_config(guild.id, forum.id,
                                             thread_ids.get("thread_dino"), thread_ids.get("thread_gfi"),
                                             thread_ids.get("thread_player"), thread_ids.get("thread_gcm"),
-                                            thread_ids.get("thread_other"))
+                                            thread_ids.get("thread_other"), thread_ids.get("thread_teleport"))
         return bot_i18n.t(guild.id, "forum_ready", forum=forum.mention,
                           thread_dino=thread_ids.get("thread_dino"), thread_gfi=thread_ids.get("thread_gfi"),
                           thread_player=thread_ids.get("thread_player"), thread_gcm=thread_ids.get("thread_gcm"),
-                          thread_other=thread_ids.get("thread_other")), None
+                          thread_other=thread_ids.get("thread_other"), thread_teleport=thread_ids.get("thread_teleport")), None
 
     async def _setup_shop_logs(self, guild: discord.Guild, channel=None):
         forum = await self._get_or_create_forum(guild, "shop-logs", bot_i18n.t(guild.id, "shop_forum_topic"),

@@ -1171,8 +1171,8 @@ STRINGS = {
         "en": "⚠️ Only {created}/5 threads were created. Missing: {missing}.{errors} Run the command again to retry.",
     },
     "forum_ready": {
-        "ar": "✅ فوروم سجل الإدارة جاهز.\nالفوروم: {forum}\nالمواضيع: 🦖 <#{thread_dino}> · 🎁 <#{thread_gfi}> · 🧍 <#{thread_player}> · 🎮 <#{thread_gcm}> · 🗂️ <#{thread_other}>",
-        "en": "✅ Admin-log forum ready.\nForum: {forum}\nThreads: 🦖 <#{thread_dino}> · 🎁 <#{thread_gfi}> · 🧍 <#{thread_player}> · 🎮 <#{thread_gcm}> · 🗂️ <#{thread_other}>",
+        "ar": "✅ فوروم سجل الإدارة جاهز.\nالفوروم: {forum}\nالمواضيع: 🦖 <#{thread_dino}> · 🎁 <#{thread_gfi}> · 🧭 <#{thread_teleport}> · 🧍 <#{thread_player}> · 🎮 <#{thread_gcm}> · 🗂️ <#{thread_other}>",
+        "en": "✅ Admin-log forum ready.\nForum: {forum}\nThreads: 🦖 <#{thread_dino}> · 🎁 <#{thread_gfi}> · 🧭 <#{thread_teleport}> · 🧍 <#{thread_player}> · 🎮 <#{thread_gcm}> · 🗂️ <#{thread_other}>",
     },
     "shop_forum_partial": {
         "ar": "⚠️ تعذر إنشاء جميع مواضيع المتجر. المفقود: {missing}.{errors} أعد تشغيل الأمر للمحاولة.",

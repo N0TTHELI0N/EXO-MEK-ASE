@@ -435,13 +435,9 @@ def init_db():
             cur.execute("ALTER TABLE server_log_config ADD COLUMN IF NOT EXISTS join_thread_id BIGINT")
             cur.execute("ALTER TABLE server_log_config ADD COLUMN IF NOT EXISTS leave_thread_id BIGINT")
             cur.execute("ALTER TABLE server_log_config ADD COLUMN IF NOT EXISTS admin_thread_id BIGINT")
-            cur.execute("ALTER TABLE server_log_config ADD COLUMN IF NOT EXISTS admin_gfi_thread_id BIGINT")
-            cur.execute("ALTER TABLE server_log_config ADD COLUMN IF NOT EXISTS admin_dino_thread_id BIGINT")
-            cur.execute("ALTER TABLE server_log_config ADD COLUMN IF NOT EXISTS admin_gcm_thread_id BIGINT")
-            cur.execute("ALTER TABLE server_log_config ADD COLUMN IF NOT EXISTS admin_player_thread_id BIGINT")
-            cur.execute("ALTER TABLE server_log_config ADD COLUMN IF NOT EXISTS admin_other_thread_id BIGINT")
             cur.execute("ALTER TABLE server_log_config ADD COLUMN IF NOT EXISTS tribe_thread_id BIGINT")
             cur.execute("ALTER TABLE forum_log_config ADD COLUMN IF NOT EXISTS thread_other BIGINT")
+            cur.execute("ALTER TABLE forum_log_config ADD COLUMN IF NOT EXISTS thread_teleport BIGINT")
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS chat_auto_rules (
                     id             SERIAL PRIMARY KEY,
@@ -1674,7 +1670,6 @@ def add_chat_log(guild_id: int, channel: str, player_name: str, message: str,
                 WHERE NOT EXISTS (
                     SELECT 1 FROM chat_logs
                     WHERE guild_id = %s AND raw_line = %s
-                      AND relayed_at > NOW() - interval '5 minutes'
                 )
             """, (guild_id, channel, player_name, tribe_name, message, raw_line, direction, guild_id, raw_line))
             inserted = cur.rowcount > 0
@@ -1795,7 +1790,6 @@ def add_server_event(guild_id: int, event_type: str, player_name: str, raw_line:
                 WHERE NOT EXISTS (
                     SELECT 1 FROM server_events
                     WHERE guild_id = %s AND raw_line = %s
-                      AND created_at > NOW() - interval '5 minutes'
                 )
             """, (guild_id, event_type, player_name, raw_line, guild_id, raw_line))
             inserted = cur.rowcount > 0
@@ -2633,13 +2627,14 @@ def delete_command_display(command_name: str) -> None:
 #  CUSTOM COMMANDS
 # ============================================================
 
-LOG_CATEGORIES = ["dino_spawn", "gfi", "player", "gcm"]
+LOG_CATEGORIES = ["dino_spawn", "gfi", "teleport", "gcm", "player"]
 
 # Default keyword detection for auto-categorizing ARK commands.
 DEFAULT_CATEGORY_RULES = {
     "dino_spawn": ["gmsummon", "gsummon", "summontamed", "summon ", "spawndino", "spawnactor", "sdf", "do injure", "force tame", "tame "],
     "gfi": ["gfi", "giveitemtoplayer", "giveitemnum", "giveitem ", "giveengrams", "giveresources"],
-    "player": ["teleport", "tpname", "teleportplayername", "addexperience", "addexp", "addxp", "givecolors", "setplayername", "god", "infinitestats", "walk", "fly", "lma"],
+    "teleport": ["teleport", "tpname", "tpto", "tptome", "tpme", "teleportplayer", "teleportplayername", "teleportplayernametome", "teleportplayerself", "teleporttoplayer", "teleportactor", "warpto", "setplayerpos"],
+    "player": ["addexperience", "addexp", "addxp", "givecolors", "setplayername", "god", "infinitestats", "walk", "fly", "ghost", "walkspeed", "flyspeed", "swim", "lma"],
     "gcm": ["gcm", "gmc", "cheatmenu", "setcheat", "setgm"],
 }
 
@@ -2779,7 +2774,7 @@ def get_forum_log_config(guild_id: int):
     try:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT forum_id, thread_dino, thread_gfi, thread_player, thread_gcm, thread_other
+                SELECT forum_id, thread_dino, thread_gfi, thread_player, thread_gcm, thread_other, thread_teleport
                 FROM forum_log_config WHERE guild_id = %s
             """, (guild_id,))
             row = cur.fetchone()
@@ -2792,6 +2787,7 @@ def get_forum_log_config(guild_id: int):
                 "thread_player": row[3],
                 "thread_gcm": row[4],
                 "thread_other": row[5],
+                "thread_teleport": row[6],
             }
     finally:
         conn.close()
@@ -2799,21 +2795,23 @@ def get_forum_log_config(guild_id: int):
 
 def set_forum_log_config(guild_id: int, forum_id: int, thread_dino: int = None,
                          thread_gfi: int = None, thread_player: int = None,
-                         thread_gcm: int = None, thread_other: int = None):
+                         thread_gcm: int = None, thread_other: int = None,
+                         thread_teleport: int = None):
     conn = get_conn()
     try:
         with conn.cursor() as cur:
             cur.execute("""
-                INSERT INTO forum_log_config (guild_id, forum_id, thread_dino, thread_gfi, thread_player, thread_gcm, thread_other)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO forum_log_config (guild_id, forum_id, thread_dino, thread_gfi, thread_player, thread_gcm, thread_other, thread_teleport)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (guild_id) DO UPDATE SET
                     forum_id = EXCLUDED.forum_id,
                     thread_dino = COALESCE(EXCLUDED.thread_dino, forum_log_config.thread_dino),
                     thread_gfi = COALESCE(EXCLUDED.thread_gfi, forum_log_config.thread_gfi),
                     thread_player = COALESCE(EXCLUDED.thread_player, forum_log_config.thread_player),
                     thread_gcm = COALESCE(EXCLUDED.thread_gcm, forum_log_config.thread_gcm),
-                    thread_other = COALESCE(EXCLUDED.thread_other, forum_log_config.thread_other)
-            """, (guild_id, forum_id, thread_dino, thread_gfi, thread_player, thread_gcm, thread_other))
+                    thread_other = COALESCE(EXCLUDED.thread_other, forum_log_config.thread_other),
+                    thread_teleport = COALESCE(EXCLUDED.thread_teleport, forum_log_config.thread_teleport)
+            """, (guild_id, forum_id, thread_dino, thread_gfi, thread_player, thread_gcm, thread_other, thread_teleport))
         conn.commit()
     finally:
         conn.close()

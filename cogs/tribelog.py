@@ -335,8 +335,17 @@ class Tribelog(commands.Cog):
                             await target.edit(archived=False, auto_archive_duration=10080)
                         except Exception:
                             pass
+                    raw = (event["content"] or "").strip()
+                    if any(probe in raw.lower() for probe in ("log file closed", "log file opened", "log fragment")):
+                        try:
+                            guild_settings.mark_tribe_event_posted(event["id"])
+                        except Exception:
+                            pass
+                        continue
                     try:
-                        await target.send(f"```{event['content'][:1850]}```")
+                        ts = guild_settings.parse_log_timestamp(raw)
+                        prefix = f"<t:{ts}:R> | " if ts else ""
+                        await target.send(f"{prefix}```{raw[:1850]}```")
                         guild_settings.mark_tribe_event_posted(event["id"])
                     except Exception:
                         continue

@@ -1611,6 +1611,24 @@ def _game_api_result(client, method: str, action: str, name: str) -> str:
     return f"Failed{(': ' + msg) if msg else (f' (HTTP {code})' if code != 200 else '')}"
 
 
+def _try_send_command(client, commands: list) -> None:
+    """Try console commands in order until one reports an actual response."""
+    last_err = None
+    for i, cmd in enumerate(commands):
+        try:
+            resp = client.send_command(cmd)
+        except Exception as e:
+            last_err = e
+            if i == len(commands) - 1:
+                raise e
+            continue
+        if resp and "command not found" not in resp.lower():
+            return
+    if last_err:
+        raise last_err
+    raise RuntimeError("console commands returned no usable response")
+
+
 def ban_player(guild_id: int, name: str) -> str:
     """Ban a player on the Nitrado server. Uses the game banlist API (works on
     PlayStation), falling back to the console command when it's unavailable."""
@@ -1621,7 +1639,7 @@ def ban_player(guild_id: int, name: str) -> str:
     if result == "OK":
         return "Banned"
     try:
-        client.send_command(f"Ban {name}")
+        _try_send_command(client, [f"BanPlayer {name}", f"Ban {name}", f"admincheat ban {name}"])
         return "Banned"
     except Exception as e:
         return result if result != "Failed" else "Failed: " + type(e).__name__
@@ -1636,7 +1654,7 @@ def unban_player(guild_id: int, name: str) -> str:
     if result == "OK":
         return "Unbanned"
     try:
-        client.send_command(f"Unban {name}")
+        _try_send_command(client, [f"UnBanPlayer {name}", f"Unban {name}", f"admincheat unban {name}"])
         return "Unbanned"
     except Exception as e:
         return result if result != "Failed" else "Failed: " + type(e).__name__

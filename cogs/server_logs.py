@@ -40,6 +40,7 @@ def _forum_named(guild, name) -> discord.ForumChannel | None:
 ADMIN_CATEGORY_THREAD_KEY = {
     "dino_spawn": "thread_dino",
     "gfi": "thread_gfi",
+    "teleport": "thread_teleport",
     "player": "thread_player",
     "gcm": "thread_gcm",
     "other": "thread_other",
@@ -47,10 +48,39 @@ ADMIN_CATEGORY_THREAD_KEY = {
 ADMIN_CATEGORY_META = {
     "dino_spawn": {"emoji": "🦖", "label": "Dino Spawning", "kws": ("dino", "spawn")},
     "gfi": {"emoji": "🎁", "label": "GFI Commands", "kws": ("gfi", "give")},
+    "teleport": {"emoji": "🧭", "label": "Teleports", "kws": ("teleport", "tp", "warp")},
     "player": {"emoji": "🧍", "label": "Player Features", "kws": ("player", "feature")},
     "gcm": {"emoji": "🎮", "label": "GCM", "kws": ("gcm",)},
     "other": {"emoji": "🗂️", "label": "Other", "kws": ("other",)},
 }
+
+# Lines matching nothing useful (log rotation markers / Nitrado noise).
+_BANNED_ADMIN_TOKENS = ("log file closed", "log file opened", "Server command", "Changed map", "Version:", "Build ID:")
+
+
+def _event_ts(raw_line: str, fallback=None) -> int | None:
+    """Best UNIX epoch for a log event: prefer the timestamp written by the
+    game server itself, fall back to the row's created time (UTC)."""
+    ts = guild_settings.parse_log_timestamp(raw_line or "")
+    if ts:
+        return ts
+    if fallback is not None:
+        try:
+            return int(fallback.timestamp())
+        except Exception:
+            return None
+    return None
+
+
+def _log_time(raw_line: str, fallback=None) -> str:
+    ts = _event_ts(raw_line, fallback)
+    return f"<t:{ts}:R>" if ts else ""
+
+
+def _iter_unposted_bans(plan):
+    """Yield (id, event_type, raw_line, created_at) for pending ban/unban events."""
+    for ev in plan["bans"]:
+        yield (ev.get("id"), ev.get("event_type"), ev.get("raw_line"), ev.get("created_at"))
 
 
 class ServerLogs(commands.Cog):
@@ -126,11 +156,18 @@ class ServerLogs(commands.Cog):
             admin_cats = guild_settings.get_forum_log_config(guild.id) or {}
         except Exception:
             pass
+        bans = []
+        for et in ("ban", "unban"):
+            try:
+                bans += guild_settings.get_unposted_server_events(guild.id, event_type=et)
+            except Exception:
+                continue
         return {
             "cfg": cfg,
             "joins": guild_settings.get_unposted_server_events(guild.id, event_type="join"),
             "leaves": guild_settings.get_unposted_server_events(guild.id, event_type="leave"),
             "admins": guild_settings.get_unposted_server_events(guild.id, event_type="admin"),
+            "bans": bans,
             "chats": guild_settings.get_unposted_chat_forum_logs(guild.id),
             "admin_cats": admin_cats,
         }
@@ -231,7 +268,8 @@ class ServerLogs(commands.Cog):
                             cat_threads.get("thread_gfi"),
                             cat_threads.get("thread_player"),
                             cat_threads.get("thread_gcm"),
-                            cat_threads.get("thread_other"))
+                            cat_threads.get("thread_other"),
+                            cat_threads.get("thread_teleport"))
                     except Exception:
                         pass
         if updates:
@@ -294,6 +332,7 @@ class ServerLogs(commands.Cog):
             leave_thread = await self._resolve_thread(guild, cfg.get("leave_thread_id"))
             chat_thread = await self._resolve_thread(guild, cfg.get("chat_thread_id"))
             admin_thread = await self._resolve_thread(guild, cfg.get("admin_thread_id"))
+            ban_thread = admin_thread
             # Self-heal: ids that no longer resolve (thread deleted/renamed) are
             # dropped so _ensure_missing_threads recreates them next tick.
             stale = {}
@@ -313,8 +352,11 @@ class ServerLogs(commands.Cog):
                 for ev in plan["joins"]:
                     name = ev["player_name"] or "?"
                     raw = (ev["raw_line"] or "").strip()
+                    if any(probe in raw.lower() for probe in _BANNED_ADMIN_TOKENS):
+                        await asyncio.to_thread(guild_settings.mark_server_event_posted, ev["id"])
+                        continue
                     try:
-                        await join_thread.send(f"🟢 **{name}** — {bot_i18n.t(guild.id, 'server_event_join')}\n```{raw[:1850]}```")
+                        await join_thread.send(f"{_log_time(raw, ev.get('created_at'))} | 🟢 **{name}** joined!")
                         await asyncio.to_thread(guild_settings.mark_server_event_posted, ev["id"])
                     except Exception:
                         continue
@@ -323,8 +365,11 @@ class ServerLogs(commands.Cog):
                 for ev in plan["leaves"]:
                     name = ev["player_name"] or "?"
                     raw = (ev["raw_line"] or "").strip()
+                    if any(probe in raw.lower() for probe in _BANNED_ADMIN_TOKENS):
+                        await asyncio.to_thread(guild_settings.mark_server_event_posted, ev["id"])
+                        continue
                     try:
-                        await leave_thread.send(f"🔴 **{name}** — {bot_i18n.t(guild.id, 'server_event_leave')}\n```{raw[:1850]}```")
+                        await leave_thread.send(f"{_log_time(raw, ev.get('created_at'))} | 🔴 **{name}** left!")
                         await asyncio.to_thread(guild_settings.mark_server_event_posted, ev["id"])
                     except Exception:
                         continue
@@ -335,6 +380,9 @@ class ServerLogs(commands.Cog):
                 cat_targets = {}
                 for ev in plan["admins"]:
                     raw = (ev["raw_line"] or "").strip()
+                    if any(probe in raw.lower() for probe in _BANNED_ADMIN_TOKENS):
+                        await asyncio.to_thread(guild_settings.mark_server_event_posted, ev["id"])
+                        continue
                     category = guild_settings.detect_command_category(raw)
                     tkey = ADMIN_CATEGORY_THREAD_KEY.get(category)
                     target = cat_targets.get(tkey)
@@ -346,13 +394,31 @@ class ServerLogs(commands.Cog):
                         target = admin_thread
                         await self._unarchive_thread(target)
                     try:
-                        await target.send(f"🛠️ {bot_i18n.t(guild.id, 'server_log_admin')}\n```{raw[:1700]}```")
+                        await target.send(f"{_log_time(raw, ev.get('created_at'))} 🛠️ {bot_i18n.t(guild.id, 'server_log_admin')}\n```{raw[:1700]}```")
                         await asyncio.to_thread(guild_settings.mark_server_event_posted, ev["id"])
                     except Exception:
                         admin_fails += 1
                         continue
                 if admin_fails:
                     print(f"[ServerLogs] gid={guild.id} admin send failures={admin_fails} thread={admin_thread.id}", flush=True)
+
+            if isinstance(ban_thread, discord.Thread) or isinstance(admin_thread, discord.Thread):
+                for ev_id, ev_type, raw, created in _iter_unposted_bans(plan):
+                    raw = (raw or "").strip()
+                    if any(probe in raw.lower() for probe in _BANNED_ADMIN_TOKENS):
+                        await asyncio.to_thread(guild_settings.mark_server_event_posted, ev_id)
+                        continue
+                    target = ban_thread if isinstance(ban_thread, discord.Thread) else admin_thread
+                    if not isinstance(target, discord.Thread):
+                        continue
+                    await self._unarchive_thread(target)
+                    icon = "⛔" if ev_type == "ban" else "♻️"
+                    word = "banned" if ev_type == "ban" else "unbanned"
+                    try:
+                        await target.send(f"{_log_time(raw, created)} {icon} **{word}**\n```{raw[:1700]}```")
+                        await asyncio.to_thread(guild_settings.mark_server_event_posted, ev_id)
+                    except Exception:
+                        continue
 
             if isinstance(chat_thread, discord.Thread):
                 posts = 0
@@ -369,9 +435,15 @@ class ServerLogs(commands.Cog):
                     if posts >= 20:
                         break
                     raw = (log.get("raw_line") or log["message"] or "").strip()
+                    if any(probe in raw.lower() for probe in _BANNED_ADMIN_TOKENS):
+                        try:
+                            await asyncio.to_thread(guild_settings.mark_chat_forum_posted, log["id"])
+                        except Exception:
+                            pass
+                        continue
                     icon = "➡️" if log["direction"] == "out" else "💬"
                     try:
-                        await chat_thread.send(f"{icon}```{raw[:1850]}```")
+                        await chat_thread.send(f"{_log_time(raw, log.get('relayed_at'))} | {icon}```{raw[:1850]}```")
                         await asyncio.to_thread(guild_settings.mark_chat_forum_posted, log["id"])
                         posts += 1
                     except Exception:

@@ -79,6 +79,24 @@ _SYS_MARKERS = (
 )
 _LOG_HEADER = re.compile(r"^(?:\[[^\]]*\]\s*)+|^\d{4}[.\-/]\d{2}[.\-/]\d{2}_\d{2}[.\-/]\d{2}[.\-/]\d{2}\s*:\s*", re.I)
 
+# Nitrado / ARK write these markers when the log file rotates; they are not
+# events and must never appear in any log thread.
+_LOG_ROTATION_NOISE = ("log file closed", "log file opened", "log fragment")
+
+_BAN_PAT = re.compile(r"\bban(?:ned|ner|player)?\b", re.I)
+_UNBAN_PAT = re.compile(r"\bunban(?:ned|ner|player)?\b", re.I)
+
+
+def _detect_ban_unban(text: str) -> str | None:
+    """Return 'ban' or 'unban' for an AdminCmd line that performs a ban/unban."""
+    body = _LOG_HEADER.sub("", text or "").strip()
+    low = body.lower()
+    if "unban" in low:
+        return "unban"
+    if "ban" in low:
+        return "ban"
+    return None
+
 
 def _classify_system_line(text: str) -> str | None:
     """Classify a non-chat log line: 'admin', 'tribe' — or None if it is player chat.
@@ -390,6 +408,9 @@ class ChatBridge(commands.Cog):
         for text in self._split_new_lines(guild.id, [l for l in lines if l]):
             if not text:
                 continue
+            low_text = text.lower()
+            if any(probe in low_text for probe in _LOG_ROTATION_NOISE):
+                continue
             joined = _detect_join_leave(text)
             if joined:
                 if not self._event_seen(guild.id, joined[0], joined[1], now5):
@@ -398,11 +419,13 @@ class ChatBridge(commands.Cog):
                 continue
             kind = _classify_system_line(text)
             if kind == "admin":
-                if not self._event_seen(guild.id, "admin", text[:80], now5):
+                ban_kind = _detect_ban_unban(text)
+                ev_type = ban_kind if ban_kind else "admin"
+                if not self._event_seen(guild.id, ev_type, text[:80], now5):
                     if guild_settings.add_server_event(
-                        guild.id, "admin", "Server", text,
+                        guild.id, ev_type, "Server", text,
                     ):
-                        stats["admin"] += 1
+                        stats[ev_type] = stats.get(ev_type, 0) + 1
                         if len(stats.setdefault("adm_samples", [])) < 3:
                             stats["adm_samples"].append(text[:140])
                 continue
