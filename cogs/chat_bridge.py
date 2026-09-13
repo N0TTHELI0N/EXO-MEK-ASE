@@ -83,6 +83,14 @@ _LOG_HEADER = re.compile(r"^(?:\[[^\]]*\]\s*)+|^\d{4}[.\-/]\d{2}[.\-/]\d{2}_\d{2
 # events and must never appear in any log thread.
 _LOG_ROTATION_NOISE = ("log file closed", "log file opened", "log fragment")
 
+# ARK server startup lines: the full game-server command line gets echoed into
+# the log once on boot and looks like "Ragnarok?listen?MaxPlayers=42?...".
+# Nothing in it is a player/admin event, so never classify or log it.
+_SERVER_STARTUP_NOISE = (
+    "?listen?", "MaxPlayers=", "RCONPort=", "AltSaveDirectoryName", "-WinPS4",
+    "-server -log", "servergamelogincludetribelogs",
+)
+
 _BAN_PAT = re.compile(r"\bban(?:ned|ner|player)?\b", re.I)
 _UNBAN_PAT = re.compile(r"\bunban(?:ned|ner|player)?\b", re.I)
 
@@ -91,9 +99,9 @@ def _detect_ban_unban(text: str) -> str | None:
     """Return 'ban' or 'unban' for an AdminCmd line that performs a ban/unban."""
     body = _LOG_HEADER.sub("", text or "").strip()
     low = body.lower()
-    if "unban" in low:
+    if _UNBAN_PAT.search(low):
         return "unban"
-    if "ban" in low:
+    if _BAN_PAT.search(low):
         return "ban"
     return None
 
@@ -409,7 +417,7 @@ class ChatBridge(commands.Cog):
             if not text:
                 continue
             low_text = text.lower()
-            if any(probe in low_text for probe in _LOG_ROTATION_NOISE):
+            if any(probe in low_text for probe in _LOG_ROTATION_NOISE) or any(probe in low_text for probe in _SERVER_STARTUP_NOISE):
                 continue
             joined = _detect_join_leave(text)
             if joined:

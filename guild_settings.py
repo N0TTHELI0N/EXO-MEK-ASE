@@ -42,6 +42,37 @@ def parse_log_timestamp(text: str) -> int | None:
     return None
 
 
+_BRACKET_BLOCK = re.compile(r"^\[[^\]]*\]\s*")
+_TS_FULL = re.compile(r"^\d{4}[.\-/]\d{1,2}[.\-/]\d{1,2}[_ T\-]\d{1,2}[:.\-/]\d{1,2}[:.\-/]\d{1,2}(?:[:.]\d+)?\s*(?:[:]\s*|\s+)", re.I)
+_TS_SHORT = re.compile(r"^\[?\d{1,2}:\d{2}:\d{2}\]?\s*")
+
+
+def strip_log_header(text: str) -> str:
+    """Remove the Nitrado/ARK log timestamp header noise from a raw log line,
+    e.g. ``[2026.09.13-12.50.33:916][229]2026.09.13_12.50.33: <msg>`` -> ``<msg>``.
+    Keeps everything else intact so tribe/chat/admin messages stay complete."""
+    if not text:
+        return text
+    out = text
+    for _ in range(8):
+        changed = False
+        m = _BRACKET_BLOCK.match(out)
+        if m:
+            out = out[m.end():]
+            changed = True
+        m = _TS_FULL.match(out)
+        if m:
+            out = out[m.end():]
+            changed = True
+        m = _TS_SHORT.match(out)
+        if m:
+            out = out[m.end():]
+            changed = True
+        if not changed:
+            break
+    return out.strip(" :[]")
+
+
 DATABASE_URL = os.getenv("DATABASE_URL")
 _ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY", "")
 _fernet = Fernet(_ENCRYPTION_KEY.encode()) if _ENCRYPTION_KEY else None
@@ -2630,13 +2661,28 @@ def delete_command_display(command_name: str) -> None:
 LOG_CATEGORIES = ["dino_spawn", "gfi", "teleport", "gcm", "player"]
 
 # Default keyword detection for auto-categorizing ARK commands.
+# Single words are matched on word boundaries (so "fly" never matches
+# "AllowFlyingStaminaRecovery" from the server startup line); multi-word
+# phrases are matched as plain substrings.
 DEFAULT_CATEGORY_RULES = {
-    "dino_spawn": ["gmsummon", "gsummon", "summontamed", "summon ", "spawndino", "spawnactor", "sdf", "do injure", "force tame", "tame "],
-    "gfi": ["gfi", "giveitemtoplayer", "giveitemnum", "giveitem ", "giveengrams", "giveresources"],
+    "dino_spawn": ["gmsummon", "gsummon", "summontamed", "summon", "spawndino", "spawnactor", "sdf", "do injure", "force tame", "tame"],
+    "gfi": ["gfi", "giveitemtoplayer", "giveitemnum", "giveitem", "giveengrams", "giveresources"],
     "teleport": ["teleport", "tpname", "tpto", "tptome", "tpme", "teleportplayer", "teleportplayername", "teleportplayernametome", "teleportplayerself", "teleporttoplayer", "teleportactor", "warpto", "setplayerpos"],
     "player": ["addexperience", "addexp", "addxp", "givecolors", "setplayername", "god", "infinitestats", "walk", "fly", "ghost", "walkspeed", "flyspeed", "swim", "lma"],
-    "gcm": ["gcm", "gmc", "cheatmenu", "setcheat", "setgm"],
+    "gcm": ["gcmcheat", "gcmcheats", "gcm*", "gmc*", "cheatmenu", "setcheat", "setgm"],
 }
+
+
+def _kw_in(keyword: str, lowered: str) -> bool:
+    """Keyword match honoring word boundaries for single words. A trailing '*'
+    matches any word prefix (used for terse ARK prefixes like ``gcm*``)."""
+    kw = keyword.lower().strip()
+    if kw.endswith("*"):
+        prefix = kw[:-1]
+        return re.search(rf"(?<![a-z0-9_]){re.escape(prefix)}", lowered) is not None
+    if " " in kw:
+        return kw in lowered
+    return re.search(rf"(?<![a-z0-9_]){re.escape(kw)}(?![a-z0-9_])", lowered) is not None
 
 
 def detect_log_category(command: str, custom_rules: dict = None) -> str:
@@ -2651,7 +2697,7 @@ def detect_log_category(command: str, custom_rules: dict = None) -> str:
         rules = merged
     for cat in LOG_CATEGORIES:
         for keyword in rules.get(cat, []):
-            if keyword in lowered:
+            if _kw_in(keyword, lowered):
                 return cat
     return "gcm"
 
@@ -2666,7 +2712,7 @@ def detect_command_category(command: str) -> str:
     lowered = (command or "").lower()
     for cat in LOG_CATEGORIES:
         for keyword in DEFAULT_CATEGORY_RULES.get(cat, []):
-            if keyword in lowered:
+            if _kw_in(keyword, lowered):
                 return cat
     return "other"
 

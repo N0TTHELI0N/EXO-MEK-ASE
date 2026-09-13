@@ -23,7 +23,14 @@ TRIBE_DISCOVERY_PATTERNS = [
     re.compile(r"Tribe (?:of |named )?['\"]?([^'\"\s]+)['\"]?", re.I),
     re.compile(r"LogTribeLog.*?Tribe[:= ]+['\"]?([^'\"\s]+)", re.I),
     re.compile(r"TribeName[:=]+([^,\s]+)", re.I),
+    # Player-typed tribe lines: "TSI_Mustafa (TribeName): <message>"
+    re.compile(r"\b\S+\s+\(([^()]{2,64})\)\s*:", re.I),
 ]
+
+# These markers are never player events (log rotation, server startup echo).
+_TRIBELOG_NOISE = ("log file closed", "log file opened", "log fragment",
+                   "?listen?", "MaxPlayers=", "AltSaveDirectoryName", "-WinPS4",
+                   "servergamelogincludetribelogs")
 
 ALLOWED_TRIBELOG_COLUMNS = {"enabled", "channel_id", "log_source", "log_path", "nitrado_token", "nitrado_user_id", "nitrado_service_id"}
 
@@ -304,6 +311,9 @@ class Tribelog(commands.Cog):
                 text = (line or "").strip()
                 if not text:
                     continue
+                low = text.lower()
+                if any(probe in low for probe in _TRIBELOG_NOISE):
+                    continue
                 if not self._is_new_line(guild.id, text):
                     continue
                 self._remember_line(guild.id, text)
@@ -336,7 +346,9 @@ class Tribelog(commands.Cog):
                         except Exception:
                             pass
                     raw = (event["content"] or "").strip()
-                    if any(probe in raw.lower() for probe in ("log file closed", "log file opened", "log fragment")):
+                    if any(probe in raw.lower() for probe in ("log file closed", "log file opened", "log fragment",
+                                                              "?listen?", "MaxPlayers=", "AltSaveDirectoryName", "-WinPS4",
+                                                              "servergamelogincludetribelogs")):
                         try:
                             guild_settings.mark_tribe_event_posted(event["id"])
                         except Exception:
@@ -345,7 +357,8 @@ class Tribelog(commands.Cog):
                     try:
                         ts = guild_settings.parse_log_timestamp(raw)
                         prefix = f"<t:{ts}:R> | " if ts else ""
-                        await target.send(f"{prefix}```{raw[:1850]}```")
+                        display = guild_settings.strip_log_header(raw)
+                        await target.send(f"{prefix}```{display[:1850]}```")
                         guild_settings.mark_tribe_event_posted(event["id"])
                     except Exception:
                         continue

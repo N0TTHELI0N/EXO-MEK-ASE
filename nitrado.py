@@ -1629,6 +1629,16 @@ def _try_send_command(client, commands: list) -> None:
     raise RuntimeError("console commands returned no usable response")
 
 
+def _record_admin_event(guild_id: int, event_type: str, player_name: str, raw_line: str) -> None:
+    """Record a ban/unban event directly so server_logs posts it to Discord.
+    Used only for the game-API path (which does not write to the ARK log), so
+    console-command bans keep being captured from the log stream instead."""
+    try:
+        guild_settings.add_server_event(guild_id, event_type, player_name or "?", raw_line)
+    except Exception:
+        pass
+
+
 def ban_player(guild_id: int, name: str) -> str:
     """Ban a player on the Nitrado server. Uses the game banlist API (works on
     PlayStation), falling back to the console command when it's unavailable."""
@@ -1637,6 +1647,7 @@ def ban_player(guild_id: int, name: str) -> str:
         return "Nitrado not configured"
     result = _game_api_result(client, "POST", "banlist", name)
     if result == "OK":
+        _record_admin_event(guild_id, "ban", name, f"BanPlayer {name}")
         return "Banned"
     try:
         _try_send_command(client, [f"BanPlayer {name}", f"Ban {name}", f"admincheat ban {name}"])
@@ -1652,6 +1663,7 @@ def unban_player(guild_id: int, name: str) -> str:
         return "Nitrado not configured"
     result = _game_api_result(client, "DELETE", "banlist", name)
     if result == "OK":
+        _record_admin_event(guild_id, "unban", name, f"UnBanPlayer {name}")
         return "Unbanned"
     try:
         _try_send_command(client, [f"UnBanPlayer {name}", f"Unban {name}", f"admincheat unban {name}"])

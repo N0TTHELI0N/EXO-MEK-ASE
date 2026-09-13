@@ -55,7 +55,8 @@ ADMIN_CATEGORY_META = {
 }
 
 # Lines matching nothing useful (log rotation markers / Nitrado noise).
-_BANNED_ADMIN_TOKENS = ("log file closed", "log file opened", "Server command", "Changed map", "Version:", "Build ID:")
+_BANNED_ADMIN_TOKENS = ("log file closed", "log file opened", "Server command", "Changed map", "Version:", "Build ID:",
+                        "?listen?", "MaxPlayers=", "AltSaveDirectoryName", "-WinPS4", "servergamelogincludetribelogs")
 
 
 def _event_ts(raw_line: str, fallback=None) -> int | None:
@@ -393,8 +394,9 @@ class ServerLogs(commands.Cog):
                     if not isinstance(target, discord.Thread):
                         target = admin_thread
                         await self._unarchive_thread(target)
+                    display = guild_settings.strip_log_header(raw)
                     try:
-                        await target.send(f"{_log_time(raw, ev.get('created_at'))} 🛠️ {bot_i18n.t(guild.id, 'server_log_admin')}\n```{raw[:1700]}```")
+                        await target.send(f"{_log_time(raw, ev.get('created_at'))} 🛠️ {bot_i18n.t(guild.id, 'server_log_admin')}\n```{display[:1700]}```")
                         await asyncio.to_thread(guild_settings.mark_server_event_posted, ev["id"])
                     except Exception:
                         admin_fails += 1
@@ -403,19 +405,30 @@ class ServerLogs(commands.Cog):
                     print(f"[ServerLogs] gid={guild.id} admin send failures={admin_fails} thread={admin_thread.id}", flush=True)
 
             if isinstance(ban_thread, discord.Thread) or isinstance(admin_thread, discord.Thread):
+                admin_cats_b = plan.get("admin_cats") or {}
                 for ev_id, ev_type, raw, created in _iter_unposted_bans(plan):
                     raw = (raw or "").strip()
                     if any(probe in raw.lower() for probe in _BANNED_ADMIN_TOKENS):
                         await asyncio.to_thread(guild_settings.mark_server_event_posted, ev_id)
                         continue
                     target = ban_thread if isinstance(ban_thread, discord.Thread) else admin_thread
+                    # Bans/unbans are player-actions; prefer the "other" category
+                    # thread when it exists so they never fall in with generic admin.
+                    okey = "thread_other"
+                    if not isinstance(target, discord.Thread) or okey:
+                        other_cat = admin_cats_b.get(okey)
+                        if isinstance(other_cat, int) and other_cat:
+                            alt = await self._resolve_thread(guild, other_cat)
+                            if isinstance(alt, discord.Thread):
+                                target = alt
                     if not isinstance(target, discord.Thread):
                         continue
                     await self._unarchive_thread(target)
                     icon = "⛔" if ev_type == "ban" else "♻️"
                     word = "banned" if ev_type == "ban" else "unbanned"
+                    display = guild_settings.strip_log_header(raw)
                     try:
-                        await target.send(f"{_log_time(raw, created)} {icon} **{word}**\n```{raw[:1700]}```")
+                        await target.send(f"{_log_time(raw, created)} {icon} **{word}**\n```{display[:1700]}```")
                         await asyncio.to_thread(guild_settings.mark_server_event_posted, ev_id)
                     except Exception:
                         continue
@@ -442,8 +455,9 @@ class ServerLogs(commands.Cog):
                             pass
                         continue
                     icon = "➡️" if log["direction"] == "out" else "💬"
+                    display = guild_settings.strip_log_header(raw)
                     try:
-                        await chat_thread.send(f"{_log_time(raw, log.get('relayed_at'))} | {icon}```{raw[:1850]}```")
+                        await chat_thread.send(f"{_log_time(raw, log.get('relayed_at'))} | {icon}```{display[:1850]}```")
                         await asyncio.to_thread(guild_settings.mark_chat_forum_posted, log["id"])
                         posts += 1
                     except Exception:
