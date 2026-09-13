@@ -29,8 +29,8 @@ DEFAULTS = {
     "warnings": {"title": "Warnings for <player>", "color": "#FFA500"},  # orange
     "punishment-history": {"title": "Punishment History: <player>", "color": "#E74C3C"},  # red
     "blacklist-list": {"title": "Blacklisted Players", "color": "#992D22"},  # dark_red
-    "set-tribe-log-config": {"title": "📜 Tribe Log Config", "color": DEFAULT_EMBED_COLOR},
-    "view-tribelog": {"title": "📜 Tribe Log", "color": DEFAULT_EMBED_COLOR},
+    "set-playerlog-config": {"title": "📋 Player Log Config", "color": DEFAULT_EMBED_COLOR},
+    "view-playerlog": {"title": "📋 Player Log", "color": DEFAULT_EMBED_COLOR},
     "whitelist": {"title": "📜 Whitelist", "color": DEFAULT_EMBED_COLOR},
     "wl-list": {"title": "📜 Whitelist", "color": DEFAULT_EMBED_COLOR},
     "view-command-permissions": {"title": "🔑 Command Permissions", "color": DEFAULT_EMBED_COLOR},

@@ -487,7 +487,7 @@ class CustomCommands(commands.Cog):
             guild_settings.set_tribe_thread(guild.id, tribe, existing.id)
             return existing.id
         try:
-            result = await forum.create_thread(name=tribe, content=bot_i18n.t(guild.id, "tribe_forum_thread_intro", tribe=tribe))
+            result = await forum.create_thread(name=tribe, content=bot_i18n.t(guild.id, "tribe_forum_thread_intro", player=tribe))
             thread = await _normalize_thread(result)
             if thread is None:
                 return None
@@ -496,22 +496,22 @@ class CustomCommands(commands.Cog):
         except Exception:
             return None
 
-    async def _setup_tribe_logs(self, guild: discord.Guild, channel=None):
-        forum = await self._get_or_create_forum(guild, "tribe-logs", bot_i18n.t(guild.id, "tribe_forum_topic"),
-                                                "Tribe log forum - created by setup-logs", channel)
+    async def _setup_player_logs(self, guild: discord.Guild, channel=None):
+        forum = await self._get_or_create_forum(guild, "player-logs", bot_i18n.t(guild.id, "tribe_forum_topic"),
+                                                "Player log forum - created by setup-logs", channel)
         if forum is None:
-            return None, "tribe-logs: " + bot_i18n.t(guild.id, "forum_error", error="create failed")
-        tribes = sorted(self._known_tribes(guild.id))
+            return None, "player-logs: " + bot_i18n.t(guild.id, "forum_error", error="create failed")
+        players = sorted(self._known_tribes(guild.id))
         created = []
-        for tribe in tribes:
-            thread_id = await self._ensure_tribe_thread(guild, forum, tribe)
+        for name in players:
+            thread_id = await self._ensure_tribe_thread(guild, forum, name)
             if thread_id:
-                created.append((tribe, thread_id))
+                created.append((name, thread_id))
         if created:
             lines = "\n".join(f"  • **{t}** → <#{tid}>" for t, tid in created)
         else:
             lines = bot_i18n.t(guild.id, "tribe_forum_no_tribes")
-        return bot_i18n.t(guild.id, "tribelog_forum_ready", forum=forum.mention, count=len(created), lines=lines), None
+        return f"✅ **Player-logs forum ready.**\nForum: {forum.mention}\nPlayers ({len(created)}):\n{lines}", None
 
     @app_commands.command(name="setup-logs", description="Set up all log forums at once, or just one type (Admin only)")
     @app_commands.choices(which=[
@@ -520,7 +520,7 @@ class CustomCommands(commands.Cog):
         app_commands.Choice(name="Server logs (join/leave)", value="server"),
         app_commands.Choice(name="Game chat", value="chat"),
         app_commands.Choice(name="Shop logs", value="shop"),
-        app_commands.Choice(name="Tribe logs", value="tribes"),
+        app_commands.Choice(name="Player logs", value="players"),
     ])
     @app_commands.describe(
         which="Which log to set up",
@@ -537,7 +537,7 @@ class CustomCommands(commands.Cog):
             "server": self._setup_server_logs,
             "chat": self._setup_chat_logs,
             "shop": self._setup_shop_logs,
-            "tribes": self._setup_tribe_logs,
+            "players": self._setup_player_logs,
         }
 
         lines = []

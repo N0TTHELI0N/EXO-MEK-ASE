@@ -45,6 +45,7 @@ def parse_log_timestamp(text: str) -> int | None:
 _BRACKET_BLOCK = re.compile(r"^\[[^\]]*\]\s*")
 _TS_FULL = re.compile(r"^\d{4}[.\-/]\d{1,2}[.\-/]\d{1,2}[_ T\-]\d{1,2}[:.\-/]\d{1,2}[:.\-/]\d{1,2}(?:[:.]\d+)?\s*(?:[:]\s*|\s+)", re.I)
 _TS_SHORT = re.compile(r"^\[?\d{1,2}:\d{2}:\d{2}\]?\s*")
+_TS_PLAYER_EVT = re.compile(r"^Log[A-Za-z]*Player(?:Joined|Left)\s*[:#]?\s*", re.I)
 
 
 def strip_log_header(text: str) -> str:
@@ -65,6 +66,10 @@ def strip_log_header(text: str) -> str:
             out = out[m.end():]
             changed = True
         m = _TS_SHORT.match(out)
+        if m:
+            out = out[m.end():]
+            changed = True
+        m = _TS_PLAYER_EVT.match(out)
         if m:
             out = out[m.end():]
             changed = True
@@ -1099,7 +1104,7 @@ DEFAULT_EMBEDS = {
     "shop": {"title": "Shop", "description": "Browse available items.", "color": "#00FF00"},
     "leaderboard": {"title": "Leaderboard", "description": "Top players.", "color": "#FFD700"},
     "automod": {"title": "Automod Alert", "description": "Rule violation detected.", "color": "#FF0000"},
-    "tribelog": {"title": "Tribe Log", "description": "Recent tribe activity.", "color": "#0080FF"},
+    "tribelog": {"title": "Player Log", "description": "Recent player activity.", "color": "#0080FF"},
 }
 
 

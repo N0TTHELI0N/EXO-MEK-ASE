@@ -8,7 +8,7 @@ Advanced admin bot for ARK: Survival Evolved servers hosted on Nitrado.
 - **Moderation** - Ban, tempban, warn, wipe players/tribes
 - **Shop System** - Buy dinos with points, manage shop
 - **Whitelist** - PSN linking, auto-restart with whitelist update
-- **Tribe Log** - Monitor tribe activity via file or Nitrado API
+- **Player Log** - Per-player activity threads from in-game log (non-admin)
 - **Leaderboard** - Tribe points and rankings
 - **Server Backup** - Create, restore backups via Nitrado Cloud Backup API
 - **AutoMod** - Profanity filter, spam detection, custom words

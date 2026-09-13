@@ -6,9 +6,9 @@ the @app_commands.command decorators across cogs/. Regenerate with:
     python tools/gen_commands_manifest.py
 """
 
-CATEGORY_ORDER = ['general', 'server', 'custom', 'moderation', 'shop', 'whitelist', 'tribelog', 'leaderboard', 'automod', 'chat', 'admin', 'other']
+CATEGORY_ORDER = ['general', 'server', 'custom', 'moderation', 'shop', 'whitelist', 'playerlog', 'leaderboard', 'automod', 'chat', 'admin', 'other']
 
-CATEGORY_LABELS = {'general': 'General', 'server': 'Server', 'custom': 'Custom Commands', 'moderation': 'Moderation', 'shop': 'Shop', 'whitelist': 'Whitelist', 'tribelog': 'Tribe Log', 'leaderboard': 'Leaderboard', 'automod': 'Auto-Mod', 'chat': 'In-Game Chat', 'admin': 'Admin', 'other': 'Other'}
+CATEGORY_LABELS = {'general': 'General', 'server': 'Server', 'custom': 'Custom Commands', 'moderation': 'Moderation', 'shop': 'Shop', 'whitelist': 'Whitelist', 'playerlog': 'Player Log', 'leaderboard': 'Leaderboard', 'automod': 'Auto-Mod', 'chat': 'In-Game Chat', 'admin': 'Admin', 'other': 'Other'}
 
 # (name, category, default description)
 COMMANDS = [
@@ -73,7 +73,7 @@ COMMANDS = [
     ('set-warning-tempban-duration', 'moderation', 'Set tempban duration for auto-punishment'),
     ('set-warning-default-expiry', 'moderation', 'Set default expiry for tempwarn'),
     ('set-punishment-log', 'moderation', 'Set channel for punishment log messages'),
-    ('add-tribe-member', 'tribelog', 'Manually add a player to a tribe'),
+    ('add-tribe-member', 'moderation', 'Manually add a player to a tribe'),
     ('server-status', 'server', 'Show server status (players, ping, etc.)'),
     ('find-server', 'moderation', 'Find the correct Nitrado service ID for the ARK server (Admin)'),
     ('server-restart', 'server', 'Restart the ARK server'),
@@ -84,10 +84,17 @@ COMMANDS = [
     ('ip-unban', 'moderation', 'Unban an IP address'),
     ('ip-ban-list', 'moderation', 'List all banned IP addresses'),
     ('add-ip', 'moderation', "Manually record a player's IP address for alt detection"),
+    ('add-player', 'playerlog', 'Add a player to the player log (Admin only)'),
+    ('set-playerlog-enabled', 'playerlog', 'Enable or disable player log monitoring (Admin only)'),
+    ('set-playerlog-channel', 'playerlog', 'Set the channel for player log forum (Admin only)'),
+    ('set-playerlog-source', 'playerlog', 'Configure player log source (Admin only)'),
+    ('set-playerlog-config', 'playerlog', 'Set Nitrado credentials for player log (Admin only)'),
+    ('view-playerlog', 'playerlog', 'View player log config and monitored players'),
     ('top-players', 'general', 'Show the top players by time spent on the server'),
     ('backup-create', 'server', 'Create a Nitrado cloud backup (Admin only)'),
     ('backup-list', 'server', 'List all Nitrado cloud backups'),
     ('backup-rollback', 'server', 'Restore a Nitrado cloud backup to the server (Admin only)'),
+    ('nitrado-debug', 'server', 'Diagnose Nitrado log reading (Admin)'),
     ('server-logs-enable', 'server', 'Enable or disable posting to server-logs & game-chat forums (Admin)'),
     ('add-shop-dino', 'shop', 'Add a dinosaur to the shop (Admin only)'),
     ('remove-shop-dino', 'shop', 'Remove a dinosaur from the shop (Admin only)'),
@@ -105,17 +112,16 @@ COMMANDS = [
     ('staff-payments', 'admin', 'List staff payments (filter by status)'),
     ('staff-pay-status', 'admin', 'Mark a staff payment as paid or pending'),
     ('staff-pay-delete', 'admin', 'Delete a staff payment record'),
-    ('add-tribe-name', 'tribelog', 'Add a tribe name to monitor (Admin only)'),
-    ('set-tribelog-enabled', 'tribelog', 'Enable or disable tribe log monitoring (Admin only)'),
-    ('set-tribe-log-channel', 'tribelog', 'Set the channel for tribe log alerts (Admin only)'),
-    ('set-tribe-log-source', 'tribelog', 'Configure tribe log source (Admin only)'),
-    ('set-tribe-log-config', 'tribelog', 'Set Nitrado credentials for tribe log (Admin only)'),
-    ('view-tribelog', 'tribelog', 'View monitored tribes and log config'),
+    ('set-vanity-channels', 'other', 'Set voice channels that show member counts (Admin only)'),
     ('set-whitelist-path', 'whitelist', 'Set the directory for Whitelist.txt on the server (Admin only)'),
     ('set-restart-time', 'whitelist', 'Set the daily restart time for whitelist activation (Admin only)'),
     ('whitelist', 'whitelist', 'View whitelist status'),
     ('wl-list', 'whitelist', 'List all linked players (Admin only)'),
-    ('linkpsn', 'whitelist', 'Link your PSN ID to your Discord account for whitelist'),
+    ('linkpsn', 'whitelist', 'Link your PSN ID to your Discord account (About Me verification)'),
     ('unlinkpsn', 'whitelist', 'Unlink your PSN ID from the bot'),
     ('wl-status', 'whitelist', 'Check your whitelist status'),
+    ('token-add', 'whitelist', 'Give a member whitelist redeem tokens (Admin only)'),
+    ('wl-redeem', 'whitelist', 'Use 1 token to add a gamertag to the server whitelist'),
+    ('wl-refresh', 'whitelist', 'Re-apply all your redeemed gamertags to the server whitelist'),
+    ('wl-check', 'whitelist', 'Check your whitelist token balance and redeemed PSNs'),
 ]

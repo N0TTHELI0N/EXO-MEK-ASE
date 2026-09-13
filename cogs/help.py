@@ -21,7 +21,7 @@ CATEGORY_LABELS = {
     "shop": {"ar": "المتجر", "en": "Shop"},
     "custom": {"ar": "الأوامر المخصصة", "en": "Custom Commands"},
     "whitelist": {"ar": "الوايت ليست", "en": "Whitelist"},
-    "tribelog": {"ar": "سجلات القبائل", "en": "Tribe Log"},
+    "playerlog": {"ar": "سجل اللاعبين", "en": "Player Log"},
     "leaderboard": {"ar": "لوحة المتصدرين", "en": "Leaderboard"},
     "automod": {"ar": "الأتمود", "en": "Auto-Mod"},
     "chat": {"ar": "شات اللعبة", "en": "In-Game Chat"},

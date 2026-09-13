@@ -438,9 +438,9 @@ class ChatBridge(commands.Cog):
                             stats["adm_samples"].append(text[:140])
                 continue
             if kind == "tribe":
-                # Tribe events (kills/tames/raids) are handled by the dedicated
-                # tribelog cog into per-tribe threads; posting them here too
-                # would duplicate every event.
+                # Tribe broadcast events (kills/tames/raids in the shared stream)
+                # are not player chat; posting them here too would duplicate them
+                # in the chat thread.
                 stats["tribe"] += 1
                 continue
             parsed = _parse_chat_line(text)

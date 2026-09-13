@@ -24,13 +24,13 @@ DESC_RE = re.compile(r"description\s*=\s*([\"'])(.*?)\1")
 
 CATEGORY_ORDER = [
     "general", "server", "custom", "moderation", "shop", "whitelist",
-    "tribelog", "leaderboard", "automod", "chat", "admin", "other",
+    "playerlog", "leaderboard", "automod", "chat", "admin", "other",
 ]
 
 CATEGORY_LABELS = {
     "general": "General", "server": "Server", "custom": "Custom Commands",
     "moderation": "Moderation", "shop": "Shop", "whitelist": "Whitelist",
-    "tribelog": "Tribe Log", "leaderboard": "Leaderboard", "automod": "Auto-Mod",
+    "playerlog": "Player Log", "leaderboard": "Leaderboard", "automod": "Auto-Mod",
     "chat": "In-Game Chat", "admin": "Admin", "other": "Other",
 }
 
@@ -43,7 +43,6 @@ NAME_CATEGORY = {
     "server-status": "server",
     "server-restart": "server",
     "server-stop": "server",
-    "add-tribe-member": "tribelog",
     "set-tribe-owner": "leaderboard",
     "add-tribe-points": "leaderboard",
     "remove-tribe-points": "leaderboard",
@@ -60,7 +59,7 @@ FILE_CATEGORY = {
     "custom_commands.py": "custom",
     "shop.py": "shop",
     "whitelist.py": "whitelist",
-    "tribelog.py": "tribelog",
+    "playerlog.py": "playerlog",
     "leaderboard.py": "leaderboard",
     "moderation.py": "moderation",
     "server_backup.py": "server",

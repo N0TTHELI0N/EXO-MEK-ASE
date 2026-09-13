@@ -167,16 +167,16 @@ STRINGS = {
         "en": "**{label}** section - shop activity appears here.",
     },
     "tribe_forum_topic": {
-        "ar": "سجلات قبائل السيرفر - مشاركة لكل قبيلة",
-        "en": "Server tribe logs - one post per tribe",
+        "ar": "سجلات لاعبين السيرفر - مشاركة لكل لاعب",
+        "en": "Server player logs - one post per player",
     },
     "tribe_forum_thread_intro": {
-        "ar": "سجل أحداث قبيلة **{tribe}** - تظهر أحداثها هنا.",
-        "en": "Tribe **{tribe}** event log - its events appear here.",
+        "ar": "سجل إجراءات اللاعب **{player}** - يظهر هنا كل ما (ليس إدارياً) يسويه.",
+        "en": "**{player}** player log - all their (non-admin) actions appear here.",
     },
     "tribe_forum_no_tribes": {
-        "ar": "لا توجد قبائل بعد. أضف قبائل عبر /add-tribe-name وستُنشأ مشاركاتها تلقائيًا.",
-        "en": "No tribes yet. Add tribes via /add-tribe-name and their posts will be created automatically.",
+        "ar": "لا يوجد لاعبون بعد. يُكتشف اللاعبون تلقائيًا من لوق السيرفر، أو أضفهم يدويًا عبر /add-player.",
+        "en": "No players yet. Players are auto-discovered from the server log, or add them manually via /add-player.",
     },
     "points_added": {
         "ar": "تم إضافة **{amount}** نقطة. الرصيد الجديد: **{balance}**.",
@@ -549,38 +549,42 @@ STRINGS = {
         "en": "🔄 Server restarted. Whitelist updated at {time} UTC.",
     },
 
-    # ── tribelog ─────────────────────────────────────────────
-    "tribe_empty_name": {
-        "ar": "❌ اسم القبيلة فارغ.",
-        "en": "❌ Empty tribe name.",
+    # ── playerlog ────────────────────────────────────────────
+    "playerlog_empty_name": {
+        "ar": "❌ اسم اللاعب فارغ.",
+        "en": "❌ Empty player name.",
     },
-    "tribe_name_added": {
-        "ar": "✅ تمت إضافة **{name}** لقائمة المراقبة.",
-        "en": "✅ **{name}** added to monitoring list.",
+    "playerlog_player_added": {
+        "ar": "✅ تمت إضافة **{name}** لسجل اللاعبين.",
+        "en": "✅ **{name}** added to the player log.",
     },
-    "tribelog_toggled": {
-        "ar": "✅ مراقبة سجلات القبائل **{status}**.",
-        "en": "✅ Tribe log monitoring **{status}**.",
+    "playerlog_thread_intro": {
+        "ar": "سجل إجراءات **{player}** — كل ما (ليس إدارياً) يسويه يظهر هنا.",
+        "en": "**{player}** player log — all their (non-admin) actions appear here.",
     },
-    "tribelog_channel_set": {
-        "ar": "✅ تم تعيين قناة سجلات القبائل إلى {channel}",
-        "en": "✅ Tribe log channel set to {channel}",
+    "playerlog_toggled": {
+        "ar": "✅ مراقبة سجل اللاعبين **{status}**.",
+        "en": "✅ Player log monitoring **{status}**.",
     },
-    "tribelog_source_set": {
-        "ar": "✅ تم تعيين مصدر سجلات القبائل إلى **{source}**.",
-        "en": "✅ Tribe log source set to **{source}**.",
+    "playerlog_channel_set": {
+        "ar": "✅ تم تعيين فوروم سجل اللاعبين إلى {channel}.",
+        "en": "✅ Player log forum set to {channel}.",
     },
-    "tribelog_config_saved": {
-        "ar": "✅ تم حفظ إعدادات Nitrado لسجلات القبائل.",
-        "en": "✅ Tribe log Nitrado config saved.",
+    "playerlog_source_set": {
+        "ar": "✅ تم تعيين مصدر سجل اللاعبين إلى **{source}**.",
+        "en": "✅ Player log source set to **{source}**.",
     },
-    "tribelog_forum_ready": {
-        "ar": "✅ فوروم سجلات القبائل جاهز.\nالفوروم: {forum}\nالقبائل المراقبة ({count}):\n{lines}",
-        "en": "✅ Tribe-logs forum ready.\nForum: {forum}\nMonitored tribes ({count}):\n{lines}",
+    "playerlog_config_saved": {
+        "ar": "✅ تم حفظ إعدادات Nitrado لسجل اللاعبين.",
+        "en": "✅ Player log Nitrado config saved.",
     },
-    "tribelog_config_title": {
-        "ar": "📋 إعدادات سجلات القبائل",
-        "en": "📋 Tribe Log Config",
+    "playerlog_config_title": {
+        "ar": "📋 إعدادات سجل اللاعبين",
+        "en": "📋 Player Log Config",
+    },
+    "tribelog_no_entries": {
+        "ar": "لا توجد سجلات لاعبين.",
+        "en": "No player log entries found.",
     },
 
     # ── moderation ───────────────────────────────────────────
