@@ -95,6 +95,10 @@ class ServerLogs(commands.Cog):
         self.bot = bot
         self._diag_ts = {}
         self._posted_ts = {}
+        # Restart-log buffering: restart lines from a single boot burst are
+        # held here and flushed as ONE message once the burst stops producing
+        # new lines (avoids splitting one boot across several messages).
+        self._restart_buf = {}  # guild_id -> {ids:set, lines:list}
         print("[ServerLogs] build=c217e83", flush=True)
         self.post_server_logs.start()
 
@@ -383,18 +387,49 @@ class ServerLogs(commands.Cog):
                         continue
 
             if isinstance(restart_thread, discord.Thread):
+                buf = self._restart_buf.setdefault(guild.id, {"ids": set(), "lines": [], "order": []})
+                new_lines = []
                 for ev in plan["restarts"]:
                     raw = (ev["raw_line"] or "").strip()
                     if any(probe in raw.lower() for probe in _BANNED_ADMIN_TOKENS):
                         await asyncio.to_thread(guild_settings.mark_server_event_posted, ev["id"])
                         continue
-                    display = guild_settings.strip_log_header(raw)
-                    try:
-                        title = bot_i18n.t(guild.id, "server_logs_thread_restart")
-                        await restart_thread.send(f"{_log_time(raw, ev.get('created_at'))} | {title}\n```{display[:1700]}```")
-                        await asyncio.to_thread(guild_settings.mark_server_event_posted, ev["id"])
-                    except Exception:
+                    if ev["id"] in buf["ids"]:
                         continue
+                    display = guild_settings.strip_log_header(raw)
+                    buf["ids"].add(ev["id"])
+                    buf["lines"].append(f"{_log_time(raw, ev.get('created_at'))} | {display}")
+                    buf["order"].append(ev["id"])
+                    new_lines.append(ev["id"])
+                # The burst is still growing -> wait for it to finish so the
+                # whole boot posts as one message. Flush only when the burst
+                # produced no NEW lines during this cycle.
+                if not new_lines:
+                    if buf["lines"]:
+                        while buf["lines"]:
+                            chunk = []
+                            total = 0
+                            for line in buf["lines"]:
+                                take = line[:1900]
+                                if chunk and total + len(take) + 1 > 1900:
+                                    break
+                                chunk.append(take)
+                                total += len(take) + 1
+                            n = len(chunk)
+                            if n == 0:
+                                chunk = [buf["lines"][0][:1900]]
+                                n = 1
+                            chunk_ids = buf["order"][:n]
+                            del buf["lines"][:n]
+                            del buf["order"][:n]
+                            for ev_id in chunk_ids:
+                                buf["ids"].discard(ev_id)
+                            try:
+                                await restart_thread.send("```\n" + "\n".join(chunk) + "\n```")
+                                for ev_id in chunk_ids:
+                                    await asyncio.to_thread(guild_settings.mark_server_event_posted, ev_id)
+                            except Exception:
+                                continue
 
             if isinstance(admin_thread, discord.Thread):
                 admin_fails = 0
