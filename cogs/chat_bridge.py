@@ -76,6 +76,7 @@ _SYS_MARKERS = (
     "killed your", "destroyed your", "destroyed their", "was destroyed by",
     "added to the tribe", "was added to the tribe", "left the tribe ",
     "froze a ", "froze an ", "was frozen", "-> ", "[killed]", "[tamed]",
+    "was killed!", "[killersid", "has been killed", "destroyed the",
 )
 _LOG_HEADER = re.compile(r"^(?:\[[^\]]*\]\s*)+|^\d{4}[.\-/]\d{2}[.\-/]\d{2}_\d{2}[.\-/]\d{2}[.\-/]\d{2}\s*:\s*", re.I)
 
@@ -85,10 +86,17 @@ _LOG_ROTATION_NOISE = ("log file closed", "log file opened", "log fragment")
 
 # ARK server startup lines: the full game-server command line gets echoed into
 # the log once on boot and looks like "Ragnarok?listen?MaxPlayers=42?...".
-# Nothing in it is a player/admin event, so never classify or log it.
+# Nothing in it is a player/admin event, so never classify or log it as chat.
 _SERVER_STARTUP_NOISE = (
     "?listen?", "MaxPlayers=", "RCONPort=", "AltSaveDirectoryName", "-WinPS4",
     "-server -log", "servergamelogincludetribelogs",
+)
+
+# Server boot / restart lines. Nitrado marks a fresh boot with these and they
+# are NOT player chat. They are stored as "restart" server events and posted
+# into the dedicated restart thread (server-logs forum).
+_RESTART_MARKERS = (
+    "log file open", "logmemory", "has successfully started", "full startup",
 )
 
 _BAN_PAT = re.compile(r"\bban(?:ned|ner|player)?\b", re.I)
@@ -104,6 +112,17 @@ def _detect_ban_unban(text: str) -> str | None:
     if _BAN_PAT.search(low):
         return "ban"
     return None
+
+
+def _detect_restart_line(text: str) -> bool:
+    """True if the line is a server boot/restart marker (not a player event).
+
+    Nitrado prints these at every boot; they must go to the restart thread and
+    never be parsed as chat (LogMemory/Full Startup lines currently leak into
+    the game-chat log).
+    """
+    low = (text or "").lower()
+    return any(probe in low for probe in _RESTART_MARKERS)
 
 
 def _classify_system_line(text: str) -> str | None:
@@ -412,11 +431,17 @@ class ChatBridge(commands.Cog):
             print(f"[ChatBridge] guild={guild.id} service={client.service_id} log_lines={len(raw.splitlines())} tail_sig={tsig}", flush=True)
         lines = [(l or "").strip() for l in (raw or "").splitlines()]
         posts = []
-        stats = {"join": 0, "leave": 0, "admin": 0, "tribe": 0, "chat": 0, "unparsed": []}
+        stats = {"join": 0, "leave": 0, "admin": 0, "tribe": 0, "restart": 0, "chat": 0, "unparsed": []}
         for text in self._split_new_lines(guild.id, [l for l in lines if l]):
             if not text:
                 continue
             low_text = text.lower()
+            if _detect_restart_line(text):
+                # Server boot/restart → dedicated restart thread, not chat.
+                if not self._event_seen(guild.id, "restart", text[:100], now5):
+                    if guild_settings.add_server_event(guild.id, "restart", "Server", text):
+                        stats["restart"] += 1
+                continue
             if any(probe in low_text for probe in _LOG_ROTATION_NOISE) or any(probe in low_text for probe in _SERVER_STARTUP_NOISE):
                 continue
             joined = _detect_join_leave(text)
@@ -438,9 +463,9 @@ class ChatBridge(commands.Cog):
                             stats["adm_samples"].append(text[:140])
                 continue
             if kind == "tribe":
-                # Tribe broadcast events (kills/tames/raids in the shared stream)
-                # are not player chat; posting them here too would duplicate them
-                # in the chat thread.
+                # Tribe broadcast events (kills/tames/deaths/raids in the shared
+                # stream) are not player chat; posting them here too would
+                # duplicate them in the chat thread. They stay in the player log.
                 stats["tribe"] += 1
                 continue
             parsed = _parse_chat_line(text)
@@ -472,11 +497,11 @@ class ChatBridge(commands.Cog):
                 continue
             posts.append({"channel": channel, "player": player, "message": message})
             stats["chat"] += 1
-        if stats["join"] or stats["leave"] or stats["admin"] or stats["tribe"] or stats["chat"] or stats["unparsed"]:
+        if stats["join"] or stats["leave"] or stats["admin"] or stats["tribe"] or stats["restart"] or stats["chat"] or stats["unparsed"]:
             if guild.id not in self._diag_ts or now5 - self._diag_ts[guild.id] >= 60:
                 self._diag_ts[guild.id] = now5
                 print(
-                    f"[ChatBridge] guild={guild.id} new lines: chat={stats['chat']} join={stats['join']} leave={stats['leave']} admin={stats['admin']} tribe={stats['tribe']} unparsed={len(stats['unparsed'])}",
+                    f"[ChatBridge] guild={guild.id} new lines: chat={stats['chat']} join={stats['join']} leave={stats['leave']} admin={stats['admin']} tribe={stats['tribe']} restart={stats['restart']} unparsed={len(stats['unparsed'])}",
                     flush=True,
                 )
                 if stats["unparsed"]:

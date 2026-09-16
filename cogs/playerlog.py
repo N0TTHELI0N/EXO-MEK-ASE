@@ -25,6 +25,14 @@ _JOIN_LEAVE = re.compile(
 )
 _RICHCOLOR = re.compile(r"<richcolor[^>]*>([^<]+)</", re.I)
 
+# Death broadcast:  "AN8R - Lvl 105 (ZO6) was killed! [KillerSID: 875216655)"
+# The victim is the player whose thread gets the entry (their controlled dino
+# or their character died). Kills ("was killed by") are matched separately.
+_DEATH_LINE = re.compile(
+    r"^(?P<name>.+?)\s*(?:-\s*Lvl\s+\d+\s*(?:\([^)]*\))?\s*)?was killed!",
+    re.I,
+)
+
 # System lines that mention a player but are NOT typed by them.  We extract
 # the first word-sequence after a richcolor tag or after common verb patterns
 # as the actor.
@@ -36,7 +44,11 @@ _TAME_KILL = re.compile(
 _NOISE = (
     "log file closed",
     "log file opened",
+    "log file open",
     "log fragment",
+    "logmemory",
+    "full startup",
+    "has successfully started",
     "?listen?",
     "MaxPlayers=",
     "AltSaveDirectoryName",
@@ -71,6 +83,13 @@ def _extract_player(line: str) -> tuple[str, str] | None:
 
     # Join / leave
     m = _JOIN_LEAVE.search(text)
+    if m:
+        name = m.group("name").strip().strip("'\"")
+        if name and 2 <= len(name) <= 40:
+            return name, ""
+
+    # Death broadcast:  victim was killed!
+    m = _DEATH_LINE.match(text)
     if m:
         name = m.group("name").strip().strip("'\"")
         if name and 2 <= len(name) <= 40:

@@ -472,6 +472,7 @@ def init_db():
             cur.execute("ALTER TABLE server_log_config ADD COLUMN IF NOT EXISTS leave_thread_id BIGINT")
             cur.execute("ALTER TABLE server_log_config ADD COLUMN IF NOT EXISTS admin_thread_id BIGINT")
             cur.execute("ALTER TABLE server_log_config ADD COLUMN IF NOT EXISTS tribe_thread_id BIGINT")
+            cur.execute("ALTER TABLE server_log_config ADD COLUMN IF NOT EXISTS restart_thread_id BIGINT")
             cur.execute("ALTER TABLE forum_log_config ADD COLUMN IF NOT EXISTS thread_other BIGINT")
             cur.execute("ALTER TABLE forum_log_config ADD COLUMN IF NOT EXISTS thread_teleport BIGINT")
             cur.execute("""
@@ -1765,7 +1766,7 @@ def get_server_log_config(guild_id: int) -> dict:
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT enabled, server_forum_id, server_events_thread_id, chat_forum_id, chat_thread_id, "
-                "join_thread_id, leave_thread_id, admin_thread_id, tribe_thread_id "
+                "join_thread_id, leave_thread_id, admin_thread_id, tribe_thread_id, restart_thread_id "
                 "FROM server_log_config WHERE guild_id = %s",
                 (guild_id,),
             )
@@ -1781,6 +1782,7 @@ def get_server_log_config(guild_id: int) -> dict:
                     "leave_thread_id": row[6],
                     "admin_thread_id": row[7],
                     "tribe_thread_id": row[8],
+                    "restart_thread_id": row[9],
                 }
             return {
                 "enabled": True,
@@ -1792,6 +1794,7 @@ def get_server_log_config(guild_id: int) -> dict:
                 "leave_thread_id": None,
                 "admin_thread_id": None,
                 "tribe_thread_id": None,
+                "restart_thread_id": None,
             }
     finally:
         conn.close()
@@ -1799,7 +1802,7 @@ def get_server_log_config(guild_id: int) -> dict:
 
 def update_server_log_config(guild_id: int, **kwargs):
     allowed = {"enabled", "server_forum_id", "server_events_thread_id", "chat_forum_id",
-               "chat_thread_id", "join_thread_id", "leave_thread_id", "admin_thread_id", "tribe_thread_id"}
+               "chat_thread_id", "join_thread_id", "leave_thread_id", "admin_thread_id", "tribe_thread_id", "restart_thread_id"}
     conn = get_conn()
     try:
         with conn.cursor() as cur:

@@ -1202,6 +1202,14 @@ STRINGS = {
         "ar": "🔴 خروج",
         "en": "🔴 Leaves",
     },
+    "server_logs_thread_restart": {
+        "ar": "🔄 اعادة التشغيل",
+        "en": "🔄 Restart",
+    },
+    "server_logs_thread_intro_restart": {
+        "ar": "أحداث إقلاع وإعادة تشغيل السيرفر (فتح اللوق والذاكرة ونجاح البدء وسرعة الإقلاع).",
+        "en": "Server boot / restart events (log open, memory, startup success, boot time).",
+    },
     "server_logs_thread_admin": {
         "ar": "🛠️ لوقات الإدارة",
         "en": "🛠️ Admin Events",

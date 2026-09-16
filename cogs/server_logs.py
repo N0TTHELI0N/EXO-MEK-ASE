@@ -112,7 +112,7 @@ class ServerLogs(commands.Cog):
         # Self-heal: some thread ids may be missing (e.g. only "/setup-logs chat"
         # ran, or thread names changed). Resolve the missing ones now from the
         # log forums, matching name keywords rather than exact names.
-        missing = [k for k in ("join_thread_id", "leave_thread_id", "chat_thread_id") if not cfg.get(k)]
+        missing = [k for k in ("join_thread_id", "leave_thread_id", "chat_thread_id", "restart_thread_id") if not cfg.get(k)]
         if missing:
             forum = guild.get_channel(cfg.get("server_forum_id") or 0)
             if not isinstance(forum, discord.ForumChannel):
@@ -125,6 +125,8 @@ class ServerLogs(commands.Cog):
                         ids.setdefault("join_thread_id", t.id)
                     elif "leave" in tn or "خروج" in tn or "مغادرة" in tn:
                         ids.setdefault("leave_thread_id", t.id)
+                    elif "restart" in tn or "اعادة" in tn or "إعادة" in tn or "تشغيل" in tn:
+                        ids.setdefault("restart_thread_id", t.id)
                     elif "شات" in tn or "chat" in tn or "رسائل" in tn or "messages" in tn or "global" in tn:
                         ids.setdefault("chat_thread_id", t.id)
                 if ids:
@@ -169,6 +171,7 @@ class ServerLogs(commands.Cog):
             "leaves": guild_settings.get_unposted_server_events(guild.id, event_type="leave"),
             "admins": guild_settings.get_unposted_server_events(guild.id, event_type="admin"),
             "bans": bans,
+            "restarts": guild_settings.get_unposted_server_events(guild.id, event_type="restart"),
             "chats": guild_settings.get_unposted_chat_forum_logs(guild.id),
             "admin_cats": admin_cats,
         }
@@ -197,6 +200,8 @@ class ServerLogs(commands.Cog):
                                 ("leave", "خروج", "مغادرة")),
             "chat_thread_id": (bot_i18n.t(guild.id, "chat_forum_thread_name"),
                                ("شات", "chat", "رسائل", "messages")),
+            "restart_thread_id": (bot_i18n.t(guild.id, "server_logs_thread_restart"),
+                                  ("restart", "اعادة", "إعادة", "تشغيل")),
         }
         for key, (name, kws) in plan_threads.items():
             if cfg.get(key):
@@ -333,12 +338,14 @@ class ServerLogs(commands.Cog):
             leave_thread = await self._resolve_thread(guild, cfg.get("leave_thread_id"))
             chat_thread = await self._resolve_thread(guild, cfg.get("chat_thread_id"))
             admin_thread = await self._resolve_thread(guild, cfg.get("admin_thread_id"))
+            restart_thread = await self._resolve_thread(guild, cfg.get("restart_thread_id"))
             ban_thread = admin_thread
             # Self-heal: ids that no longer resolve (thread deleted/renamed) are
             # dropped so _ensure_missing_threads recreates them next tick.
             stale = {}
             for key, th in (("join_thread_id", join_thread), ("leave_thread_id", leave_thread),
-                            ("chat_thread_id", chat_thread), ("admin_thread_id", admin_thread)):
+                            ("chat_thread_id", chat_thread), ("admin_thread_id", admin_thread),
+                            ("restart_thread_id", restart_thread)):
                 if cfg.get(key) and th is None:
                     stale[key] = None
             if stale:
@@ -346,7 +353,7 @@ class ServerLogs(commands.Cog):
                     guild_settings.update_server_log_config(guild.id, **stale)
                 except Exception:
                     pass
-            for th in (join_thread, leave_thread, chat_thread, admin_thread):
+            for th in (join_thread, leave_thread, chat_thread, admin_thread, restart_thread):
                 await self._unarchive_thread(th)
 
             if isinstance(join_thread, discord.Thread):
@@ -371,6 +378,20 @@ class ServerLogs(commands.Cog):
                         continue
                     try:
                         await leave_thread.send(f"{_log_time(raw, ev.get('created_at'))} | 🔴 **{name}** left!")
+                        await asyncio.to_thread(guild_settings.mark_server_event_posted, ev["id"])
+                    except Exception:
+                        continue
+
+            if isinstance(restart_thread, discord.Thread):
+                for ev in plan["restarts"]:
+                    raw = (ev["raw_line"] or "").strip()
+                    if any(probe in raw.lower() for probe in _BANNED_ADMIN_TOKENS):
+                        await asyncio.to_thread(guild_settings.mark_server_event_posted, ev["id"])
+                        continue
+                    display = guild_settings.strip_log_header(raw)
+                    try:
+                        title = bot_i18n.t(guild.id, "server_logs_thread_restart")
+                        await restart_thread.send(f"{_log_time(raw, ev.get('created_at'))} | {title}\n```{display[:1700]}```")
                         await asyncio.to_thread(guild_settings.mark_server_event_posted, ev["id"])
                     except Exception:
                         continue

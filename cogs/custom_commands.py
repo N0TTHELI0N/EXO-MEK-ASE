@@ -397,7 +397,7 @@ class CustomCommands(commands.Cog):
                           thread_done=thread_ids.get("thread_done"), thread_pending=thread_ids.get("thread_pending")), None
 
     async def _ensure_server_log_threads(self, guild: discord.Guild, channel=None):
-        """Make sure the server-logs forum exists with join / leave / chat threads."""
+        """Make sure the server-logs forum exists with join / leave / chat / restart threads."""
         forum = await self._get_or_create_forum(guild, "server-logs", bot_i18n.t(guild.id, "server_logs_topic"),
                                                 "Server log forum - created by setup-logs", channel)
         if forum is None:
@@ -408,7 +408,9 @@ class CustomCommands(commands.Cog):
                                                     bot_i18n.t(guild.id, "server_logs_thread_intro"))
         chat_tid = await self._ensure_forum_thread(forum, bot_i18n.t(guild.id, "chat_forum_thread_name"),
                                                    bot_i18n.t(guild.id, "chat_forum_thread_intro"))
-        return forum, join_tid, leave_tid, chat_tid
+        restart_tid = await self._ensure_forum_thread(forum, bot_i18n.t(guild.id, "server_logs_thread_restart"),
+                                                      bot_i18n.t(guild.id, "server_logs_thread_intro_restart"))
+        return forum, join_tid, leave_tid, chat_tid, restart_tid
 
     async def _ensure_special_log_threads(self, guild: discord.Guild):
         """Admin events thread inside the admin-logs forum. Returns admin_tid."""
@@ -423,10 +425,10 @@ class CustomCommands(commands.Cog):
         return None
 
     async def _setup_server_logs(self, guild: discord.Guild, channel=None):
-        forum, join_tid, leave_tid, chat_tid = await self._ensure_server_log_threads(guild, channel)
+        forum, join_tid, leave_tid, chat_tid, restart_tid = await self._ensure_server_log_threads(guild, channel)
         if forum is None:
             return None, "server-logs: " + bot_i18n.t(guild.id, "forum_error", error="create failed")
-        if not (join_tid and leave_tid and chat_tid):
+        if not (join_tid and leave_tid and chat_tid and restart_tid):
             return None, "server-logs: " + bot_i18n.t(guild.id, "forum_error", error="thread failed")
         admin_tid = await self._ensure_special_log_threads(guild)
         guild_settings.update_server_log_config(guild.id, enabled=True,
@@ -435,6 +437,7 @@ class CustomCommands(commands.Cog):
                                                 leave_thread_id=leave_tid,
                                                 chat_forum_id=forum.id,
                                                 chat_thread_id=chat_tid,
+                                                restart_thread_id=restart_tid,
                                                 admin_thread_id=admin_tid)
         # The in-game monitoring that captures events must run to feed this forum.
         guild_settings.update_chat_bridge_config(guild.id, enabled=True)
@@ -446,7 +449,7 @@ class CustomCommands(commands.Cog):
                           join=join_tid, leave=leave_tid) + tail, None
 
     async def _setup_chat_logs(self, guild: discord.Guild, channel=None):
-        forum, join_tid, leave_tid, chat_tid = await self._ensure_server_log_threads(guild, channel)
+        forum, join_tid, leave_tid, chat_tid, restart_tid = await self._ensure_server_log_threads(guild, channel)
         if forum is None:
             return None, "server-logs: " + bot_i18n.t(guild.id, "forum_error", error="create failed")
         if not chat_tid:
@@ -459,6 +462,7 @@ class CustomCommands(commands.Cog):
                                                 leave_thread_id=leave_tid or cfg.get("leave_thread_id"),
                                                 chat_forum_id=forum.id,
                                                 chat_thread_id=chat_tid,
+                                                restart_thread_id=restart_tid or cfg.get("restart_thread_id"),
                                                 admin_thread_id=admin_tid or cfg.get("admin_thread_id"),
                                                 server_events_thread_id=cfg.get("server_events_thread_id"))
         guild_settings.update_chat_bridge_config(guild.id, enabled=True)
