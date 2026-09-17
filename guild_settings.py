@@ -267,11 +267,24 @@ def _decrypt(value: str) -> str:
     return _fernet.decrypt(value[4:].encode()).decode()
 
 
+_init_db_spin_lock = threading.Lock()
+
+
 def init_db():
+    # Postgres deadlock guard (Render log: two parallel callers racing to
+    # ALTER the same tables from separate pool connections). Run migration
+    # exactly once, and only while holding an advisory lock scoped to the
+    # migration key so concurrent callers queue serially instead of
+    # deadlocking on each other's row locks.
+    if not _init_db_spin_lock.acquire(blocking=False):
+        return
     conn = get_conn()
     try:
-        with conn.cursor() as cur:
-            cur.execute("""
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT pg_advisory_xact_lock(752001)")
+            with conn.cursor() as cur:
+                cur.execute("""
                 CREATE TABLE IF NOT EXISTS guild_settings (
                     guild_id    BIGINT PRIMARY KEY,
                     settings    JSONB NOT NULL DEFAULT '{}'::jsonb
