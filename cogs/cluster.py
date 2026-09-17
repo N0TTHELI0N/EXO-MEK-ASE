@@ -24,8 +24,9 @@ class Cluster(commands.Cog):
     @app_commands.command(name="cluster-set", description="Set or update the alpha tribe for a cluster")
     @app_commands.describe(cluster_name="Cluster name (map/adventure name)", tribe_name="Alpha tribe name", disc_channel="Optional Discord channel for alpha announcements")
     async def cluster_set(self, interaction: discord.Interaction, cluster_name: str, tribe_name: str, disc_channel: discord.TextChannel = None):
+        await interaction.response.defer(ephemeral=True)
         if not interaction.user.guild_permissions.administrator:
-            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
+            return await interaction.followup.send(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
 
         guild_settings.add_cluster(
             interaction.guild_id, cluster_name.strip(), tribe_name.strip(),
@@ -34,7 +35,7 @@ class Cluster(commands.Cog):
         )
         _log(interaction.guild_id, "cluster_set", interaction.user, tribe_name, details={"cluster": cluster_name})
         ch = f" <#{disc_channel.id}>" if disc_channel else ""
-        await interaction.response.send_message(
+        await interaction.followup.send(
             bot_i18n.t(interaction.guild_id, "cluster_alpha_set", cluster=cluster_name, tribe=tribe_name, channel=ch),
             ephemeral=True,
         )
@@ -54,13 +55,14 @@ class Cluster(commands.Cog):
     @app_commands.command(name="cluster-remove", description="Remove a cluster entry")
     @app_commands.describe(cluster_id="Cluster ID (see /cluster-list)")
     async def cluster_remove(self, interaction: discord.Interaction, cluster_id: int):
+        await interaction.response.defer(ephemeral=True)
         if not interaction.user.guild_permissions.administrator:
-            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
+            return await interaction.followup.send(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
         if guild_settings.remove_cluster(cluster_id, interaction.guild_id):
             _log(interaction.guild_id, "cluster_remove", interaction.user, None, details={"cluster_id": cluster_id})
-            await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "cluster_removed", cluster_id=cluster_id), ephemeral=True)
+            await interaction.followup.send(bot_i18n.t(interaction.guild_id, "cluster_removed", cluster_id=cluster_id), ephemeral=True)
         else:
-            await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "cluster_not_found", cluster_id=cluster_id), ephemeral=True)
+            await interaction.followup.send(bot_i18n.t(interaction.guild_id, "cluster_not_found", cluster_id=cluster_id), ephemeral=True)
 
     @app_commands.command(name="cluster-status", description="Show cluster alpha status")
     async def cluster_status(self, interaction: discord.Interaction):

@@ -329,11 +329,12 @@ class Playerlog(commands.Cog):
     @app_commands.command(name="add-player", description="Add a player to the player log (Admin only)")
     @app_commands.describe(player_name="In-game player name", psn_id="PlayStation ID (optional)")
     async def add_player(self, interaction: discord.Interaction, player_name: str, psn_id: str = ""):
+        await interaction.response.defer(ephemeral=True)
         if not interaction.user.guild_permissions.administrator:
-            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
+            return await interaction.followup.send(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
         name = player_name.strip()
         if not name:
-            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "playerlog_empty_name"), ephemeral=True)
+            return await interaction.followup.send(bot_i18n.t(interaction.guild_id, "playerlog_empty_name"), ephemeral=True)
         _add_known_player(interaction.guild_id, name, psn_id)
         self.known_players_cache.setdefault(interaction.guild_id, {})[name] = psn_id
         cfg = guild_settings.get_tribe_forum_config(interaction.guild_id)
@@ -341,7 +342,7 @@ class Playerlog(commands.Cog):
             forum = interaction.guild.get_channel(cfg["forum_id"])
             if isinstance(forum, discord.ForumChannel):
                 await self._ensure_player_thread(interaction.guild, forum, name, psn_id)
-        await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "playerlog_player_added", name=name), ephemeral=True)
+        await interaction.followup.send(bot_i18n.t(interaction.guild_id, "playerlog_player_added", name=name), ephemeral=True)
 
     # ── background monitor ──────────────────────────────────────────────────
     @tasks.loop(seconds=30)
@@ -450,11 +451,12 @@ class Playerlog(commands.Cog):
     @app_commands.command(name="set-playerlog-enabled", description="Enable or disable player log monitoring (Admin only)")
     @app_commands.describe(enabled="Enable or disable")
     async def set_playerlog_enabled(self, interaction: discord.Interaction, enabled: bool):
+        await interaction.response.defer(ephemeral=True)
         if not interaction.user.guild_permissions.administrator:
-            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
+            return await interaction.followup.send(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
         _update_config(interaction.guild_id, enabled=enabled)
         status = bot_i18n.t(interaction.guild_id, "enabled_word" if enabled else "disabled_word")
-        await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "playerlog_toggled", status=status), ephemeral=True)
+        await interaction.followup.send(bot_i18n.t(interaction.guild_id, "playerlog_toggled", status=status), ephemeral=True)
 
     # ── /set-playerlog-channel ──────────────────────────────────────────────
     @app_commands.command(name="set-playerlog-channel", description="Set the channel for player log forum (Admin only)")
@@ -473,10 +475,11 @@ class Playerlog(commands.Cog):
         app_commands.Choice(name="Nitrado API", value="nitrado"),
     ])
     async def set_playerlog_source(self, interaction: discord.Interaction, source: app_commands.Choice[str], log_path: str = ""):
+        await interaction.response.defer(ephemeral=True)
         if not interaction.user.guild_permissions.administrator:
-            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
+            return await interaction.followup.send(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
         _update_config(interaction.guild_id, log_source=source.value, log_path=log_path)
-        await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "playerlog_source_set", source=source.value), ephemeral=True)
+        await interaction.followup.send(bot_i18n.t(interaction.guild_id, "playerlog_source_set", source=source.value), ephemeral=True)
 
     # ── /set-playerlog-config ───────────────────────────────────────────────
     @app_commands.command(name="set-playerlog-config", description="Set Nitrado credentials for player log (Admin only)")
@@ -499,6 +502,7 @@ class Playerlog(commands.Cog):
     @app_commands.describe(player_name="Look up a specific player")
     @app_commands.autocomplete(player_name=player_autocomplete)
     async def view_playerlog(self, interaction: discord.Interaction, player_name: str = ""):
+        await interaction.response.defer(ephemeral=True)
         config_data = _get_config(interaction.guild_id) or {}
         players = _get_known_players(interaction.guild_id)
         counts = guild_settings.get_tribe_event_counts(interaction.guild_id)
@@ -523,7 +527,7 @@ class Playerlog(commands.Cog):
             lines.append(f"\n**{display}** — {counts.get(player_name, 0)} events")
 
         embed = discord.Embed(title=bot_i18n.t(interaction.guild_id, "playerlog_config_title"), description="\n".join(lines), color=discord.Color.blurple())
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.followup.send(embed=embed, ephemeral=True)
 
 
 async def asyncio_to_thread(fn, *args, **kwargs):

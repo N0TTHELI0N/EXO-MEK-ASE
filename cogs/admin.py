@@ -50,8 +50,9 @@ class Admin(commands.Cog):
         service_id="Nitrado service ID"
     )
     async def set_nitrado_token(self, interaction: discord.Interaction, api_token: str, service_id: str = ""):
+        await interaction.response.defer(ephemeral=True)
         if not interaction.user.guild_permissions.administrator:
-            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
+            return await interaction.followup.send(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
 
         guild_settings.update_setting(interaction.guild_id, "nitrado_api_token", api_token)
         if service_id:
@@ -64,7 +65,7 @@ class Admin(commands.Cog):
                 service_id=service_id,
                 api_token=api_token,
             )
-        await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "nitrado_token_saved"), ephemeral=True)
+        await interaction.followup.send(bot_i18n.t(interaction.guild_id, "nitrado_token_saved"), ephemeral=True)
 
     # ── /set-log-channel ─────────────────────────────────────
     @app_commands.command(name="set-log-channel", description="Set the log channel for bot activity (Admin only)")
@@ -80,16 +81,17 @@ class Admin(commands.Cog):
     @app_commands.command(name="set-license", description="Set the license key for this guild (Admin only)")
     @app_commands.describe(key="License key (issued by the bot owner)")
     async def set_license(self, interaction: discord.Interaction, key: str):
+        await interaction.response.defer(ephemeral=True)
         if not interaction.user.guild_permissions.administrator:
-            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
+            return await interaction.followup.send(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
 
         parsed = guild_settings.parse_license_key(key)
         if parsed is None:
-            return await interaction.response.send_message(
+            return await interaction.followup.send(
                 bot_i18n.t(interaction.guild_id, "license_key_format_invalid"), ephemeral=True
             )
         if not guild_settings.verify_license_key(interaction.guild_id, key):
-            return await interaction.response.send_message(
+            return await interaction.followup.send(
                 bot_i18n.t(interaction.guild_id, "license_key_mismatch"), ephemeral=True
             )
         expiry = guild_settings.get_license_expiry(interaction.guild_id)
@@ -97,7 +99,7 @@ class Admin(commands.Cog):
             msg = bot_i18n.t(interaction.guild_id, "license_verified_unlimited")
         else:
             msg = bot_i18n.t(interaction.guild_id, "license_verified_until", expiry=expiry)
-        await interaction.response.send_message(msg, ephemeral=True)
+        await interaction.followup.send(msg, ephemeral=True)
 
     # ── /set-language ────────────────────────────────────────
     @app_commands.command(name="set-language", description="Set bot language (Admin only)")
@@ -124,14 +126,15 @@ class Admin(commands.Cog):
     @app_commands.command(name="ban-user", description="Ban a user from the bot in this guild (Admin only)")
     @app_commands.describe(user="User to ban")
     async def ban_user(self, interaction: discord.Interaction, user: discord.Member):
+        await interaction.response.defer(ephemeral=True)
         if not interaction.user.guild_permissions.administrator:
-            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
+            return await interaction.followup.send(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
 
         banned = guild_settings.get_setting(interaction.guild_id, "banned_users", [])
         if user.id not in banned:
             banned.append(user.id)
             guild_settings.update_setting(interaction.guild_id, "banned_users", banned)
-        await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "user_banned", user=user.mention), ephemeral=True)
+        await interaction.followup.send(bot_i18n.t(interaction.guild_id, "user_banned", user=user.mention), ephemeral=True)
 
     # ── /view-guilds ─────────────────────────────────────────
     @app_commands.command(name="view-guilds", description="View all guilds the bot is in (Admin only)")
@@ -146,14 +149,15 @@ class Admin(commands.Cog):
     # ── /force-sync-guild ────────────────────────────────────
     @app_commands.command(name="force-sync-guild", description="Force sync slash commands for this guild (Admin only)")
     async def force_sync_guild(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
         if not interaction.user.guild_permissions.administrator:
-            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
+            return await interaction.followup.send(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
 
         try:
             synced = await self.bot.tree.sync(guild=interaction.guild)
-            await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "commands_synced", count=len(synced)), ephemeral=True)
+            await interaction.followup.send(bot_i18n.t(interaction.guild_id, "commands_synced", count=len(synced)), ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "sync_failed", error=e), ephemeral=True)
+            await interaction.followup.send(bot_i18n.t(interaction.guild_id, "sync_failed", error=e), ephemeral=True)
 
     # ── /remove-command-permission ───────────────────────────
     @app_commands.command(name="remove-command-permission", description="Remove a role from a command (Admin only)")
@@ -172,12 +176,13 @@ class Admin(commands.Cog):
     # ── /view-command-permissions ────────────────────────────
     @app_commands.command(name="view-command-permissions", description="View all command permission settings (Admin only)")
     async def view_command_permissions(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
         if not interaction.user.guild_permissions.administrator:
-            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
+            return await interaction.followup.send(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
 
         all_perms = guild_settings.get_all_command_permissions(interaction.guild_id)
         if not all_perms:
-            return await interaction.response.send_message(
+            return await interaction.followup.send(
                 bot_i18n.t(interaction.guild_id, "no_command_permissions"), ephemeral=True
             )
 
@@ -189,7 +194,7 @@ class Admin(commands.Cog):
                 roles.append(role_obj.mention if role_obj else f"`{rid}`")
             lines.append(f"`/{cmd}` → {', '.join(roles)}")
 
-        await interaction.response.send_message("\n".join(lines), ephemeral=True)
+        await interaction.followup.send("\n".join(lines), ephemeral=True)
 
     # ── /clear-command-permissions ───────────────────────────
     @app_commands.command(name="clear-command-permissions", description="Reset a command to default permissions (Admin only)")
@@ -208,15 +213,16 @@ class Admin(commands.Cog):
     @app_commands.command(name="automod-add-word", description="Add a word to automod monitoring (Admin only)")
     @app_commands.describe(word="Word to monitor")
     async def automod_add_word(self, interaction: discord.Interaction, word: str):
+        await interaction.response.defer(ephemeral=True)
         if not interaction.user.guild_permissions.administrator:
-            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
+            return await interaction.followup.send(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
 
         guild_settings.add_automod_word(interaction.guild_id, word, interaction.user.id)
         guild_settings.log_action(
             interaction.guild_id, "automod", interaction.user.id, str(interaction.user),
             word, sub_type="word_added", details={"word": word}
         )
-        await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "automod_word_added", word=word), ephemeral=True)
+        await interaction.followup.send(bot_i18n.t(interaction.guild_id, "automod_word_added", word=word), ephemeral=True)
 
     # ── /automod-remove-word ─────────────────────────────────
     @app_commands.command(name="automod-remove-word", description="Remove a word from automod monitoring (Admin only)")
@@ -238,12 +244,13 @@ class Admin(commands.Cog):
     # ── /automod-list-words ──────────────────────────────────
     @app_commands.command(name="automod-list-words", description="List all custom automod words (Admin only)")
     async def automod_list_words(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
         if not interaction.user.guild_permissions.administrator:
-            return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
+            return await interaction.followup.send(bot_i18n.t(interaction.guild_id, "admin_only"), ephemeral=True)
 
         words = guild_settings.get_automod_words(interaction.guild_id)
         if not words:
-            return await interaction.response.send_message(
+            return await interaction.followup.send(
                 bot_i18n.t(interaction.guild_id, "automod_words_empty"), ephemeral=True
             )
 
@@ -254,7 +261,7 @@ class Admin(commands.Cog):
             color=discord.Color.orange(),
         )
         embed.set_footer(text=bot_i18n.t(interaction.guild_id, "automod_list_footer", count=len(words)))
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.followup.send(embed=embed, ephemeral=True)
 
     # ── /automod-clear-words ─────────────────────────────────
     @app_commands.command(name="automod-clear-words", description="Clear all custom automod words (Admin only)")
