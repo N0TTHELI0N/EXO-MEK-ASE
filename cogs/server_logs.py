@@ -99,6 +99,15 @@ class ServerLogs(commands.Cog):
         # held here and flushed as ONE message once the burst stops producing
         # new lines (avoids splitting one boot across several messages).
         self._restart_buf = {}  # guild_id -> {ids:set, lines:list}
+        # Chat-log hourly buffer: new in-game chat lines are held here and
+        # flushed as ONE message per hour, formatted like the /restart-log:
+        # "7 hours ago | `swry_-op (Human): a`" (renderable <t:...:R>, no outer
+        # code fence so the timestamp actually renders).
+        self._chat_buf = {}  # guild_id -> {ids:set, lines:list, order:list, since:float|None}
+        # Chat-lines are buffered and flushed as ONE message per hour so that
+        # each hour's in-game chat arrives as a single readable post with
+        # renderable <t:...> timestamps.
+        self._chat_buf = {}  # guild_id -> {ids:set, lines:list, order:list, since:float|None}
         print("[ServerLogs] build=c217e83", flush=True)
         self.post_server_logs.start()
 
@@ -490,34 +499,63 @@ class ServerLogs(commands.Cog):
                         continue
 
             if isinstance(chat_thread, discord.Thread):
+                # Game chat is relayed to the chat thread, buffered per guild
+                # and flushed as ONE message per hour (not one message per
+                # line), so the thread stays readable. Each line carries a
+                # live relative-time stamp (the <t:...:R> is OUTSIDE the
+                # backticks so Discord renders "7 hours ago") followed by the
+                # stripped chat text in inline backticks — matching the
+                # restart-log format, no outer code block:
+                #
+                #     7 hours ago | `swry_-op (Human): a`
+                #
                 posts = 0
                 nowc = time.time()
                 stale = []
+                cbuf = self._chat_buf.setdefault(guild.id, {
+                    "ids": set(),
+                    "lines": [],
+                    "order": [],
+                    "since": None,
+                })
                 for log in plan["chats"]:
-                    # Old backlog (queued for hours/days) is dropped, not replayed:
-                    # replaying it floods the chat thread with stale posts.
+                    # Old backlog (queued for hours/days) is dropped, not
+                    # replayed: replaying it floods the chat thread with stale
+                    # posts.
                     rel = log.get("relayed_at")
                     age = (nowc - rel.timestamp()) if getattr(rel, "timestamp", None) else -1
                     if age > 300:
                         stale.append(log["id"])
                         continue
-                    if posts >= 20:
-                        break
                     raw = (log.get("raw_line") or log["message"] or "").strip()
-                    if any(probe in raw.lower() for probe in _BANNED_ADMIN_TOKENS):
-                        try:
-                            await asyncio.to_thread(guild_settings.mark_chat_forum_posted, log["id"])
-                        except Exception:
-                            pass
-                        continue
-                    icon = "➡️" if log["direction"] == "out" else "💬"
-                    display = guild_settings.strip_log_header(raw)
-                    try:
-                        await chat_thread.send(f"{_log_time(raw, log.get('relayed_at'))} | {icon}```{display[:1850]}```")
+                    if any(probe in raw.lower() for probe in _BANNED_ADMIN_TOKEN):
                         await asyncio.to_thread(guild_settings.mark_chat_forum_posted, log["id"])
-                        posts += 1
-                    except Exception:
                         continue
+                    if log["id"] in cbuf["ids"]:
+                        continue
+                    display = guild_settings.strip_log_header(raw)
+                    cbuf["ids"].add(log["id"])
+                    cbuf["order"].append(log["id"])
+                    cbuf["lines"].append(
+                        f"{_log_time(raw, log.get('relayed_at'))} | `{display[:1860]}`"
+                    )
+                    posts += 1
+                    if len(cbuf["order"]) >= 8:
+                        break
+                if cbuf["since"] is None:
+                    cbuf["since"] = nowc
+                if cbuf["lines"] and nowc - cbuf["since"] >= 3600:
+                    # One full hour elapsed: flush this hour's chats as ONE
+                    # message (hourly arhive post).
+                    try:
+                        await chat_thread.send("\n".join(cbuf["lines"])[:1900])
+                        for ev_id in cbuf["order"]:
+                            await asyncio.to_thread(guild_settings.mark_chat_forum_posted, ev_id)
+                    except Exception:
+                        pass
+                    self._chat_buf[guild.id] = {
+                        "ids": set(), "lines": [], "order": [], "since": None,
+                    }
                 if stale:
                     try:
                         await asyncio.to_thread(guild_settings.mark_chat_forum_posted_batch, guild.id, stale)
@@ -526,9 +564,8 @@ class ServerLogs(commands.Cog):
                 if posts:
                     nowp2 = time.time()
                     if guild.id not in self._posted_ts or nowp2 - self._posted_ts[guild.id] >= 30:
-                        print(f"[ServerLogs] gid={guild.id} posted chats={posts}", flush=True)
                         self._posted_ts[guild.id] = nowp2
-
+                        print(f"[ServerLogs] gid={guild.id} buffered chats={posts}", flush=True)
     @post_server_logs.before_loop
     async def before_post_server_logs(self):
         await self.bot.wait_until_ready()
