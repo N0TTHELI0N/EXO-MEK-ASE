@@ -114,6 +114,7 @@ EXTENSIONS = [
     "cogs.custom_commands",
     "cogs.whitelist",
     "cogs.gettribelog",
+    "cogs.playerlog",
     "cogs.leaderboard",
     "cogs.automod",
     "cogs.server_backup",
