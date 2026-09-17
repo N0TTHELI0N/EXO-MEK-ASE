@@ -398,7 +398,7 @@ class ServerLogs(commands.Cog):
                         continue
                     display = guild_settings.strip_log_header(raw)
                     buf["ids"].add(ev["id"])
-                    buf["lines"].append(f"{_log_time(raw, ev.get('created_at'))} | {display}")
+                    buf["lines"].append(f"{_log_time(raw, ev.get('created_at'))} | `{display}`")
                     buf["order"].append(ev["id"])
                     new_lines.append(ev["id"])
                 # The burst is still growing -> wait for it to finish so the
@@ -425,7 +425,7 @@ class ServerLogs(commands.Cog):
                             for ev_id in chunk_ids:
                                 buf["ids"].discard(ev_id)
                             try:
-                                await restart_thread.send("```\n" + "\n".join(chunk) + "\n```")
+                                await restart_thread.send("\n".join(chunk))
                                 for ev_id in chunk_ids:
                                     await asyncio.to_thread(guild_settings.mark_server_event_posted, ev_id)
                             except Exception:
