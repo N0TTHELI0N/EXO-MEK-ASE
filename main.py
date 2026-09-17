@@ -113,7 +113,7 @@ EXTENSIONS = [
     "cogs.shop",
     "cogs.custom_commands",
     "cogs.whitelist",
-    "cogs.playerlog",
+    "cogs.gettribelog",
     "cogs.leaderboard",
     "cogs.automod",
     "cogs.server_backup",
