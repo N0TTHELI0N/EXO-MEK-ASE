@@ -534,6 +534,22 @@ class ServerLogs(commands.Cog):
                     if log["id"] in cbuf["ids"]:
                         continue
                     display = guild_settings.strip_log_header(raw)
+                    # Auto-mod: if this in-game chat line contains a dashboard
+                    # watch-word, ALSO relay it to the admin/رقابه thread as a
+                    # renderable alert (it still posts in normal chat as usual).
+                    am_words = []
+                    try:
+                        am_words = await asyncio.to_thread(guild_settings.get_automod_words, guild.id) or []
+                    except Exception:
+                        pass
+                    am_hit = any(w and w.strip().lower() in (raw or "").lower() for w in am_words)
+                    if am_hit:
+                        try:
+                            await admin_thread.send(
+                                f"{_log_time(raw, log.get('relayed_at'))} | 🚨 **Auto-Mod** | `{display[:1500]}`"
+                            )
+                        except Exception:
+                            pass
                     cbuf["ids"].add(log["id"])
                     cbuf["order"].append(log["id"])
                     cbuf["lines"].append(
