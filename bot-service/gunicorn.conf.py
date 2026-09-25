@@ -98,7 +98,13 @@ def start_bot():
 
 
 def post_worker_init(worker):
-    """Gunicorn hook: fire the bot once per worker process."""
+    """Gunicorn hook: bring the schema up to date, then fire the bot.
+
+    Runs in the worker (not the master) so no PostgreSQL connection is ever
+    created before the fork. With workers=1 this executes exactly once.
+    """
+    import db_migrate
+    db_migrate.run_all_migrations()
     start_bot()
 
 

@@ -1,8 +1,11 @@
 """Gunicorn configuration — DASHBOARD SERVICE (Render).
 
-This service runs NO Discord bot: no post_worker_init hook, no gateway
-thread. It is a pure web service, so it can be scaled horizontally
-(threads, not workers, to keep the psycopg2 pool per-process stable).
+This service runs NO Discord bot: no gateway thread, no bot bootstrap. It is
+a pure web service, so it can be scaled horizontally (threads, not workers,
+to keep the psycopg2 pool per-process stable).
+
+It does carry a ``post_worker_init`` hook, but only to run the database
+migrations - see ``core/db_migrate.py``.
 """
 
 import os
@@ -58,3 +61,14 @@ def on_starting(server):
             flush=True,
         )
     print(f"[Dashboard] gunicorn binding to 0.0.0.0:{_port()}", flush=True)
+
+
+def post_worker_init(worker):
+    """Gunicorn hook: bring the schema up to date.
+
+    Must run in the worker, never in the master: the master forks, and a
+    PostgreSQL connection opened before the fork is inherited in a broken
+    state. With workers=1 this executes exactly once.
+    """
+    import db_migrate
+    db_migrate.run_all_migrations()
