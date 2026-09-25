@@ -267,7 +267,7 @@ def _decrypt(value: str) -> str:
     return _fernet.decrypt(value[4:].encode()).decode()
 
 
-_init_db_spin_lock = threading.Lock()
+_init_db_spin_lock = _threading.Lock()
 
 
 def init_db():

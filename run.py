@@ -221,14 +221,27 @@ def run_bot():
         print(f"[Bot] Bot exited: {e}", flush=True)
 
 
+def _port() -> int:
+    """Resolve the listen port. Koyeb injects $PORT; default 5000 locally."""
+    raw = os.environ.get("PORT", "5000").strip() or "5000"
+    try:
+        return int(raw)
+    except ValueError:
+        return 5000
+
+
 def run_dashboard():
     from dashboard.app import app, guild_settings as gs
     gs.init_db()
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    port = _port()
+    print(f"[Web] Listening on 0.0.0.0:{port}", flush=True)
+    app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
 
 
 if __name__ == "__main__":
+    # Local / manual start path. On Koyeb the Procfile runs
+    # `gunicorn --config gunicorn.conf.py wsgi:application`, and the bot is
+    # started by that config's `post_worker_init` hook instead.
     def _bot_worker():
         try:
             run_bot()
@@ -236,6 +249,7 @@ if __name__ == "__main__":
             import traceback
             print(f"[Bot] FATAL error in bot thread:\n{traceback.format_exc()}", flush=True)
 
+    print(f"[Bot] Starting Discord bot thread (port={_port()})...", flush=True)
     bot_thread = threading.Thread(target=_bot_worker, daemon=True)
     bot_thread.start()
     run_dashboard()

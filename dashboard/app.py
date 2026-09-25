@@ -79,6 +79,24 @@ app.config.update(
     SESSION_COOKIE_SAMESITE='Lax',
 )
 
+# ────────────────────────────────────────────────────────────
+#  Reverse-proxy awareness (Koyeb)
+# ────────────────────────────────────────────────────────────
+#  Koyeb terminates TLS at its edge proxy and forwards plain HTTP to $PORT,
+#  so without this Flask sees scheme="http" and builds wrong absolute URLs.
+#  That breaks the Discord OAuth redirect_uri, secure session cookies and
+#  any url_for(..., _external=True).
+from werkzeug.middleware.proxy_fix import ProxyFix  # noqa: E402
+
+app.wsgi_app = ProxyFix(
+    app.wsgi_app,
+    x_for=1,      # X-Forwarded-For
+    x_proto=1,    # X-Forwarded-Proto  (https detection)
+    x_host=1,     # X-Forwarded-Host   (correct external host)
+    x_port=1,     # X-Forwarded-Port
+    x_prefix=0,
+)
+
 BOT_OWNER_ID = int(os.environ.get("BOT_OWNER_ID", "0"))
 
 def generate_csrf_token():
@@ -2785,10 +2803,26 @@ def api_health():
     return jsonify({"status": "ok"})
 
 
+@app.route("/health")
+def koyeb_health():
+    """Koyeb health-check target.
+
+    Deliberately free of DB/network calls so a slow Postgres or a Nitrado
+    outage never causes Koyeb to mark the container unhealthy and restart it.
+    """
+    return jsonify({
+        "status": "ok",
+        "service": "exo-mek-asa",
+        "platform": os.environ.get("KOYEB_SERVICE_NAME", "local"),
+    }), 200
+
+
 # ────────────────────────────────────────────────────────────
 #  Init
 # ────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     guild_settings.init_db()
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    _port = int(os.environ.get("PORT", "5000") or 5000)
+    print(f"[Web] Dashboard standalone on 0.0.0.0:{_port}", flush=True)
+    app.run(host="0.0.0.0", port=_port, debug=False, threaded=True)

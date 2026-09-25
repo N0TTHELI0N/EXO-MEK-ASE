@@ -10,9 +10,15 @@ DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET", "")
 DASHBOARD_SECRET = os.getenv("DASHBOARD_SECRET", "change-me")
 
 # Public URL of the web dashboard (used by /help). Set via env DASHBOARD_BASE_URL.
-DASHBOARD_BASE_URL = os.getenv(
-    "DASHBOARD_BASE_URL", "https://exo-mek-dashboard.onrender.com"
-).rstrip("/")
+# Koyeb exposes KOYEB_PUBLIC_DOMAIN for every deployed service, so derive the
+# default from it instead of hardcoding the old Render hostname.
+_DEFAULT_DASHBOARD_URL = os.getenv("KOYEB_PUBLIC_DOMAIN", "").strip()
+if _DEFAULT_DASHBOARD_URL:
+    _DEFAULT_DASHBOARD_URL = f"https://{_DEFAULT_DASHBOARD_URL}"
+else:
+    _DEFAULT_DASHBOARD_URL = ""
+
+DASHBOARD_BASE_URL = os.getenv("DASHBOARD_BASE_URL", _DEFAULT_DASHBOARD_URL).rstrip("/")
 
 BOT_INVITE_URL = os.getenv(
     "BOT_INVITE_URL",
