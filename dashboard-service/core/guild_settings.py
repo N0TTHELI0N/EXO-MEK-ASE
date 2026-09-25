@@ -646,6 +646,22 @@ def init_db():
             cur.execute("ALTER TABLE server_log_config ADD COLUMN IF NOT EXISTS admin_thread_id BIGINT")
             cur.execute("ALTER TABLE server_log_config ADD COLUMN IF NOT EXISTS tribe_thread_id BIGINT")
             cur.execute("ALTER TABLE server_log_config ADD COLUMN IF NOT EXISTS restart_thread_id BIGINT")
+            # forum_log_config is created here, NOT further down the schema:
+            # its ALTER TABLE statements below run immediately after, and on a
+            # brand-new database an ALTER on a table that does not exist yet
+            # aborts the whole migration with
+            # UndefinedTable: relation "forum_log_config" does not exist.
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS forum_log_config (
+                    guild_id       BIGINT PRIMARY KEY,
+                    forum_id       BIGINT,
+                    thread_dino    BIGINT,
+                    thread_gfi     BIGINT,
+                    thread_player  BIGINT,
+                    thread_gcm     BIGINT,
+                    created_at     TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """)
             cur.execute("ALTER TABLE forum_log_config ADD COLUMN IF NOT EXISTS thread_other BIGINT")
             cur.execute("ALTER TABLE forum_log_config ADD COLUMN IF NOT EXISTS thread_teleport BIGINT")
             cur.execute("""
@@ -784,17 +800,6 @@ def init_db():
                 )
             """)
             cur.execute("ALTER TABLE command_display_overrides ADD COLUMN IF NOT EXISTS help_description TEXT")
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS forum_log_config (
-                    guild_id       BIGINT PRIMARY KEY,
-                    forum_id       BIGINT,
-                    thread_dino    BIGINT,
-                    thread_gfi     BIGINT,
-                    thread_player  BIGINT,
-                    thread_gcm     BIGINT,
-                    created_at     TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-                )
-            """)
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS shop_forum_config (
                     guild_id       BIGINT PRIMARY KEY,
