@@ -27,6 +27,16 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
 sys.path.insert(0, os.path.join(_HERE, "core"))
 
+# Each service owns its configuration: read the .env sitting next to this
+# file. On Koyeb the variables come from the platform instead and this is a
+# no-op. Real environment variables always win (override=False).
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(os.path.join(_HERE, ".env"), override=False)
+except ImportError:
+    pass
+
 import guild_settings
 import shop_db
 import nitrado

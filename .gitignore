@@ -13,13 +13,19 @@ env/
 .venv/
 
 # Environment variables
+# Per-service: bot-service/.env and dashboard-service/.env are both ignored
 .env
+.env.*
+!.env.example
 
 # Database
 *.db
 
 # Backups
 backups/
+
+# Moderation evidence (written at runtime, relative to the service CWD)
+evidence/
 
 # IDE
 .vscode/

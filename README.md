@@ -2,19 +2,28 @@
 
 Advanced admin bot for ARK servers hosted on Nitrado.
 
-## Architecture — two independent services
+## Architecture — two independent services, two folders
 
-This repository is split into two services that share **no code at runtime**;
-they communicate only through one central PostgreSQL database and a shared
-Fernet key.
+```
+Exo-Mek ASE/
+├── bot-service/          Discord bot, cogs, RCON, Nitrado, DB layer
+├── dashboard-service/    Flask dashboard, templates, static, web routes
+├── .gitignore
+└── README.md
+```
 
-| Service | Folder | Contents | Koyeb Procfile |
+Each folder is a self-contained, independently deployable project with its own
+`requirements.txt`, `Procfile`, `gunicorn.conf.py`, `wsgi.py`, `.env` and
+`.env.example`. They share **no code at runtime**; they communicate only
+through one central PostgreSQL database and a shared Fernet key.
+
+| Service | Folder | Contents | Entry point |
 |---|---|---|---|
-| **Bot Service** | repo root | `cogs/`, Discord gateway, RCON, Nitrado client, `guild_settings.py`, `shop_db.py` | `gunicorn --config gunicorn.conf.py wsgi:application` |
-| **Dashboard Service** | `dashboard-service/` | Flask views, `templates/`, `static/`, `translations.py` | `gunicorn --config gunicorn.conf.py wsgi:application` |
+| **Bot Service** | `bot-service/` | `cogs/` (19), Discord gateway, RCON, Nitrado client, `guild_settings.py`, `shop_db.py` | `wsgi:application` + `run.py` |
+| **Dashboard Service** | `dashboard-service/` | Flask views, `templates/`, `static/`, `translations.py` | `wsgi:application` + `app.py` |
 
 - The Bot Service serves only `/` and `/health` (a dependency-free WSGI status
-  page) — it no longer serves the dashboard.
+  page) — it no longer serves the dashboard and needs no Flask.
 - The Dashboard Service runs no Discord bot and needs no `discord.py`.
 - `dashboard-service/core/` holds a byte-identical copy of the shared data layer
   (`guild_settings.py`, `shop_db.py`, `nitrado.py`, `sftp_client.py`,
@@ -36,7 +45,7 @@ Both services must be configured with **identical** values for:
 Bot → Dashboard: `DASHBOARD_BASE_URL` (used by `/help`).
 Dashboard → Bot: `BOT_SERVICE_URL`.
 
-See `.env.example` (bot) and `dashboard-service/.env.example` (dashboard).
+See `bot-service/.env.example` and `dashboard-service/.env.example`.
 
 ## Features
 
@@ -59,27 +68,33 @@ See `.env.example` (bot) and `dashboard-service/.env.example` (dashboard).
 
 ## Environment Variables
 
-See `.env.example` for all required variables.
+See `bot-service/.env.example` and `dashboard-service/.env.example`.
+Each service loads the `.env` in its own folder (real environment variables
+always take precedence, so Koyeb needs no `.env` file).
 
 ## Deployment
 
 ### Koyeb — Bot Service
-- Root directory: repo root · Build: `pip install -r requirements.txt`
+- Root directory: `bot-service/` · Build: `pip install -r requirements.txt`
 - Health check path: `/health` · Instance: **paid** (the bot must stay awake)
+- Set `DASHBOARD_BASE_URL` to the dashboard service's public URL
 
 ### Koyeb — Dashboard Service
 - Root directory: `dashboard-service/` · Build: `pip install -r requirements.txt`
 - Health check path: `/health`
+- Set `BOT_SERVICE_URL` and copy every `[SHARED]` value from the bot service
 
 ### Local
 ```bash
-# bot
+# bot  (terminal 1)
+cd bot-service
 pip install -r requirements.txt
-python run.py
+python run.py            # or: restart.bat
 
-# dashboard (separate shell)
-pip install -r dashboard-service/requirements.txt
-cd dashboard-service && python app.py
+# dashboard  (terminal 2)
+cd dashboard-service
+pip install -r requirements.txt
+python app.py
 ```
 
 ## License

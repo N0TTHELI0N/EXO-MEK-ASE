@@ -9,16 +9,40 @@ DISCORD_CLIENT_ID = os.getenv("DISCORD_CLIENT_ID", "")
 DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET", "")
 DASHBOARD_SECRET = os.getenv("DASHBOARD_SECRET", "change-me")
 
-# Public URL of the web dashboard (used by /help). Set via env DASHBOARD_BASE_URL.
-# Koyeb exposes KOYEB_PUBLIC_DOMAIN for every deployed service, so derive the
-# default from it instead of hardcoding the old Render hostname.
-_DEFAULT_DASHBOARD_URL = os.getenv("KOYEB_PUBLIC_DOMAIN", "").strip()
-if _DEFAULT_DASHBOARD_URL:
-    _DEFAULT_DASHBOARD_URL = f"https://{_DEFAULT_DASHBOARD_URL}"
-else:
-    _DEFAULT_DASHBOARD_URL = ""
+# ────────────────────────────────────────────────────────────
+#  Service topology (Bot Service <-> Dashboard Service)
+# ────────────────────────────────────────────────────────────
+#  The Flask dashboard is an INDEPENDENT service (dashboard-service/) with its
+#  own repo/container/URL. The bot only needs to know where it lives so that
+#  /help can link to it.
+#
+#  Set DASHBOARD_BASE_URL to the dashboard service's public URL, e.g.
+#      https://exo-mek-dashboard.koyeb.app
+#  Leave it empty to hide the link (cogs/help.py already guards on this).
+#
+#  Koyeb exposes KOYEB_PUBLIC_DOMAIN for the service it is deploying, which is
+#  the BOT's own domain — not the dashboard's — so it is only used as a
+#  last-resort guess, never as the primary source.
+_DASHBOARD_URL = os.getenv("DASHBOARD_BASE_URL", "").strip().rstrip("/")
 
-DASHBOARD_BASE_URL = os.getenv("DASHBOARD_BASE_URL", _DEFAULT_DASHBOARD_URL).rstrip("/")
+if not _DASHBOARD_URL:
+    # Optional: a service that also injects the sibling dashboard domain.
+    _peer = os.getenv("DASHBOARD_PUBLIC_DOMAIN", "").strip()
+    if _peer:
+        _DASHBOARD_URL = f"https://{_peer}".rstrip("/")
+
+DASHBOARD_BASE_URL = _DASHBOARD_URL
+
+# Reverse direction: where the dashboard can find the bot. Consumed by the
+# Dashboard Service (see dashboard-service/.env.example).
+BOT_SERVICE_URL = os.getenv("BOT_SERVICE_URL", "").strip().rstrip("/")
+if not BOT_SERVICE_URL:
+    _self_domain = os.getenv("KOYEB_PUBLIC_DOMAIN", "").strip()
+    if _self_domain:
+        BOT_SERVICE_URL = f"https://{_self_domain}".rstrip("/")
+else:
+    # Lets the dashboard discover this bot's URL without extra configuration.
+    os.environ.setdefault("DASHBOARD_BASE_URL", DASHBOARD_BASE_URL)
 
 BOT_INVITE_URL = os.getenv(
     "BOT_INVITE_URL",

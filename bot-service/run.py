@@ -2,7 +2,18 @@ import threading
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(__file__))
+_HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, _HERE)
+
+# Each service owns its configuration: read the .env sitting next to this
+# file. On Koyeb the variables come from the platform instead and this is a
+# no-op. Real environment variables always win (override=False).
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(os.path.join(_HERE, ".env"), override=False)
+except ImportError:
+    pass
 
 
 def run_bot():
