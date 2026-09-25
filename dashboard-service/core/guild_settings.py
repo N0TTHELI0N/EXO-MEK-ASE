@@ -1,0 +1,3650 @@
+import os
+import json
+import hmac
+import hashlib
+import time
+import secrets
+import string
+import re
+import calendar
+from datetime import datetime, timezone
+
+import psycopg2
+from cryptography.fernet import Fernet
+
+
+def parse_log_timestamp(text: str) -> int | None:
+    """Best-effort UNIX epoch from an ARK console log line (assumes UTC):
+
+      2026-09-11 17:42:33   2026.09.11-17.42.33   [17:42:33]
+
+    Returns None when the line carries no recognisable timestamp, so callers
+    fall back to their stored insert time.
+    """
+    if not text:
+        return None
+    m = re.search(r"(\d{4})[./-](\d{1,2})[./-](\d{1,2})[ T](\d{1,2}):(\d{2}):(\d{2})", text)
+    if m:
+        try:
+            return calendar.timegm(tuple(int(g) for g in m.groups()))
+        except Exception:
+            return None
+    m = re.search(r"\[?(\d{1,2}):(\d{2}):(\d{2})\]?", text)
+    if m:
+        h, mi, s = (int(g) for g in m.groups())
+        if h > 23:
+            return None
+        y, mon, d = time.gmtime()[:3]
+        try:
+            return calendar.timegm((y, mon, d, h, mi, s))
+        except Exception:
+            return None
+    return None
+
+
+_BRACKET_BLOCK = re.compile(r"^\[[^\]]*\]\s*")
+_TS_FULL = re.compile(r"^\d{4}[.\-/]\d{1,2}[.\-/]\d{1,2}[_ T\-]\d{1,2}[:.\-/]\d{1,2}[:.\-/]\d{1,2}(?:[:.]\d+)?\s*(?:[:]\s*|\s+)", re.I)
+_TS_SHORT = re.compile(r"^\[?\d{1,2}:\d{2}:\d{2}\]?\s*")
+_TS_PLAYER_EVT = re.compile(r"^Log[A-Za-z]*Player(?:Joined|Left)\s*[:#]?\s*", re.I)
+
+
+def strip_log_header(text: str) -> str:
+    """Remove the Nitrado/ARK log timestamp header noise from a raw log line,
+    e.g. ``[2026.09.13-12.50.33:916][229]2026.09.13_12.50.33: <msg>`` -> ``<msg>``.
+    Keeps everything else intact so tribe/chat/admin messages stay complete."""
+    if not text:
+        return text
+    out = text
+    for _ in range(8):
+        changed = False
+        m = _BRACKET_BLOCK.match(out)
+        if m:
+            out = out[m.end():]
+            changed = True
+        m = _TS_FULL.match(out)
+        if m:
+            out = out[m.end():]
+            changed = True
+        m = _TS_SHORT.match(out)
+        if m:
+            out = out[m.end():]
+            changed = True
+        m = _TS_PLAYER_EVT.match(out)
+        if m:
+            out = out[m.end():]
+            changed = True
+        if not changed:
+            break
+    return out.strip(" :[]")
+
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+_ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY", "")
+_fernet = Fernet(_ENCRYPTION_KEY.encode()) if _ENCRYPTION_KEY else None
+
+# Secret used to sign license keys. If not set, falls back to ENCRYPTION_KEY.
+_LICENSE_SIGN_KEY = (os.getenv("LICENSE_SIGN_KEY", "") or _ENCRYPTION_KEY).encode()
+
+ENCRYPTED_FIELDS = {"nitrado_api_token", "ftp_password"}
+
+# ---------------------------------------------------------------------------
+# Small in-process TTL caches for the hot read paths.
+# Every t() / interaction check / send hook used to open a fresh Postgres
+# connection, which blew past Discord's 3s response window and produced
+# "The application did not respond" / Unknown interaction (10062).
+# ---------------------------------------------------------------------------
+
+import threading as _threading
+import time as _clock
+
+_CACHE_TTL = 20  # seconds; keeps dashboard edits visible within ~20s
+
+_cache_lock = _threading.Lock()
+_settings_cache = {}   # guild_id -> (monotonic_expiry, decrypted settings dict)
+_perms_cache = {}      # (guild_id, command) -> (expiry, list of role ids)
+_display_cache = {}    # command_name -> (expiry, display cfg dict)
+
+
+def _cache_get(cache, key):
+    with _cache_lock:
+        item = cache.get(key)
+        if item is not None:
+            if item[0] > _clock.monotonic():
+                return item[1]
+            cache.pop(key, None)
+    return None
+
+
+def _cache_set(cache, key, value, ttl=_CACHE_TTL):
+    with _cache_lock:
+        cache[key] = (_clock.monotonic() + ttl, value)
+
+
+def _cache_drop(cache, key):
+    with _cache_lock:
+        cache.pop(key, None)
+
+
+# ---------------------------------------------------------------------------
+# Small warm-connection pool for Postgres.
+# Every write path (add_chat_log, add_ip_record, ...) used to open a brand
+# new psycopg2 connection; with Render's Postgres that connect takes hundreds
+# of ms to seconds (TCP + SSL) and was run synchronously ON the event loop,
+# stalling Discord heartbeats and causing "did not respond"/disconnects.
+# get_conn() now hands out reusable connections from a small pool; close()
+# returns them to the pool instead of dropping the socket.
+# ---------------------------------------------------------------------------
+
+_pool_lock = _threading.Lock()
+_pool_cond = _threading.Condition(_pool_lock)
+_pool_idle = []            # list of (raw connection, monotonic time)
+_pool_open = 0             # total live connections (idle + borrowed)
+_POOL_MAX_IDLE = 4
+_POOL_MAX_OPEN = 8
+_POOL_WAIT_S = 6.0
+
+
+def _pool_trim_locked():
+    global _pool_open
+    _pool_idle[:] = [(c, ts) for c, ts in _pool_idle if not c.closed]
+    while len(_pool_idle) > _POOL_MAX_IDLE:
+        c, _ = _pool_idle.pop(0)
+        _pool_open -= 1
+        try:
+            c.close()
+        except Exception:
+            pass
+
+
+def _pool_dec():
+    global _pool_open
+    with _pool_lock:
+        _pool_open = max(0, _pool_open - 1)
+
+
+class _PooledConnection:
+    __slots__ = ("_raw",)
+
+    def __init__(self, raw):
+        object.__setattr__(self, "_raw", raw)
+
+    def close(self):
+        raw = object.__getattribute__(self, "_raw")
+        object.__setattr__(self, "_raw", None)
+        if raw is None or raw.closed:
+            return
+        try:
+            if raw.in_transaction:
+                raw.rollback()
+        except Exception:
+            try:
+                raw.close()
+            except Exception:
+                pass
+            _pool_dec()
+            return
+        with _pool_lock:
+            _pool_idle.append((raw, _clock.monotonic()))
+            _pool_trim_locked()
+        _pool_cond.notify()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        if exc_type is None:
+            try:
+                object.__getattribute__(self, "_raw").commit()
+            except Exception:
+                pass
+        return False
+
+    def __getattr__(self, name):
+        raw = object.__getattribute__(self, "_raw")
+        if raw is None:
+            raise RuntimeError("database connection already returned to the pool")
+        return getattr(raw, name)
+
+
+def get_conn():
+    global _pool_open
+    if not DATABASE_URL:
+        raise RuntimeError("DATABASE_URL not set")
+    start = _clock.monotonic()
+    raw = None
+    with _pool_cond:
+        while not _pool_idle and _pool_open >= _POOL_MAX_OPEN \
+                and _clock.monotonic() - start < _POOL_WAIT_S:
+            _pool_cond.wait(0.2)
+        if _pool_idle:
+            raw = _pool_idle.pop()[0]
+            _pool_trim_locked()
+        else:
+            # After the wait a new connection is opened even past the soft cap
+            # so a leaked connection can never wedge the pool permanently.
+            _pool_open += 1
+    if raw is None or raw.closed:
+        if raw is not None and raw.closed:
+            with _pool_lock:
+                _pool_open = max(0, _pool_open - 1)
+            raw = None
+        # Short connect timeout so an unreachable Postgres can't hang startup/requests
+        # (this was causing Render "Port scan timeout" deploys).
+        try:
+            raw = psycopg2.connect(
+                DATABASE_URL, connect_timeout=5,
+                keepalives=1, keepalives_idle=120, keepalives_interval=30, keepalives_count=4,
+            )
+        except Exception:
+            _pool_dec()
+            raise
+    return _PooledConnection(raw)
+
+
+def _close_all_pool():
+    global _pool_open
+    with _pool_lock:
+        for c, _ in _pool_idle:
+            try:
+                c.close()
+            except Exception:
+                pass
+        _pool_idle.clear()
+        _pool_open = 0
+
+
+def _encrypt(value: str) -> str:
+    if not _fernet or not value:
+        return value
+    return "enc:" + _fernet.encrypt(value.encode()).decode()
+
+
+def _decrypt(value: str) -> str:
+    if not value or not value.startswith("enc:"):
+        return value
+    if not _fernet:
+        return value
+    return _fernet.decrypt(value[4:].encode()).decode()
+
+
+_init_db_spin_lock = _threading.Lock()
+
+
+def init_db():
+    # Postgres deadlock guard (Render log: two parallel callers racing to
+    # ALTER the same tables from separate pool connections). Run migration
+    # exactly once, and only while holding an advisory lock scoped to the
+    # migration key so concurrent callers queue serially instead of
+    # deadlocking on each other's row locks.
+    if not _init_db_spin_lock.acquire(blocking=False):
+        return
+    conn = get_conn()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT pg_advisory_xact_lock(752001)")
+            with conn.cursor() as cur:
+                cur.execute("""
+                CREATE TABLE IF NOT EXISTS guild_settings (
+                    guild_id    BIGINT PRIMARY KEY,
+                    settings    JSONB NOT NULL DEFAULT '{}'::jsonb
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS embed_templates (
+                    embed_id    TEXT PRIMARY KEY,
+                    guild_id    BIGINT NOT NULL,
+                    template    JSONB NOT NULL DEFAULT '{}'::jsonb,
+                    updated_at  TIMESTAMP WITH TIME ZONE DEFAULT now()
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS shop_dinos (
+                    id          SERIAL PRIMARY KEY,
+                    guild_id    BIGINT NOT NULL,
+                    name        TEXT NOT NULL,
+                    blueprint   TEXT NOT NULL,
+                    min_level   INTEGER DEFAULT 1,
+                    max_level   INTEGER DEFAULT 150,
+                    price       INTEGER DEFAULT 0,
+                    category    TEXT DEFAULT 'General'
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS tribe_points (
+                    id          SERIAL PRIMARY KEY,
+                    guild_id    BIGINT NOT NULL,
+                    tribe_name  TEXT NOT NULL,
+                    points      INTEGER DEFAULT 0,
+                    last_update TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    UNIQUE (guild_id, tribe_name)
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS leaderboard_config (
+                    guild_id                BIGINT PRIMARY KEY,
+                    announcement_channel_id BIGINT,
+                    announcement_message    TEXT,
+                    update_interval         INTEGER DEFAULT 5,
+                    last_update             TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS linked_players (
+                    guild_id    BIGINT NOT NULL,
+                    discord_id  BIGINT NOT NULL,
+                    psn_id      TEXT NOT NULL,
+                    status      TEXT DEFAULT 'pending',
+                    linked_at   TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    PRIMARY KEY (guild_id, discord_id)
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS restart_schedule (
+                    guild_id        BIGINT PRIMARY KEY,
+                    restart_hour    INTEGER DEFAULT 3,
+                    restart_minute  INTEGER DEFAULT 0,
+                    last_run_date   DATE
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS tribe_log_config (
+                    guild_id            BIGINT PRIMARY KEY,
+                    enabled             BOOLEAN DEFAULT FALSE,
+                    channel_id          BIGINT,
+                    log_source          TEXT DEFAULT 'file',
+                    log_path            TEXT DEFAULT '',
+                    nitrado_token       TEXT DEFAULT '',
+                    nitrado_user_id     TEXT DEFAULT '',
+                    nitrado_service_id  TEXT DEFAULT ''
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS known_tribes (
+                    guild_id    BIGINT NOT NULL,
+                    tribe_name  TEXT NOT NULL,
+                    tribe_game_id TEXT DEFAULT '',
+                    PRIMARY KEY (guild_id, tribe_name)
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS backup_records (
+                    id          SERIAL PRIMARY KEY,
+                    guild_id    BIGINT NOT NULL,
+                    name        TEXT NOT NULL,
+                    created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    created_by  BIGINT,
+                    file_path   TEXT
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS player_warnings (
+                    id          SERIAL PRIMARY KEY,
+                    guild_id    BIGINT NOT NULL,
+                    player_name TEXT NOT NULL,
+                    player_id   TEXT,
+                    reason      TEXT NOT NULL,
+                    warned_by   BIGINT NOT NULL,
+                    warned_at   TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    expires_at  TIMESTAMP WITH TIME ZONE,
+                    active      BOOLEAN DEFAULT TRUE
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS player_punishments (
+                    id              SERIAL PRIMARY KEY,
+                    guild_id        BIGINT NOT NULL,
+                    player_name     TEXT NOT NULL,
+                    player_id       TEXT,
+                    tribe_name      TEXT,
+                    punishment_type TEXT NOT NULL,
+                    reason          TEXT NOT NULL,
+                    issued_by       BIGINT NOT NULL,
+                    scope           TEXT DEFAULT 'player',
+                    issued_at       TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    expires_at      TIMESTAMP WITH TIME ZONE,
+                    executed        BOOLEAN DEFAULT FALSE,
+                    appealed        BOOLEAN DEFAULT FALSE,
+                    appeal_reason   TEXT
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS punishment_evidence (
+                    id              SERIAL PRIMARY KEY,
+                    punishment_id   INTEGER REFERENCES player_punishments(id) ON DELETE CASCADE,
+                    guild_id        BIGINT NOT NULL,
+                    filename        TEXT NOT NULL,
+                    original_name   TEXT NOT NULL,
+                    file_size       INTEGER,
+                    uploaded_by     BIGINT NOT NULL,
+                    created_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS player_blacklist (
+                    id          SERIAL PRIMARY KEY,
+                    guild_id    BIGINT NOT NULL,
+                    player_name TEXT NOT NULL,
+                    player_id   TEXT,
+                    tribe_name  TEXT,
+                    reason      TEXT NOT NULL,
+                    issued_by   BIGINT NOT NULL,
+                    scope       TEXT DEFAULT 'player',
+                    issued_at   TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS chat_bridge_config (
+                    guild_id            BIGINT PRIMARY KEY,
+                    enabled             BOOLEAN DEFAULT FALSE,
+                    log_channel_id      BIGINT,
+                    relay_channel_id    BIGINT,
+                    relay_out           BOOLEAN DEFAULT FALSE,
+                    relay_in            BOOLEAN DEFAULT FALSE,
+                    last_log_line       TEXT DEFAULT ''
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS chat_logs (
+                    id          SERIAL PRIMARY KEY,
+                    guild_id    BIGINT NOT NULL,
+                    channel     TEXT DEFAULT 'global',
+                    player_name TEXT,
+                    tribe_name  TEXT,
+                    message     TEXT NOT NULL,
+                    raw_line    TEXT,
+                    direction   TEXT DEFAULT 'in',
+                    relayed_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_chat_logs_guild ON chat_logs(guild_id, relayed_at DESC)")
+            cur.execute("ALTER TABLE chat_logs ADD COLUMN IF NOT EXISTS posted_chat_forum BOOLEAN DEFAULT FALSE")
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS server_log_config (
+                    guild_id                BIGINT PRIMARY KEY,
+                    enabled                 BOOLEAN DEFAULT FALSE,
+                    server_forum_id         BIGINT,
+                    server_events_thread_id BIGINT,
+                    chat_forum_id           BIGINT,
+                    chat_thread_id          BIGINT
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS server_events (
+                    id           SERIAL PRIMARY KEY,
+                    guild_id     BIGINT NOT NULL,
+                    event_type   TEXT NOT NULL,
+                    player_name  TEXT,
+                    raw_line     TEXT,
+                    created_at   TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    posted_forum BOOLEAN DEFAULT FALSE
+                )
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_server_events_guild ON server_events(guild_id, id)")
+            cur.execute("ALTER TABLE server_log_config ADD COLUMN IF NOT EXISTS join_thread_id BIGINT")
+            cur.execute("ALTER TABLE server_log_config ADD COLUMN IF NOT EXISTS leave_thread_id BIGINT")
+            cur.execute("ALTER TABLE server_log_config ADD COLUMN IF NOT EXISTS admin_thread_id BIGINT")
+            cur.execute("ALTER TABLE server_log_config ADD COLUMN IF NOT EXISTS tribe_thread_id BIGINT")
+            cur.execute("ALTER TABLE server_log_config ADD COLUMN IF NOT EXISTS restart_thread_id BIGINT")
+            cur.execute("ALTER TABLE forum_log_config ADD COLUMN IF NOT EXISTS thread_other BIGINT")
+            cur.execute("ALTER TABLE forum_log_config ADD COLUMN IF NOT EXISTS thread_teleport BIGINT")
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS chat_auto_rules (
+                    id             SERIAL PRIMARY KEY,
+                    guild_id       BIGINT NOT NULL,
+                    word           TEXT NOT NULL,
+                    punishment     TEXT DEFAULT 'warn',
+                    tempban_hours  INTEGER DEFAULT 24,
+                    enabled        BOOLEAN DEFAULT TRUE,
+                    added_by       BIGINT,
+                    created_at     TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_chat_auto_rules ON chat_auto_rules(guild_id)")
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS tribe_members (
+                    guild_id    BIGINT NOT NULL,
+                    tribe_name  TEXT NOT NULL,
+                    player_name TEXT NOT NULL,
+                    player_id   TEXT,
+                    joined_at   TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    PRIMARY KEY (guild_id, tribe_name, player_name)
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS bot_logs (
+                    id          SERIAL PRIMARY KEY,
+                    guild_id    BIGINT NOT NULL,
+                    log_type    TEXT NOT NULL,
+                    sub_type    TEXT,
+                    user_id     BIGINT,
+                    user_name   TEXT,
+                    player_name TEXT,
+                    command     TEXT,
+                    details     JSONB,
+                    created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """)
+            cur.execute("ALTER TABLE bot_logs ADD COLUMN IF NOT EXISTS log_category TEXT")
+            cur.execute("ALTER TABLE bot_logs ADD COLUMN IF NOT EXISTS posted_forum BOOLEAN DEFAULT FALSE")
+            cur.execute("ALTER TABLE bot_logs ADD COLUMN IF NOT EXISTS posted_shop_forum BOOLEAN DEFAULT FALSE")
+            cur.execute("ALTER TABLE bot_logs ADD COLUMN IF NOT EXISTS server_name TEXT")
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS player_whitelist (
+                    id          SERIAL PRIMARY KEY,
+                    guild_id    BIGINT NOT NULL,
+                    player_name TEXT NOT NULL,
+                    player_id   TEXT,
+                    reason      TEXT,
+                    issued_by   BIGINT NOT NULL,
+                    created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    expires_at  TIMESTAMP WITH TIME ZONE
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS player_playtime (
+                    guild_id    BIGINT NOT NULL,
+                    player_id   TEXT NOT NULL,
+                    player_name TEXT NOT NULL,
+                    seconds     BIGINT DEFAULT 0,
+                    last_seen   TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    PRIMARY KEY (guild_id, player_id)
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS pending_actions (
+                    id          SERIAL PRIMARY KEY,
+                    guild_id    BIGINT NOT NULL,
+                    action      TEXT NOT NULL,
+                    payload     JSONB,
+                    status      TEXT DEFAULT 'pending',
+                    created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_bot_logs_guild ON bot_logs(guild_id, created_at DESC)")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_bot_logs_type ON bot_logs(guild_id, log_type, created_at DESC)")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_warnings_player ON player_warnings(guild_id, player_name, active)")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_punishments_player ON player_punishments(guild_id, player_name)")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_pending_actions ON pending_actions(guild_id, status)")
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS command_permissions (
+                    guild_id    BIGINT NOT NULL,
+                    command     TEXT NOT NULL,
+                    role_id     BIGINT NOT NULL,
+                    PRIMARY KEY (guild_id, command, role_id)
+                )
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_cmd_perms ON command_permissions(guild_id, command)")
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS automod_custom_words (
+                    id          SERIAL PRIMARY KEY,
+                    guild_id    BIGINT NOT NULL,
+                    word        TEXT NOT NULL,
+                    added_by    BIGINT,
+                    created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    UNIQUE (guild_id, word)
+                )
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_automod_words ON automod_custom_words(guild_id)")
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS content_overrides (
+                    content_key TEXT NOT NULL,
+                    lang        TEXT NOT NULL,
+                    value       TEXT NOT NULL,
+                    updated_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    PRIMARY KEY (content_key, lang)
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS custom_commands (
+                    id             SERIAL PRIMARY KEY,
+                    guild_id       BIGINT NOT NULL,
+                    name           TEXT NOT NULL,
+                    command_string TEXT NOT NULL,
+                    category       TEXT DEFAULT 'dino_spawn',
+                    enabled        BOOLEAN DEFAULT TRUE,
+                    created_by     BIGINT,
+                    created_at     TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    UNIQUE (guild_id, name)
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS command_display_overrides (
+                    command_name   TEXT PRIMARY KEY,
+                    plain_reply    TEXT,
+                    title          TEXT,
+                    description    TEXT,
+                    color          TEXT,
+                    footer_text    TEXT,
+                    thumbnail_url  TEXT,
+                    image_url      TEXT,
+                    help_description TEXT,
+                    buttons        JSONB,
+                    updated_at     TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """)
+            cur.execute("ALTER TABLE command_display_overrides ADD COLUMN IF NOT EXISTS help_description TEXT")
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS forum_log_config (
+                    guild_id       BIGINT PRIMARY KEY,
+                    forum_id       BIGINT,
+                    thread_dino    BIGINT,
+                    thread_gfi     BIGINT,
+                    thread_player  BIGINT,
+                    thread_gcm     BIGINT,
+                    created_at     TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS shop_forum_config (
+                    guild_id       BIGINT PRIMARY KEY,
+                    forum_id       BIGINT,
+                    thread_done    BIGINT,
+                    thread_pending BIGINT,
+                    created_at     TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS tribe_forum_config (
+                    guild_id   BIGINT PRIMARY KEY,
+                    forum_id   BIGINT,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS tribe_forum_threads (
+                    guild_id   BIGINT NOT NULL,
+                    tribe_name TEXT NOT NULL,
+                    thread_id  BIGINT NOT NULL,
+                    PRIMARY KEY (guild_id, tribe_name)
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS tribe_log_events (
+                    id          SERIAL PRIMARY KEY,
+                    guild_id    BIGINT NOT NULL,
+                    tribe_name  TEXT NOT NULL,
+                    content     TEXT NOT NULL,
+                    created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    posted_forum BOOLEAN DEFAULT FALSE
+                )
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_tribe_events ON tribe_log_events(guild_id, tribe_name, created_at DESC)")
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS nitrado_services (
+                    id          SERIAL PRIMARY KEY,
+                    guild_id    BIGINT NOT NULL,
+                    name        TEXT NOT NULL,
+                    service_id  TEXT NOT NULL DEFAULT '',
+                    api_token   TEXT NOT NULL DEFAULT '',
+                    ftp_host    TEXT DEFAULT '',
+                    ftp_port    TEXT DEFAULT '22',
+                    ftp_user    TEXT DEFAULT '',
+                    ftp_password TEXT DEFAULT '',
+                    display_name TEXT DEFAULT '',
+                    is_active   BOOLEAN DEFAULT FALSE,
+                    created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    UNIQUE (guild_id, name)
+                )
+            """)
+            cur.execute("ALTER TABLE nitrado_services ADD COLUMN IF NOT EXISTS display_name TEXT DEFAULT ''")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_nitrado_services_guild ON nitrado_services(guild_id)")
+
+            # ── Anti-abuse / IP / alt detection ──────────────
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS player_ip_records (
+                    id          SERIAL PRIMARY KEY,
+                    guild_id    BIGINT NOT NULL,
+                    player_id   TEXT,
+                    player_name TEXT NOT NULL,
+                    ip_address  TEXT NOT NULL,
+                    source      TEXT DEFAULT 'manual',
+                    first_seen  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    last_seen   TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    UNIQUE (guild_id, player_name, ip_address)
+                )
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_player_ip_guild ON player_ip_records(guild_id, player_name)")
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS player_ip_bans (
+                    id          SERIAL PRIMARY KEY,
+                    guild_id    BIGINT NOT NULL,
+                    ip_address  TEXT UNIQUE NOT NULL,
+                    player_name TEXT,
+                    reason      TEXT,
+                    issued_by   BIGINT,
+                    created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS admin_action_logs (
+                    id          SERIAL PRIMARY KEY,
+                    guild_id    BIGINT NOT NULL,
+                    admin_user_id BIGINT,
+                    admin_name  TEXT,
+                    action      TEXT NOT NULL,
+                    target      TEXT,
+                    details     JSONB,
+                    created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_admin_logs_guild ON admin_action_logs(guild_id, created_at DESC)")
+
+            # ── Cluster alpha system ─────────────────────────
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS cluster_alphas (
+                    id           SERIAL PRIMARY KEY,
+                    guild_id     BIGINT NOT NULL,
+                    cluster_name TEXT NOT NULL,
+                    tribe_name   TEXT NOT NULL,
+                    disc_channel BIGINT,
+                    created_by   BIGINT,
+                    created_at   TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    UNIQUE (guild_id, cluster_name)
+                )
+            """)
+
+            # ── Staff payment system ─────────────────────────
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS staff_payments (
+                    id           SERIAL PRIMARY KEY,
+                    guild_id     BIGINT NOT NULL,
+                    staff_user_id BIGINT,
+                    staff_name   TEXT,
+                    role         TEXT DEFAULT 'staff',
+                    payment_type TEXT,
+                    amount       NUMERIC(10,2) DEFAULT 0,
+                    currency     TEXT DEFAULT 'USD',
+                    status       TEXT DEFAULT 'pending',
+                    note         TEXT,
+                    issued_by    BIGINT,
+                    issued_at    TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    paid_at      TIMESTAMP WITH TIME ZONE
+                )
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_staff_pay_guild ON staff_payments(guild_id, status)")
+        conn.commit()
+    finally:
+        conn.close()
+
+
+# ============================================================
+#  KEY-VALUE HELPERS
+# ============================================================
+
+def get_settings(guild_id: int) -> dict:
+    cached = _cache_get(_settings_cache, guild_id)
+    if cached is not None:
+        return cached
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT settings FROM guild_settings WHERE guild_id = %s", (guild_id,))
+            row = cur.fetchone()
+            if row is None:
+                _cache_set(_settings_cache, guild_id, {})
+                return {}
+            raw = row[0] if isinstance(row[0], dict) else json.loads(row[0])
+            decrypted = {}
+            for k, v in raw.items():
+                if k in ENCRYPTED_FIELDS and isinstance(v, str):
+                    decrypted[k] = _decrypt(v)
+                else:
+                    decrypted[k] = v
+            _cache_set(_settings_cache, guild_id, decrypted)
+            return decrypted
+    finally:
+        conn.close()
+
+
+def get_setting(guild_id: int, key: str, default=None):
+    value = get_settings(guild_id).get(key, default)
+    if key in ENCRYPTED_FIELDS and isinstance(value, str):
+        return _decrypt(value)
+    return value
+
+
+def get_bool_setting(guild_id: int, key: str, default: bool = False) -> bool:
+    value = get_settings(guild_id).get(key, default)
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.lower() in ("1", "true", "yes", "on")
+    return bool(value)
+
+
+def update_setting(guild_id: int, key: str, value):
+    if key in ENCRYPTED_FIELDS and isinstance(value, str) and value:
+        value = _encrypt(value)
+    settings = get_settings(guild_id)
+    settings[key] = value
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO guild_settings (guild_id, settings)
+                VALUES (%s, %s::jsonb)
+                ON CONFLICT (guild_id) DO UPDATE SET settings = EXCLUDED.settings
+            """, (guild_id, json.dumps(settings)))
+        conn.commit()
+    finally:
+        conn.close()
+    _cache_drop(_settings_cache, guild_id)
+
+
+def remove_setting(guild_id: int, key: str):
+    settings = get_settings(guild_id)
+    if key in settings:
+        del settings[key]
+        conn = get_conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO guild_settings (guild_id, settings)
+                    VALUES (%s, %s::jsonb)
+                    ON CONFLICT (guild_id) DO UPDATE SET settings = EXCLUDED.settings
+                """, (guild_id, json.dumps(settings)))
+            conn.commit()
+        finally:
+            conn.close()
+        _cache_drop(_settings_cache, guild_id)
+
+
+def get_all_settings(guild_id: int = None) -> dict:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            if guild_id is not None:
+                cur.execute("SELECT settings FROM guild_settings WHERE guild_id = %s", (guild_id,))
+                row = cur.fetchone()
+                if row is None:
+                    return {}
+                return row[0] if isinstance(row[0], dict) else json.loads(row[0])
+            cur.execute("SELECT guild_id, settings FROM guild_settings")
+            return {row[0]: row[1] if isinstance(row[1], dict) else json.loads(row[1]) for row in cur.fetchall()}
+    finally:
+        conn.close()
+
+
+def get_settings_by_prefix(prefix: str) -> dict:
+    all_settings = get_all_settings()
+    return {gid: s for gid, s in all_settings.items() if prefix in s}
+
+
+def get_nitrado_config(guild_id: int) -> dict:
+    """Return the Nitrado API config (token/service/user) for a guild.
+
+    Prefers the currently-selected service from the nitrado_services table;
+    falls back to the legacy single-service settings.
+    """
+    svc = get_active_nitrado_service(guild_id)
+    if svc and svc.get("api_token"):
+        return {
+            "api_token": _decrypt(svc.get("api_token", "")),
+            "service_id": svc.get("service_id", ""),
+            "user_id": "",
+            "ftp_host": svc.get("ftp_host", ""),
+            "ftp_port": svc.get("ftp_port", "22"),
+            "ftp_user": svc.get("ftp_user", ""),
+            "ftp_password": _decrypt(svc.get("ftp_password", "")),
+        }
+    return {
+        "api_token": get_setting(guild_id, "nitrado_api_token", ""),
+        "service_id": get_setting(guild_id, "nitrado_service_id", ""),
+        "user_id": get_setting(guild_id, "nitrado_user_id", ""),
+        "ftp_host": get_setting(guild_id, "ftp_host", ""),
+        "ftp_port": get_setting(guild_id, "ftp_port", "22"),
+        "ftp_user": get_setting(guild_id, "ftp_user", ""),
+        "ftp_password": get_setting(guild_id, "ftp_password", ""),
+    }
+
+
+def _svc_row_to_dict(row) -> dict:
+    if row is None:
+        return {}
+    cols = ["id", "guild_id", "name", "service_id", "api_token", "ftp_host",
+            "ftp_port", "ftp_user", "ftp_password", "is_active", "display_name"]
+    return {c: row[i] for i, c in enumerate(cols)}
+
+
+def list_nitrado_services(guild_id: int) -> list[dict]:
+    """List all configured Nitrado services for a guild (newest first)."""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, guild_id, name, service_id, api_token, ftp_host, ftp_port, ftp_user, ftp_password, is_active, display_name "
+                "FROM nitrado_services WHERE guild_id = %s ORDER BY created_at ASC, id ASC",
+                (guild_id,),
+            )
+            out = []
+            for row in cur.fetchall():
+                d = _svc_row_to_dict(row)
+                d["has_token"] = bool(_decrypt(d.get("api_token", "")))
+                d["api_token"] = "••••••••" if d["has_token"] else ""
+                d["has_ftp"] = bool(_decrypt(d.get("ftp_password", "")))
+                out.append(d)
+            return out
+    except Exception:
+        return []
+    finally:
+        conn.close()
+
+
+def get_active_nitrado_service(guild_id: int) -> dict:
+    """Return the currently-selected (active) Nitrado service, if any."""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, guild_id, name, service_id, api_token, ftp_host, ftp_port, ftp_user, ftp_password, is_active, display_name "
+                "FROM nitrado_services WHERE guild_id = %s AND is_active = TRUE ORDER BY id ASC LIMIT 1",
+                (guild_id,),
+            )
+            return _svc_row_to_dict(cur.fetchone())
+    except Exception:
+        return {}
+    finally:
+        conn.close()
+
+
+def promote_nitrado_service(guild_id: int, service_id: str) -> bool:
+    """Promote a configured Nitrado service to active by its service id.
+
+    Used by auto-heal: when the stored/active service turns out stale or
+    suspended, the bot promotes a healthy one so every feature (not just the
+    chat bridge) resolves the correct service via get_nitrado_config.
+    Success does not require a pre-existing row (legacy fallback also updated).
+    """
+    service_id = (service_id or "").strip()
+    if not service_id:
+        return False
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE nitrado_services SET is_active = (service_id = %s) WHERE guild_id = %s",
+                (service_id, guild_id),
+            )
+        conn.commit()
+        update_setting(guild_id, "nitrado_service_id", service_id)
+        return True
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return False
+    finally:
+        conn.close()
+
+
+def add_nitrado_service(guild_id: int, name: str, service_id: str, api_token: str = "",
+                        ftp_host: str = "", ftp_port: str = "22", ftp_user: str = "",
+                        ftp_password: str = "") -> bool:
+    """Add or update a Nitrado service. The saved service becomes the active one."""
+    name = (name or "").strip() or f"Server-{service_id or '?'}"
+    service_id = (service_id or "").strip()
+    api_token = _encrypt(api_token or "")
+    ftp_password = _encrypt(ftp_password or "")
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO nitrado_services (guild_id, name, service_id, api_token, ftp_host, ftp_port, ftp_user, ftp_password, is_active) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                "ON CONFLICT (guild_id, name) DO UPDATE SET service_id = EXCLUDED.service_id, "
+                "is_active = TRUE, "
+                "api_token = CASE WHEN EXCLUDED.api_token = '' THEN nitrado_services.api_token ELSE EXCLUDED.api_token END, "
+                "ftp_host = EXCLUDED.ftp_host, ftp_port = EXCLUDED.ftp_port, ftp_user = EXCLUDED.ftp_user, "
+                "ftp_password = CASE WHEN EXCLUDED.ftp_password = '' THEN nitrado_services.ftp_password ELSE EXCLUDED.ftp_password END",
+                (guild_id, name, service_id, api_token, ftp_host, ftp_port, ftp_user, ftp_password, True),
+            )
+            cur.execute(
+                "UPDATE nitrado_services SET is_active = FALSE "
+                "WHERE guild_id = %s AND (service_id <> %s OR name <> %s)",
+                (guild_id, service_id, name),
+            )
+        conn.commit()
+        return True
+    except Exception:
+        conn.rollback()
+        return False
+    finally:
+        conn.close()
+
+
+def set_active_nitrado_service(guild_id: int, service_record_id: int) -> bool:
+    """Set which configured service is the active/selected one."""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE nitrado_services SET is_active = FALSE WHERE guild_id = %s", (guild_id,))
+            cur.execute(
+                "UPDATE nitrado_services SET is_active = TRUE WHERE guild_id = %s AND id = %s",
+                (guild_id, service_record_id),
+            )
+        conn.commit()
+        return True
+    except Exception:
+        conn.rollback()
+        return False
+    finally:
+        conn.close()
+
+
+def update_nitrado_ftp(guild_id: int, service_record_id: int, ftp_host: str = "",
+                       ftp_port: str = "22", ftp_user: str = "", ftp_password: str = "") -> bool:
+    """Update FTP/SFTP credentials for a configured service (used as the log
+    and save-file reader for PlayStation services, which lack an API interface)."""
+    ftp_port = str(ftp_port or "22")
+    _pw = _encrypt(ftp_password or "")
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE nitrado_services SET ftp_host = %s, ftp_port = %s, ftp_user = %s, "
+                "ftp_password = CASE WHEN %s = '' THEN ftp_password ELSE %s END "
+                "WHERE guild_id = %s AND id = %s",
+                (ftp_host, ftp_port, ftp_user, _pw, _pw, guild_id, service_record_id),
+            )
+        conn.commit()
+        return True
+    except Exception:
+        conn.rollback()
+        return False
+    finally:
+        conn.close()
+
+
+def update_nitrado_display_name(guild_id: int, service_record_id: int, display_name: str) -> bool:
+    """Set an optional display/join name for a configured service."""
+    display_name = (display_name or "").strip()
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE nitrado_services SET display_name = %s WHERE guild_id = %s AND id = %s",
+                (display_name, guild_id, service_record_id),
+            )
+        conn.commit()
+        return True
+    except Exception:
+        conn.rollback()
+        return False
+    finally:
+        conn.close()
+
+
+def delete_nitrado_service(guild_id: int, service_record_id: int) -> bool:
+    """Remove a configured service. If the active one is deleted, activate another."""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM nitrado_services WHERE guild_id = %s AND id = %s",
+                (guild_id, service_record_id),
+            )
+            cur.execute(
+                "UPDATE nitrado_services SET is_active = TRUE WHERE guild_id = %s AND is_active = FALSE "
+                "AND NOT EXISTS (SELECT 1 FROM nitrado_services s2 WHERE s2.guild_id = nitrado_services.guild_id AND s2.is_active = TRUE)",
+                (guild_id,),
+            )
+        conn.commit()
+        return True
+    except Exception:
+        conn.rollback()
+        return False
+    finally:
+        conn.close()
+
+
+# Dashboard aliases
+def set_setting(guild_id: int, key: str, value):
+    update_setting(guild_id, key, value)
+
+
+def delete_setting(guild_id: int, key: str):
+    remove_setting(guild_id, key)
+
+
+# ============================================================
+#  EMBED TEMPLATES
+# ============================================================
+
+DEFAULT_EMBEDS = {
+    "welcome": {"title": "Welcome!", "description": "Welcome to the server!", "color": "#FFD700"},
+    "goodbye": {"title": "Goodbye!", "description": "See you next time!", "color": "#808080"},
+    "shop": {"title": "Shop", "description": "Browse available items.", "color": "#00FF00"},
+    "leaderboard": {"title": "Leaderboard", "description": "Top players.", "color": "#FFD700"},
+    "automod": {"title": "Automod Alert", "description": "Rule violation detected.", "color": "#FF0000"},
+    "tribelog": {"title": "Player Log", "description": "Recent player activity.", "color": "#0080FF"},
+}
+
+
+def get_embed_templates(guild_id: int) -> list:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT embed_id, template, updated_at FROM embed_templates WHERE guild_id = %s",
+                (guild_id,),
+            )
+            return [
+                {"id": row[0], "template": row[1] if isinstance(row[1], dict) else json.loads(row[1]), "updated_at": row[2]}
+                for row in cur.fetchall()
+            ]
+    finally:
+        conn.close()
+
+
+_EMBED_FIELDS = ["title", "description", "color", "image_url", "thumbnail_url", "footer_text", "author_name"]
+
+
+def get_all_embed_templates(guild_id: int) -> dict:
+    templates = {}
+    for key, default in DEFAULT_EMBEDS.items():
+        custom = get_setting(guild_id, f"embed_{key}", {})
+        if not isinstance(custom, dict):
+            custom = {}
+        merged = {f: "" for f in _EMBED_FIELDS}
+        merged.update(default)
+        merged.update({k: (v or "") for k, v in custom.items() if k in _EMBED_FIELDS})
+        templates[key] = merged
+    return templates
+
+
+def get_custom_embed_templates(guild_id: int) -> dict:
+    """Return embed templates that are NOT one of the built-in DEFAULT_EMBEDS."""
+    builtins = set(DEFAULT_EMBEDS.keys())
+    templates = {}
+    for row in get_embed_templates(guild_id):
+        eid = row["id"]
+        if eid in builtins:
+            continue
+        merged = {f: "" for f in _EMBED_FIELDS}
+        merged.update(row["template"])
+        templates[eid] = merged
+    return templates
+
+
+def get_embed_template(guild_id: int, embed_key: str) -> dict:
+    default = DEFAULT_EMBEDS.get(embed_key, {})
+    custom = get_setting(guild_id, f"embed_{embed_key}", {})
+    return {**default, **custom}
+
+
+def save_embed_template(guild_id: int, embed_id: str, template: dict):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO embed_templates (embed_id, guild_id, template, updated_at)
+                VALUES (%s, %s, %s::jsonb, %s)
+                ON CONFLICT (embed_id)
+                DO UPDATE SET template = EXCLUDED.template, updated_at = EXCLUDED.updated_at
+            """, (embed_id, guild_id, json.dumps(template), datetime.now(timezone.utc)))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def set_embed_template(guild_id: int, embed_key: str, **kwargs):
+    current = get_setting(guild_id, f"embed_{embed_key}", {})
+    current.update(kwargs)
+    update_setting(guild_id, f"embed_{embed_key}", current)
+
+
+def reset_embed_template(guild_id: int, embed_key: str):
+    remove_setting(guild_id, f"embed_{embed_key}")
+
+
+def delete_embed_template(guild_id: int, embed_id: str):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM embed_templates WHERE guild_id = %s AND embed_id = %s", (guild_id, embed_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+# ============================================================
+#  LOGGING
+# ============================================================
+
+LOG_TYPES = ["chat", "admin_command", "punishment", "leaderboard", "whitelist", "automod", "server", "tribe"]
+
+
+def log_action(guild_id: int, log_type: str, user_id=None, user_name=None,
+               player_name=None, command=None, sub_type=None, details=None, log_category=None,
+               server_name=None):
+    if server_name is None:
+        svc = get_active_nitrado_service(guild_id)
+        server_name = svc.get("name", "") if svc else get_setting(guild_id, "nitrado_service_id", "")
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO bot_logs (guild_id, log_type, sub_type, user_id, user_name, player_name, command, details, log_category, server_name)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s)
+            """, (guild_id, log_type, sub_type, user_id, user_name, player_name, command,
+                  json.dumps(details) if details else None, log_category, server_name))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_logs(guild_id: int, log_type=None, user_id=None, limit=50, offset=0):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            query = "SELECT id, log_type, sub_type, user_id, user_name, player_name, command, details, created_at, log_category, server_name FROM bot_logs WHERE guild_id = %s"
+            params = [guild_id]
+            if log_type:
+                query += " AND log_type = %s"
+                params.append(log_type)
+            if user_id:
+                query += " AND user_id = %s"
+                params.append(user_id)
+            query += " ORDER BY created_at DESC LIMIT %s OFFSET %s"
+            params.extend([limit, offset])
+            cur.execute(query, params)
+            return [
+                {"id": r[0], "log_type": r[1], "sub_type": r[2], "user_id": r[3], "user_name": r[4],
+                 "player_name": r[5], "command": r[6], "details": r[7] if isinstance(r[7], dict) else json.loads(r[7]) if r[7] else None, "created_at": r[8], "log_category": r[9], "server_name": r[10]}
+                for r in cur.fetchall()
+            ]
+    finally:
+        conn.close()
+
+
+def get_log_count(guild_id: int, log_type=None):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            query = "SELECT COUNT(*) FROM bot_logs WHERE guild_id = %s"
+            params = [guild_id]
+            if log_type:
+                query += " AND log_type = %s"
+                params.append(log_type)
+            cur.execute(query, params)
+            return cur.fetchone()[0]
+    finally:
+        conn.close()
+
+
+# ============================================================
+#  PENDING ACTIONS
+# ============================================================
+
+def set_pending_action(guild_id: int, action: str, payload: dict = None):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO pending_actions (guild_id, action, payload)
+                VALUES (%s, %s, %s::jsonb)
+            """, (guild_id, action, json.dumps(payload) if payload else None))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_pending_actions(guild_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, action, payload, created_at FROM pending_actions WHERE guild_id = %s AND status = 'pending' ORDER BY created_at",
+                (guild_id,),
+            )
+            return [
+                {"id": r[0], "action": r[1], "payload": r[2] if isinstance(r[2], dict) else json.loads(r[2]) if r[2] else None, "created_at": r[3]}
+                for r in cur.fetchall()
+            ]
+    finally:
+        conn.close()
+
+
+def mark_action_done(action_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE pending_actions SET status = 'done' WHERE id = %s", (action_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+# ============================================================
+#  TRIBE MEMBERS
+# ============================================================
+
+def add_tribe_member(guild_id: int, tribe_name: str, player_name: str, player_id: str = None):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO tribe_members (guild_id, tribe_name, player_name, player_id)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (guild_id, tribe_name, player_name) DO NOTHING
+            """, (guild_id, tribe_name, player_name, player_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_tribe_members(guild_id: int, tribe_name: str):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT player_name, player_id FROM tribe_members WHERE guild_id = %s AND tribe_name = %s",
+                (guild_id, tribe_name),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def get_player_tribe(guild_id: int, player_name: str):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT tribe_name FROM tribe_members WHERE guild_id = %s AND player_name = %s",
+                (guild_id, player_name),
+            )
+            row = cur.fetchone()
+            return row[0] if row else None
+    finally:
+        conn.close()
+
+
+def remove_tribe_member(guild_id: int, tribe_name: str, player_name: str):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM tribe_members WHERE guild_id = %s AND tribe_name = %s AND player_name = %s",
+                (guild_id, tribe_name, player_name),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+# ============================================================
+#  WARNINGS
+# ============================================================
+
+def add_warning(guild_id: int, player_name: str, reason: str, warned_by: int, player_id: str = None, expires_at=None):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO player_warnings (guild_id, player_name, player_id, reason, warned_by, expires_at)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING id
+            """, (guild_id, player_name, player_id, reason, warned_by, expires_at))
+            warning_id = cur.fetchone()[0]
+        conn.commit()
+        return warning_id
+    finally:
+        conn.close()
+
+
+def get_active_warning_count(guild_id: int, player_name: str) -> int:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT COUNT(*) FROM player_warnings
+                WHERE guild_id = %s AND player_name = %s AND active = TRUE
+                AND (expires_at IS NULL OR expires_at > NOW())
+            """, (guild_id, player_name))
+            return cur.fetchone()[0]
+    finally:
+        conn.close()
+
+
+def get_warnings(guild_id: int, player_name: str):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, reason, warned_by, warned_at, expires_at, active
+                FROM player_warnings WHERE guild_id = %s AND player_name = %s
+                ORDER BY warned_at DESC
+            """, (guild_id, player_name))
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def get_all_warnings(guild_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, player_name, reason, warned_by, warned_at, expires_at, active
+                FROM player_warnings WHERE guild_id = %s
+                ORDER BY warned_at DESC
+            """, (guild_id,))
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def clear_warnings(guild_id: int, player_name: str):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE player_warnings SET active = FALSE WHERE guild_id = %s AND player_name = %s AND active = TRUE",
+                (guild_id, player_name),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def remove_warning(warning_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE player_warnings SET active = FALSE WHERE id = %s", (warning_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def cleanup_expired_warnings():
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE player_warnings SET active = FALSE
+                WHERE active = TRUE AND expires_at IS NOT NULL AND expires_at <= NOW()
+            """)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+# ============================================================
+#  PUNISHMENTS
+# ============================================================
+
+PUNISHMENT_TYPES = ["ban", "tempban", "wipe_structures", "wipe_dinos", "wipe_both"]
+
+
+def add_punishment(guild_id: int, player_name: str, punishment_type: str, reason: str,
+                    issued_by: int, scope: str = "player", player_id: str = None,
+                    tribe_name: str = None, expires_at=None):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO player_punishments (guild_id, player_name, player_id, tribe_name, punishment_type, reason, issued_by, scope, expires_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+            """, (guild_id, player_name, player_id, tribe_name, punishment_type, reason, issued_by, scope, expires_at))
+            punishment_id = cur.fetchone()[0]
+        conn.commit()
+        return punishment_id
+    finally:
+        conn.close()
+
+
+def mark_punishment_executed(punishment_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE player_punishments SET executed = TRUE WHERE id = %s", (punishment_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_punishments(guild_id: int, player_name: str = None, limit=50, offset=0):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            query = "SELECT id, player_name, player_id, tribe_name, punishment_type, reason, issued_by, scope, issued_at, expires_at, executed, appealed FROM player_punishments WHERE guild_id = %s"
+            params = [guild_id]
+            if player_name:
+                query += " AND player_name = %s"
+                params.append(player_name)
+            query += " ORDER BY issued_at DESC LIMIT %s OFFSET %s"
+            params.extend([limit, offset])
+            cur.execute(query, params)
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def get_expired_tempbans():
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, guild_id, player_name, player_id
+                FROM player_punishments
+                WHERE punishment_type = 'tempban' AND executed = TRUE
+                AND expires_at IS NOT NULL AND expires_at <= NOW()
+                AND appealed = FALSE
+            """)
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def appeal_punishment(punishment_id: int, appeal_reason: str):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE player_punishments SET appealed = TRUE, appeal_reason = %s WHERE id = %s",
+                (appeal_reason, punishment_id),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def delete_punishment(punishment_id: int, guild_id: int):
+    """Remove a punishment record (used when an owner revokes a ban)."""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM player_punishments WHERE id = %s AND guild_id = %s", (punishment_id, guild_id))
+            return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
+# ============================================================
+#  BLACKLIST
+# ============================================================
+
+def add_blacklist(guild_id: int, player_name: str, reason: str, issued_by: int,
+                  player_id: str = None, tribe_name: str = None, scope: str = "player"):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO player_blacklist (guild_id, player_name, player_id, tribe_name, reason, issued_by, scope)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+            """, (guild_id, player_name, player_id, tribe_name, reason, issued_by, scope))
+            bl_id = cur.fetchone()[0]
+        conn.commit()
+        return bl_id
+    finally:
+        conn.close()
+
+
+def get_blacklists(guild_id: int, player_name: str = None):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            query = "SELECT id, player_name, player_id, tribe_name, reason, issued_by, scope, issued_at FROM player_blacklist WHERE guild_id = %s"
+            params = [guild_id]
+            if player_name:
+                query += " AND player_name = %s"
+                params.append(player_name)
+            query += " ORDER BY issued_at DESC"
+            cur.execute(query, params)
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def remove_blacklist(entry_id: int, guild_id: int):
+    """Remove a player from the blacklist."""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM player_blacklist WHERE id = %s AND guild_id = %s", (entry_id, guild_id))
+            return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
+def is_blacklisted(guild_id: int, player_name: str) -> bool:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT 1 FROM player_blacklist WHERE guild_id = %s AND player_name = %s LIMIT 1",
+                (guild_id, player_name),
+            )
+            return cur.fetchone() is not None
+    finally:
+        conn.close()
+
+
+# ============================================================
+#  EVIDENCE
+# ============================================================
+
+def add_evidence(punishment_id: int, guild_id: int, filename: str, original_name: str, file_size: int, uploaded_by: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO punishment_evidence (punishment_id, guild_id, filename, original_name, file_size, uploaded_by)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (punishment_id, guild_id, filename, original_name, file_size, uploaded_by))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_evidence(punishment_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, filename, original_name, file_size, uploaded_by, created_at FROM punishment_evidence WHERE punishment_id = %s",
+                (punishment_id,),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+# ============================================================
+#  CHAT BRIDGE (in-game chat log + Discord <-> game relay)
+# ============================================================
+
+def get_chat_bridge_config(guild_id: int) -> dict:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT enabled, log_channel_id, relay_channel_id, relay_out, relay_in, last_log_line "
+                "FROM chat_bridge_config WHERE guild_id = %s",
+                (guild_id,),
+            )
+            row = cur.fetchone()
+            if row:
+                return {
+                    "enabled": row[0],
+                    "log_channel_id": row[1],
+                    "relay_channel_id": row[2],
+                    "relay_out": row[3],
+                    "relay_in": row[4],
+                    "last_log_line": row[5],
+                }
+            return {
+                "enabled": True,
+                "log_channel_id": None,
+                "relay_channel_id": None,
+                "relay_out": False,
+                "relay_in": False,
+                "last_log_line": "",
+            }
+    finally:
+        conn.close()
+
+
+def update_chat_bridge_config(guild_id: int, **kwargs):
+    allowed = {"enabled", "log_channel_id", "relay_channel_id", "relay_out", "relay_in", "last_log_line"}
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO chat_bridge_config (guild_id) VALUES (%s)
+                ON CONFLICT (guild_id) DO NOTHING
+            """, (guild_id,))
+            for key, val in kwargs.items():
+                if key not in allowed:
+                    raise ValueError(f"Invalid chat bridge column: {key}")
+                cur.execute(f"UPDATE chat_bridge_config SET {key} = %s WHERE guild_id = %s", (val, guild_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def add_chat_log(guild_id: int, channel: str, player_name: str, message: str,
+                 tribe_name: str = None, raw_line: str = None, direction: str = "in"):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO chat_logs (guild_id, channel, player_name, tribe_name, message, raw_line, direction)
+                SELECT %s, %s, %s, %s, %s, %s, %s
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM chat_logs
+                    WHERE guild_id = %s AND raw_line = %s
+                )
+            """, (guild_id, channel, player_name, tribe_name, message, raw_line, direction, guild_id, raw_line))
+            inserted = cur.rowcount > 0
+        conn.commit()
+        return inserted
+    finally:
+        conn.close()
+
+
+def get_chat_logs(guild_id: int, limit: int = 200, offset: int = 0):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, channel, player_name, tribe_name, message, direction, relayed_at
+                FROM chat_logs WHERE guild_id = %s
+                ORDER BY relayed_at DESC LIMIT %s OFFSET %s
+            """, (guild_id, limit, offset))
+            return [
+                {
+                    "id": r[0], "channel": r[1], "player_name": r[2], "tribe_name": r[3],
+                    "message": r[4], "direction": r[5], "relayed_at": r[6],
+                }
+                for r in cur.fetchall()
+            ]
+    finally:
+        conn.close()
+
+
+def count_chat_logs(guild_id: int) -> int:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM chat_logs WHERE guild_id = %s", (guild_id,))
+            return cur.fetchone()[0]
+    finally:
+        conn.close()
+
+
+def clear_chat_logs(guild_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM chat_logs WHERE guild_id = %s", (guild_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+# ============================================================
+#  SERVER LOGS (player join/leave events + game-chat forum)
+# ============================================================
+
+def get_server_log_config(guild_id: int) -> dict:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT enabled, server_forum_id, server_events_thread_id, chat_forum_id, chat_thread_id, "
+                "join_thread_id, leave_thread_id, admin_thread_id, tribe_thread_id, restart_thread_id "
+                "FROM server_log_config WHERE guild_id = %s",
+                (guild_id,),
+            )
+            row = cur.fetchone()
+            if row:
+                return {
+                    "enabled": row[0],
+                    "server_forum_id": row[1],
+                    "server_events_thread_id": row[2],
+                    "chat_forum_id": row[3],
+                    "chat_thread_id": row[4],
+                    "join_thread_id": row[5],
+                    "leave_thread_id": row[6],
+                    "admin_thread_id": row[7],
+                    "tribe_thread_id": row[8],
+                    "restart_thread_id": row[9],
+                }
+            return {
+                "enabled": True,
+                "server_forum_id": None,
+                "server_events_thread_id": None,
+                "chat_forum_id": None,
+                "chat_thread_id": None,
+                "join_thread_id": None,
+                "leave_thread_id": None,
+                "admin_thread_id": None,
+                "tribe_thread_id": None,
+                "restart_thread_id": None,
+            }
+    finally:
+        conn.close()
+
+
+def update_server_log_config(guild_id: int, **kwargs):
+    allowed = {"enabled", "server_forum_id", "server_events_thread_id", "chat_forum_id",
+               "chat_thread_id", "join_thread_id", "leave_thread_id", "admin_thread_id", "tribe_thread_id", "restart_thread_id"}
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO server_log_config (guild_id) VALUES (%s)
+                ON CONFLICT (guild_id) DO NOTHING
+            """, (guild_id,))
+            for key, val in kwargs.items():
+                if key not in allowed:
+                    raise ValueError(f"Invalid server log column: {key}")
+                cur.execute(f"UPDATE server_log_config SET {key} = %s WHERE guild_id = %s", (val, guild_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def add_server_event(guild_id: int, event_type: str, player_name: str, raw_line: str):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO server_events (guild_id, event_type, player_name, raw_line)
+                SELECT %s, %s, %s, %s
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM server_events
+                    WHERE guild_id = %s AND raw_line = %s
+                )
+            """, (guild_id, event_type, player_name, raw_line, guild_id, raw_line))
+            inserted = cur.rowcount > 0
+        conn.commit()
+        return inserted
+    finally:
+        conn.close()
+
+
+def get_unposted_server_events(guild_id: int, limit: int = 50, event_type: str = None):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            if event_type:
+                cur.execute("""
+                    SELECT id, event_type, player_name, raw_line, created_at
+                    FROM server_events
+                    WHERE guild_id = %s AND event_type = %s AND posted_forum = FALSE
+                    ORDER BY id ASC
+                    LIMIT %s
+                """, (guild_id, event_type, limit))
+            else:
+                cur.execute("""
+                    SELECT id, event_type, player_name, raw_line, created_at
+                    FROM server_events
+                    WHERE guild_id = %s AND posted_forum = FALSE
+                    ORDER BY id ASC
+                    LIMIT %s
+                """, (guild_id, limit))
+            return [
+                {"id": r[0], "event_type": r[1], "player_name": r[2], "raw_line": r[3], "created_at": r[4]}
+                for r in cur.fetchall()
+            ]
+    finally:
+        conn.close()
+
+
+def mark_server_event_posted(event_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE server_events SET posted_forum = TRUE WHERE id = %s", (event_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_unposted_chat_forum_logs(guild_id: int, limit: int = 50):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, channel, player_name, message, direction, relayed_at, raw_line
+                FROM chat_logs
+                WHERE guild_id = %s AND posted_chat_forum = FALSE
+                ORDER BY id ASC
+                LIMIT %s
+            """, (guild_id, limit))
+            return [
+                {"id": r[0], "channel": r[1], "player_name": r[2], "message": r[3],
+                 "direction": r[4], "relayed_at": r[5], "raw_line": r[6]}
+                for r in cur.fetchall()
+            ]
+    finally:
+        conn.close()
+
+
+def mark_chat_forum_posted(log_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE chat_logs SET posted_chat_forum = TRUE WHERE id = %s", (log_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def mark_chat_forum_posted_batch(guild_id: int, log_ids: list[int]):
+    """Drop stale queued chat-log rows in one UPDATE (backlog cleanup)."""
+    if not log_ids:
+        return
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE chat_logs SET posted_chat_forum = TRUE WHERE guild_id = %s AND id = ANY(%s)",
+                (guild_id, log_ids),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def drop_stale_chat_forum_logs(guild_id: int, max_age_seconds: int = 300):
+    """Permanently delete queued (unposted) chat rows older than max_age. Used
+    so a large historical backlog can never flood a forum thread."""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                DELETE FROM chat_logs
+                WHERE guild_id = %s
+                  AND posted_chat_forum = FALSE
+                  AND relayed_at < NOW() - make_interval(secs => %s)
+            """, (guild_id, max_age_seconds))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+# ============================================================
+#  CHAT AUTO-DETECTION RULES (word -> auto punishment)
+# ============================================================
+
+CHAT_AUTO_PUNISHMENTS = ["warn", "tempban", "ban", "blacklist"]
+
+def add_chat_auto_rule(guild_id: int, word: str, punishment: str = "warn",
+                       tempban_hours: int = 24, added_by: int = None):
+    if punishment not in CHAT_AUTO_PUNISHMENTS:
+        raise ValueError(f"Invalid punishment: {punishment}")
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO chat_auto_rules (guild_id, word, punishment, tempban_hours, added_by)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (guild_id, word.strip().lower(), punishment, tempban_hours, added_by))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_chat_auto_rules(guild_id: int) -> list:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, word, punishment, tempban_hours, enabled, added_by, created_at
+                FROM chat_auto_rules WHERE guild_id = %s ORDER BY word
+            """, (guild_id,))
+            return [
+                {"id": r[0], "word": r[1], "punishment": r[2], "tempban_hours": r[3],
+                 "enabled": r[4], "added_by": r[5], "created_at": r[6]}
+                for r in cur.fetchall()
+            ]
+    finally:
+        conn.close()
+
+
+def get_enabled_chat_auto_rules(guild_id: int) -> list:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, word, punishment, tempban_hours, enabled
+                FROM chat_auto_rules WHERE guild_id = %s AND enabled = TRUE
+            """, (guild_id,))
+            return [
+                {"id": r[0], "word": r[1].lower(), "punishment": r[2], "tempban_hours": r[3], "enabled": r[4]}
+                for r in cur.fetchall()
+            ]
+    finally:
+        conn.close()
+
+
+def remove_chat_auto_rule(rule_id: int, guild_id: int) -> bool:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM chat_auto_rules WHERE id = %s AND guild_id = %s", (rule_id, guild_id))
+            return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
+def clear_chat_auto_rules(guild_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM chat_auto_rules WHERE guild_id = %s", (guild_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def set_chat_auto_rule_punishment(rule_id: int, guild_id: int, punishment: str, tempban_hours: int = 24):
+    if punishment not in CHAT_AUTO_PUNISHMENTS:
+        raise ValueError(f"Invalid punishment: {punishment}")
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE chat_auto_rules SET punishment = %s, tempban_hours = %s WHERE id = %s AND guild_id = %s",
+                (punishment, tempban_hours, rule_id, guild_id),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def set_chat_auto_rule_enabled(rule_id: int, guild_id: int, enabled: bool):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE chat_auto_rules SET enabled = %s WHERE id = %s AND guild_id = %s",
+                (enabled, rule_id, guild_id),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+
+# ============================================================
+#  PLAYER WHITELIST (dashboard)
+# ============================================================
+
+def add_whitelist(guild_id: int, player_name: str, player_id: str = "", reason: str = "", issued_by: int = 0, expires_at=None):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO player_whitelist (guild_id, player_name, player_id, reason, issued_by, expires_at)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING id
+            """, (guild_id, player_name, player_id or None, reason or None, issued_by, expires_at))
+            return cur.fetchone()[0]
+    finally:
+        conn.close()
+
+
+def get_whitelists(guild_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, player_name, player_id, reason, issued_by, created_at, expires_at
+                FROM player_whitelist
+                WHERE guild_id = %s
+                ORDER BY created_at DESC
+            """, (guild_id,))
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def remove_whitelist(entry_id: int, guild_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM player_whitelist WHERE id = %s AND guild_id = %s", (entry_id, guild_id))
+            return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
+# ============================================================
+#  LICENSE
+# ============================================================
+
+def generate_license_key() -> str:
+    """Generate a purely random activation-license key, e.g. ARK-XXXXXX-XXXXXX-XXXXXX.
+    The key carries no readable data; expiry is stored in the database."""
+    alphabet = string.ascii_uppercase + string.digits
+    # 3 groups of 6 => 18 random chars (~107 bits of entropy) - strong and easy to copy.
+    groups = ["".join(secrets.choice(alphabet) for _ in range(6)) for _ in range(3)]
+    return "ARK-" + "-".join(groups)
+
+
+def is_license_valid(guild_id: int) -> bool:
+    from datetime import datetime, timezone, timedelta
+    key = get_setting(guild_id, "license_key", "")
+    if not key:
+        return False
+    days = get_setting(guild_id, "license_days", 0)
+    if days == 0:
+        return True
+    created = get_setting(guild_id, "license_created")
+    if not created:
+        return True
+    try:
+        if isinstance(created, str):
+            created_dt = datetime.fromisoformat(created.replace('Z', '+00:00'))
+        else:
+            created_dt = created
+        expires = created_dt + timedelta(days=days)
+        return datetime.now(timezone.utc) < expires
+    except (ValueError, TypeError):
+        return True
+
+
+def get_license_expiry(guild_id: int) -> str:
+    """Human-readable expiry for dashboard display."""
+    from datetime import datetime, timezone, timedelta
+    days = get_setting(guild_id, "license_days", 0)
+    if not get_setting(guild_id, "license_key", ""):
+        return ""
+    if days == 0:
+        return "Unlimited"
+    created = get_setting(guild_id, "license_created")
+    try:
+        if isinstance(created, str):
+            created_dt = datetime.fromisoformat(created.replace('Z', '+00:00'))
+        else:
+            created_dt = created
+        expires = created_dt + timedelta(days=days)
+        return expires.strftime("%Y-%m-%d %H:%M UTC")
+    except (ValueError, TypeError):
+        return "Unknown"
+
+
+def parse_license_key(key: str) -> dict | None:
+    """Simple format validation. Returns the key if it looks like a license key, else None.
+    Real authorization is done by matching against the stored key in the database."""
+    if not key or not key.startswith("ARK-"):
+        return None
+    body = key[4:]
+    parts = body.split("-")
+    if len(parts) != 3:
+        return None
+    if not all(len(p) == 6 and p.isalnum() for p in parts):
+        return None
+    return {"key": key}
+
+
+def verify_license_key(guild_id: int, key: str) -> bool:
+    """True only if the supplied key matches the one stored for this guild AND is not expired."""
+    stored = get_setting(guild_id, "license_key", "")
+    if not stored or not key:
+        return False
+    try:
+        # compare as bytes to safely handle any input (incl. non-ASCII) without raising
+        if not hmac.compare_digest(stored.strip().encode("utf-8"), key.strip().encode("utf-8")):
+            return False
+    except Exception:
+        return False
+    return is_license_valid(guild_id)
+
+
+def get_all_licenses() -> list[dict]:
+    from datetime import datetime, timezone, timedelta
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT guild_id, settings FROM guild_settings")
+            rows = cur.fetchall()
+        results = []
+        for guild_id, settings in rows:
+            if not isinstance(settings, dict):
+                settings = json.loads(settings)
+            key = settings.get("license_key", "")
+            if not key:
+                continue
+            days = settings.get("license_days", 0)
+            created = settings.get("license_created")
+            expiry_str = "" if not key else ("Unlimited" if days == 0 else "Unknown")
+            is_valid = False
+            if key:
+                if days == 0:
+                    is_valid = True
+                    expiry_str = "Unlimited"
+                else:
+                    try:
+                        if isinstance(created, str):
+                            created_dt = datetime.fromisoformat(created.replace('Z', '+00:00'))
+                        elif created:
+                            created_dt = created
+                        else:
+                            created_dt = datetime.now(timezone.utc)
+                        expires = created_dt + timedelta(days=days)
+                        is_valid = datetime.now(timezone.utc) < expires
+                        expiry_str = expires.strftime("%Y-%m-%d %H:%M UTC")
+                    except (ValueError, TypeError):
+                        is_valid = False
+                        expiry_str = "Unknown"
+            results.append({
+                "guild_id": guild_id,
+                "key": key,
+                "days": days,
+                "created": created,
+                "expiry": expiry_str,
+                "valid": is_valid,
+            })
+        return results
+    finally:
+        conn.close()
+
+
+def create_license_for_guild(guild_id: int, duration_days: int = 30) -> str:
+    key = generate_license_key()
+    update_setting(guild_id, "license_key", key)
+    update_setting(guild_id, "license_days", duration_days)
+    update_setting(guild_id, "license_created", datetime.now(timezone.utc).isoformat())
+    return key
+
+
+# ============================================================
+#  LOG CHANNEL HELPERS (dashboard)
+# ============================================================
+
+def set_log_channel(guild_id: int, log_type: str, channel_id: int):
+    update_setting(guild_id, f"log_channel_{log_type}", channel_id)
+
+
+def get_all_log_channels(guild_id: int) -> dict:
+    settings = get_settings(guild_id)
+    return {k.replace("log_channel_", ""): v for k, v in settings.items() if k.startswith("log_channel_")}
+
+
+def get_all_settings_for_guild(guild_id: int) -> dict:
+    return get_settings(guild_id)
+
+
+# ============================================================
+#  COMMAND PERMISSIONS
+# ============================================================
+
+def set_command_permission(guild_id: int, command: str, role_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO command_permissions (guild_id, command, role_id)
+                VALUES (%s, %s, %s)
+                ON CONFLICT DO NOTHING
+            """, (guild_id, command, role_id))
+        conn.commit()
+    finally:
+        conn.close()
+    _cache_drop(_perms_cache, (guild_id, command))
+
+
+def remove_command_permission(guild_id: int, command: str, role_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM command_permissions WHERE guild_id = %s AND command = %s AND role_id = %s",
+                (guild_id, command, role_id),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+    _cache_drop(_perms_cache, (guild_id, command))
+
+
+def get_command_permissions(guild_id: int, command: str) -> list:
+    key = (guild_id, command)
+    cached = _cache_get(_perms_cache, key)
+    if cached is not None:
+        return cached
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT role_id FROM command_permissions WHERE guild_id = %s AND command = %s",
+                (guild_id, command),
+            )
+            result = [row[0] for row in cur.fetchall()]
+    finally:
+        conn.close()
+    _cache_set(_perms_cache, key, result)
+    return result
+
+
+def get_all_command_permissions(guild_id: int) -> dict:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT command, role_id FROM command_permissions WHERE guild_id = %s",
+                (guild_id,),
+            )
+            result = {}
+            for cmd, role_id in cur.fetchall():
+                result.setdefault(cmd, []).append(role_id)
+            return result
+    finally:
+        conn.close()
+
+
+def clear_command_permissions(guild_id: int, command: str):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM command_permissions WHERE guild_id = %s AND command = %s",
+                (guild_id, command),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+    _cache_drop(_perms_cache, (guild_id, command))
+
+
+def set_command_disabled(guild_id: int, command: str, disabled: bool):
+    """Enable/disable a slash command for a guild."""
+    disabled_list = get_disabled_commands(guild_id)
+    if disabled:
+        if command not in disabled_list:
+            disabled_list.append(command)
+    else:
+        disabled_list = [c for c in disabled_list if c != command]
+    update_setting(guild_id, "disabled_commands", disabled_list)
+
+
+def get_disabled_commands(guild_id: int) -> list:
+    """Return the list of disabled slash command names for a guild."""
+    value = get_settings(guild_id).get("disabled_commands", [])
+    if not isinstance(value, list):
+        value = []
+    return value
+
+
+def is_command_disabled(guild_id: int, command: str) -> bool:
+    return command in get_disabled_commands(guild_id)
+
+
+# ============================================================
+#  COMMAND DESCRIPTION OVERRIDES
+# ============================================================
+
+def get_command_descriptions(guild_id: int) -> dict:
+    """Return per-command description overrides for a guild."""
+    value = get_settings(guild_id).get("command_descriptions", {})
+    return value if isinstance(value, dict) else {}
+
+
+def set_command_description(guild_id: int, command: str, description: str):
+    overrides = get_command_descriptions(guild_id)
+    description = (description or "").strip()
+    if description:
+        overrides[command] = description
+    else:
+        overrides.pop(command, None)
+    update_setting(guild_id, "command_descriptions", overrides)
+
+
+def get_command_description(guild_id: int, command: str, default: str = "") -> str:
+    per_guild = get_command_descriptions(guild_id).get(command)
+    if per_guild:
+        return per_guild
+    display = get_command_display(command)
+    if display.get("help_description"):
+        return display["help_description"]
+    return default
+
+
+def has_command_permission(guild_id: int, command: str, member) -> bool:
+    """Check if a member has permission to use a command.
+
+    Rules:
+    - Guild admins always have permission.
+    - If no roles are configured for the command, anyone with default Discord perms can use it.
+    - If roles ARE configured, the member must have at least one of those roles.
+    """
+    if member.guild_permissions.administrator:
+        return True
+
+    allowed_roles = get_command_permissions(guild_id, command)
+    if not allowed_roles:
+        return True  # no restriction — use default Discord perms
+
+    member_role_ids = {r.id for r in member.roles}
+    return bool(member_role_ids & set(allowed_roles))
+
+
+# ============================================================
+#  AUTOMOD CUSTOM WORDS
+# ============================================================
+
+def add_automod_word(guild_id: int, word: str, added_by: int = None):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO automod_custom_words (guild_id, word, added_by)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (guild_id, word) DO NOTHING
+            """, (guild_id, word.lower().strip(), added_by))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def remove_automod_word(guild_id: int, word: str) -> bool:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM automod_custom_words WHERE guild_id = %s AND word = %s",
+                (guild_id, word.lower().strip()),
+            )
+            deleted = cur.rowcount
+        conn.commit()
+        return deleted > 0
+    finally:
+        conn.close()
+
+
+def get_automod_words(guild_id: int) -> list:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT word FROM automod_custom_words WHERE guild_id = %s ORDER BY word",
+                (guild_id,),
+            )
+            return [row[0] for row in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+def get_automod_words_with_info(guild_id: int) -> list:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, word, added_by, created_at FROM automod_custom_words WHERE guild_id = %s ORDER BY word",
+                (guild_id,),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def clear_automod_words(guild_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM automod_custom_words WHERE guild_id = %s", (guild_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+# ============================================================
+#  CONTENT OVERRIDES (dashboard text customization)
+# ============================================================
+
+def set_content_override(content_key: str, lang: str, value: str):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO content_overrides (content_key, lang, value, updated_at)
+                VALUES (%s, %s, %s, now())
+                ON CONFLICT (content_key, lang)
+                DO UPDATE SET value = EXCLUDED.value, updated_at = now()
+            """, (content_key, lang, value))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def delete_content_override(content_key: str, lang: str = None):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            if lang is None:
+                cur.execute("DELETE FROM content_overrides WHERE content_key = %s", (content_key,))
+            else:
+                cur.execute(
+                    "DELETE FROM content_overrides WHERE content_key = %s AND lang = %s",
+                    (content_key, lang),
+                )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_all_content_overrides() -> dict:
+    """Return {content_key: {lang: value}}"""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT content_key, lang, value FROM content_overrides")
+            rows = cur.fetchall()
+        result = {}
+        for key, lang, value in rows:
+            result.setdefault(key, {})[lang] = value
+        return result
+    finally:
+        conn.close()
+
+
+def get_content_override(content_key: str, lang: str) -> str:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT value FROM content_overrides WHERE content_key = %s AND lang = %s",
+                (content_key, lang),
+            )
+            row = cur.fetchone()
+            return row[0] if row else None
+    finally:
+        conn.close()
+
+
+# ============================================================
+#  COMMAND DISPLAY OVERRIDES (global, owner-managed)
+#  Lets the owner customize what a bot command shows:
+#  plain reply text, its embed, and its buttons. Applied by
+#  command_overrides.install() at send time for ALL commands.
+# ============================================================
+
+
+def get_command_display(command_name: str) -> dict:
+    cached = _cache_get(_display_cache, command_name)
+    if cached is not None:
+        return cached
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT plain_reply, title, description, color, footer_text, "
+                "thumbnail_url, image_url, help_description, buttons FROM command_display_overrides "
+                "WHERE command_name = %s",
+                (command_name,),
+            )
+            row = cur.fetchone()
+        if not row:
+            _cache_set(_display_cache, command_name, {})
+            return {}
+        plain_reply, title, description, color, footer_text, thumbnail_url, image_url, help_description, buttons = row
+        cfg = {}
+        if plain_reply:
+            cfg["plain_reply"] = plain_reply
+        if title:
+            cfg["title"] = title
+        if description:
+            cfg["description"] = description
+        if color:
+            cfg["color"] = color
+        if footer_text:
+            cfg["footer_text"] = footer_text
+        if thumbnail_url:
+            cfg["thumbnail_url"] = thumbnail_url
+        if image_url:
+            cfg["image_url"] = image_url
+        if help_description:
+            cfg["help_description"] = help_description
+        if buttons:
+            cfg["buttons"] = buttons
+        _cache_set(_display_cache, command_name, cfg)
+        return cfg
+    finally:
+        conn.close()
+
+
+def get_all_command_displays() -> dict:
+    """Return {command_name: cfg} for every command with an override."""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT command_name FROM command_display_overrides")
+            rows = cur.fetchall()
+        result = {}
+        for (name,) in rows:
+            cfg = get_command_display(name)
+            if cfg:
+                result[name] = cfg
+        return result
+    finally:
+        conn.close()
+
+
+def set_command_display(command_name: str, **fields) -> None:
+    """Insert/update a command's global display override.
+    Supported fields: plain_reply, title, description, color,
+    footer_text, thumbnail_url, image_url, help_description, buttons (list)."""
+    allowed = {
+        "plain_reply", "title", "description", "color",
+        "footer_text", "thumbnail_url", "image_url",
+        "help_description", "buttons",
+    }
+    data = {k: v for k, v in fields.items() if k in allowed}
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """INSERT INTO command_display_overrides
+                     (command_name, plain_reply, title, description, color,
+                      footer_text, thumbnail_url, image_url, help_description,
+                      buttons, updated_at)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
+                   ON CONFLICT (command_name)
+                   DO UPDATE SET plain_reply = EXCLUDED.plain_reply,
+                                 title = EXCLUDED.title,
+                                 description = EXCLUDED.description,
+                                 color = EXCLUDED.color,
+                                 footer_text = EXCLUDED.footer_text,
+                                 thumbnail_url = EXCLUDED.thumbnail_url,
+                                 image_url = EXCLUDED.image_url,
+                                 help_description = EXCLUDED.help_description,
+                                 buttons = EXCLUDED.buttons,
+                                 updated_at = now()
+                """,
+                (
+                    command_name,
+                    data.get("plain_reply"),
+                    data.get("title"),
+                    data.get("description"),
+                    data.get("color"),
+                    data.get("footer_text"),
+                    data.get("thumbnail_url"),
+                    data.get("image_url"),
+                    data.get("help_description"),
+                    json.dumps(data.get("buttons")) if data.get("buttons") else None,
+                ),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+    _cache_drop(_display_cache, command_name)
+
+
+def delete_command_display(command_name: str) -> None:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM command_display_overrides WHERE command_name = %s",
+                (command_name,),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+    _cache_drop(_display_cache, command_name)
+
+
+# ============================================================
+#  CUSTOM COMMANDS
+# ============================================================
+
+LOG_CATEGORIES = ["dino_spawn", "gfi", "teleport", "gcm", "player"]
+
+# Default keyword detection for auto-categorizing ARK commands.
+# Single words are matched on word boundaries (so "fly" never matches
+# "AllowFlyingStaminaRecovery" from the server startup line); multi-word
+# phrases are matched as plain substrings.
+DEFAULT_CATEGORY_RULES = {
+    "dino_spawn": ["gmsummon", "gsummon", "summontamed", "summon", "spawndino", "spawnactor", "sdf", "do injure", "force tame", "tame"],
+    "gfi": ["gfi", "giveitemtoplayer", "giveitemnum", "giveitem", "giveengrams", "giveresources"],
+    "teleport": ["teleport", "tpname", "tpto", "tptome", "tpme", "teleportplayer", "teleportplayername", "teleportplayernametome", "teleportplayerself", "teleporttoplayer", "teleportactor", "warpto", "setplayerpos"],
+    "player": ["addexperience", "addexp", "addxp", "givecolors", "setplayername", "god", "infinitestats", "walk", "fly", "ghost", "walkspeed", "flyspeed", "swim", "lma"],
+    "gcm": ["gcmcheat", "gcmcheats", "gcm*", "gmc*", "cheatmenu", "setcheat", "setgm"],
+}
+
+
+def _kw_in(keyword: str, lowered: str) -> bool:
+    """Keyword match honoring word boundaries for single words. A trailing '*'
+    matches any word prefix (used for terse ARK prefixes like ``gcm*``)."""
+    kw = keyword.lower().strip()
+    if kw.endswith("*"):
+        prefix = kw[:-1]
+        return re.search(rf"(?<![a-z0-9_]){re.escape(prefix)}", lowered) is not None
+    if " " in kw:
+        return kw in lowered
+    return re.search(rf"(?<![a-z0-9_]){re.escape(kw)}(?![a-z0-9_])", lowered) is not None
+
+
+def detect_log_category(command: str, custom_rules: dict = None) -> str:
+    """Auto-detect a log category from an ARK command string, honoring custom rules."""
+    lowered = (command or "").lower()
+    rules = DEFAULT_CATEGORY_RULES
+    if custom_rules:
+        merged = {}
+        for cat in LOG_CATEGORIES:
+            merged[cat] = list(DEFAULT_CATEGORY_RULES.get(cat, []))
+            merged[cat] += [r.lower() for r in custom_rules.get(cat, [])]
+        rules = merged
+    for cat in LOG_CATEGORIES:
+        for keyword in rules.get(cat, []):
+            if _kw_in(keyword, lowered):
+                return cat
+    return "gcm"
+
+
+def detect_log_category_for_guild(guild_id: int, command: str) -> str:
+    """Detect a log category using the guild's custom rules, falling back to defaults."""
+    return detect_log_category(command, get_category_rules(guild_id))
+
+
+def detect_command_category(command: str) -> str:
+    """Categorize a command by real keyword only; unregistered ones get 'other'."""
+    lowered = (command or "").lower()
+    for cat in LOG_CATEGORIES:
+        for keyword in DEFAULT_CATEGORY_RULES.get(cat, []):
+            if _kw_in(keyword, lowered):
+                return cat
+    return "other"
+
+
+def add_custom_command(guild_id: int, name: str, command_string: str, category: str = None, created_by: int = None) -> str:
+    """Create a custom command. Returns 'ok' or an error string."""
+    if category is None:
+        category = detect_log_category(command_string)
+    if category not in LOG_CATEGORIES:
+        category = "gcm"
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO custom_commands (guild_id, name, command_string, category, created_by)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (guild_id, name) DO UPDATE
+                    SET command_string = EXCLUDED.command_string,
+                        category = EXCLUDED.category,
+                        enabled = TRUE
+                RETURNING 1
+            """, (guild_id, name, command_string, category, created_by))
+        conn.commit()
+        return "ok"
+    finally:
+        conn.close()
+
+
+def get_custom_commands(guild_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, name, command_string, category, enabled, created_at
+                FROM custom_commands
+                WHERE guild_id = %s
+                ORDER BY name ASC
+            """, (guild_id,))
+            return [{"id": r[0], "name": r[1], "command_string": r[2], "category": r[3], "enabled": r[4], "created_at": r[5]} for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+def get_custom_command(guild_id: int, name: str):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, name, command_string, category, enabled
+                FROM custom_commands
+                WHERE guild_id = %s AND name = %s AND enabled = TRUE
+            """, (guild_id, name))
+            row = cur.fetchone()
+            if not row:
+                return None
+            return {"id": row[0], "name": row[1], "command_string": row[2], "category": row[3], "enabled": row[4]}
+    finally:
+        conn.close()
+
+
+def update_custom_command(guild_id: int, name: str, command_string: str = None, category: str = None, enabled: bool = None):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT command_string, category FROM custom_commands WHERE guild_id = %s AND name = %s
+            """, (guild_id, name))
+            row = cur.fetchone()
+            if not row:
+                return False
+            cur_cmd = command_string if command_string is not None else row[0]
+            cur_cat = category if category is not None else row[1]
+            if cur_cat not in LOG_CATEGORIES:
+                cur_cat = detect_log_category(cur_cmd)
+            cur_enabled = enabled if enabled is not None else True
+            cur.execute("""
+                UPDATE custom_commands
+                SET command_string = %s, category = %s, enabled = %s
+                WHERE guild_id = %s AND name = %s
+            """, (cur_cmd, cur_cat, cur_enabled, guild_id, name))
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
+
+def remove_custom_command(guild_id: int, name: str) -> bool:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM custom_commands WHERE guild_id = %s AND name = %s", (guild_id, name))
+            deleted = cur.rowcount
+        conn.commit()
+        return deleted > 0
+    finally:
+        conn.close()
+
+
+# ============================================================
+#  FORUM LOG CONFIG
+# ============================================================
+
+def get_forum_log_config(guild_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT forum_id, thread_dino, thread_gfi, thread_player, thread_gcm, thread_other, thread_teleport
+                FROM forum_log_config WHERE guild_id = %s
+            """, (guild_id,))
+            row = cur.fetchone()
+            if not row:
+                return None
+            return {
+                "forum_id": row[0],
+                "thread_dino": row[1],
+                "thread_gfi": row[2],
+                "thread_player": row[3],
+                "thread_gcm": row[4],
+                "thread_other": row[5],
+                "thread_teleport": row[6],
+            }
+    finally:
+        conn.close()
+
+
+def set_forum_log_config(guild_id: int, forum_id: int, thread_dino: int = None,
+                         thread_gfi: int = None, thread_player: int = None,
+                         thread_gcm: int = None, thread_other: int = None,
+                         thread_teleport: int = None):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO forum_log_config (guild_id, forum_id, thread_dino, thread_gfi, thread_player, thread_gcm, thread_other, thread_teleport)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (guild_id) DO UPDATE SET
+                    forum_id = EXCLUDED.forum_id,
+                    thread_dino = COALESCE(EXCLUDED.thread_dino, forum_log_config.thread_dino),
+                    thread_gfi = COALESCE(EXCLUDED.thread_gfi, forum_log_config.thread_gfi),
+                    thread_player = COALESCE(EXCLUDED.thread_player, forum_log_config.thread_player),
+                    thread_gcm = COALESCE(EXCLUDED.thread_gcm, forum_log_config.thread_gcm),
+                    thread_other = COALESCE(EXCLUDED.thread_other, forum_log_config.thread_other),
+                    thread_teleport = COALESCE(EXCLUDED.thread_teleport, forum_log_config.thread_teleport)
+            """, (guild_id, forum_id, thread_dino, thread_gfi, thread_player, thread_gcm, thread_other, thread_teleport))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_unposted_forum_logs(guild_id: int, limit: int = 50):
+    """Return categorized log entries not yet posted to the forum.
+
+    Entries with an explicit category go to their thread; uncategorized
+    admin_command/cmd entries are treated as "Other".
+    """
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, log_type, sub_type, user_id, user_name, player_name, command, details, created_at, log_category
+                FROM bot_logs
+                WHERE guild_id = %s AND posted_forum = FALSE
+                  AND (log_category IS NOT NULL OR log_type IN ('admin_command', 'cmd'))
+                ORDER BY id ASC
+                LIMIT %s
+            """, (guild_id, limit))
+            return [
+                {"id": r[0], "log_type": r[1], "sub_type": r[2], "user_id": r[3], "user_name": r[4],
+                 "player_name": r[5], "command": r[6], "details": r[7] if isinstance(r[7], dict) else json.loads(r[7]) if r[7] else None, "created_at": r[8], "log_category": r[9]}
+                for r in cur.fetchall()
+            ]
+    finally:
+        conn.close()
+
+
+def mark_log_posted(log_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE bot_logs SET posted_forum = TRUE WHERE id = %s", (log_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_unposted_shop_logs(guild_id: int, limit: int = 50):
+    """Return shop log entries (pending/delivered/cancelled) not yet posted to the shop forum."""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, log_type, sub_type, user_id, user_name, player_name, command, details, created_at
+                FROM bot_logs
+                WHERE guild_id = %s
+                  AND log_type = 'leaderboard'
+                  AND sub_type IN ('purchase_pending', 'purchase_delivered', 'purchase_cancelled')
+                  AND posted_shop_forum = FALSE
+                ORDER BY id ASC
+                LIMIT %s
+            """, (guild_id, limit))
+            return [
+                {"id": r[0], "log_type": r[1], "sub_type": r[2], "user_id": r[3], "user_name": r[4],
+                 "player_name": r[5], "command": r[6], "details": r[7] if isinstance(r[7], dict) else json.loads(r[7]) if r[7] else None, "created_at": r[8]}
+                for r in cur.fetchall()
+            ]
+    finally:
+        conn.close()
+
+
+def mark_shop_log_posted(log_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE bot_logs SET posted_shop_forum = TRUE WHERE id = %s", (log_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_shop_forum_config(guild_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT forum_id, thread_done, thread_pending
+                FROM shop_forum_config WHERE guild_id = %s
+            """, (guild_id,))
+            row = cur.fetchone()
+            if not row:
+                return None
+            return {"forum_id": row[0], "thread_done": row[1], "thread_pending": row[2]}
+    finally:
+        conn.close()
+
+
+def set_shop_forum_config(guild_id: int, forum_id: int, thread_done: int = None, thread_pending: int = None):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO shop_forum_config (guild_id, forum_id, thread_done, thread_pending)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (guild_id) DO UPDATE SET
+                    forum_id = EXCLUDED.forum_id,
+                    thread_done = COALESCE(EXCLUDED.thread_done, shop_forum_config.thread_done),
+                    thread_pending = COALESCE(EXCLUDED.thread_pending, shop_forum_config.thread_pending)
+            """, (guild_id, forum_id, thread_done, thread_pending))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+# ============================================================
+#  TRIBE FORUM / TRIBE LOG EVENTS
+# ============================================================
+
+def get_tribe_forum_config(guild_id: int):
+    """Return {forum_id, threads: {tribe_name: thread_id}} or None."""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT forum_id FROM tribe_forum_config WHERE guild_id = %s", (guild_id,))
+            row = cur.fetchone()
+            if not row:
+                return None
+            threads = {}
+            cur.execute("SELECT tribe_name, thread_id FROM tribe_forum_threads WHERE guild_id = %s", (guild_id,))
+            for t, tid in cur.fetchall():
+                threads[t] = tid
+            return {"forum_id": row[0], "threads": threads}
+    finally:
+        conn.close()
+
+
+def set_tribe_forum_config(guild_id: int, forum_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO tribe_forum_config (guild_id, forum_id) VALUES (%s, %s)
+                ON CONFLICT (guild_id) DO UPDATE SET forum_id = EXCLUDED.forum_id
+            """, (guild_id, forum_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def set_tribe_thread(guild_id: int, tribe_name: str, thread_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO tribe_forum_threads (guild_id, tribe_name, thread_id)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (guild_id, tribe_name) DO UPDATE SET thread_id = EXCLUDED.thread_id
+            """, (guild_id, tribe_name, thread_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def clear_tribe_threads(guild_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM tribe_forum_threads WHERE guild_id = %s", (guild_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def add_tribe_log_event(guild_id: int, tribe_name: str, content: str):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO tribe_log_events (guild_id, tribe_name, content) VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
+                (guild_id, tribe_name, content),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_unposted_tribe_events(guild_id: int, limit: int = 50):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, tribe_name, content, created_at
+                FROM tribe_log_events
+                WHERE guild_id = %s AND posted_forum = FALSE
+                ORDER BY id ASC
+                LIMIT %s
+            """, (guild_id, limit))
+            return [
+                {"id": r[0], "tribe_name": r[1], "content": r[2], "created_at": r[3]}
+                for r in cur.fetchall()
+            ]
+    finally:
+        conn.close()
+
+
+def mark_tribe_event_posted(log_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE tribe_log_events SET posted_forum = TRUE WHERE id = %s", (log_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_tribe_log_events(guild_id: int, tribe_name: str = None, limit: int = 100, offset: int = 0, search: str = None):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            conditions = ["guild_id = %s"]
+            params = [guild_id]
+            if tribe_name:
+                conditions.append("tribe_name = %s")
+                params.append(tribe_name)
+            if search:
+                conditions.append("content ILIKE %s")
+                params.append(f"%{search}%")
+            cur.execute(
+                f"""
+                SELECT id, tribe_name, content, created_at
+                FROM tribe_log_events
+                WHERE {' AND '.join(conditions)}
+                ORDER BY created_at DESC
+                LIMIT %s OFFSET %s
+                """,
+                (*params, limit, offset),
+            )
+            return [
+                {"id": r[0], "tribe_name": r[1], "content": r[2], "created_at": r[3]}
+                for r in cur.fetchall()
+            ]
+    finally:
+        conn.close()
+
+
+def get_tribe_log_event_count(guild_id: int, tribe_name: str = None, search: str = None):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            conditions = ["guild_id = %s"]
+            params = [guild_id]
+            if tribe_name:
+                conditions.append("tribe_name = %s")
+                params.append(tribe_name)
+            if search:
+                conditions.append("content ILIKE %s")
+                params.append(f"%{search}%")
+            cur.execute(
+                f"SELECT COUNT(*) FROM tribe_log_events WHERE {' AND '.join(conditions)}",
+                params,
+            )
+            return cur.fetchone()[0]
+    finally:
+        conn.close()
+
+
+def get_tribe_event_counts(guild_id: int) -> dict:
+    """Return {tribe_name: event_count}."""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT tribe_name, COUNT(*) FROM tribe_log_events WHERE guild_id = %s GROUP BY tribe_name", (guild_id,))
+            return {r[0]: r[1] for r in cur.fetchall()}
+    finally:
+        conn.close()
+
+
+# ============================================================
+#  WIPE HELPERS
+# ============================================================
+
+def wipe_tribe_logs(guild_id: int):
+    """Delete all stored tribe log events for a guild."""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM tribe_log_events WHERE guild_id = %s", (guild_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def wipe_bot_logs(guild_id: int):
+    """Delete all stored bot/action logs for a guild."""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM bot_logs WHERE guild_id = %s", (guild_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def wipe_warnings(guild_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM player_warnings WHERE guild_id = %s", (guild_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def wipe_punishments(guild_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM player_punishments WHERE guild_id = %s", (guild_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_category_rules(guild_id: int) -> dict:
+    """Return per-guild custom keyword rules for log-category detection."""
+    raw = get_setting(guild_id, "category_rules", None)
+    if not raw:
+        return {}
+    if isinstance(raw, dict):
+        return raw
+    try:
+        return json.loads(raw)
+    except Exception:
+        return {}
+
+
+def set_category_rules(guild_id: int, rules: dict):
+    update_setting(guild_id, "category_rules", json.dumps(rules))
+
+
+# ============================================================
+#  PLAYER PLAYTIME TRACKING
+# ============================================================
+
+def record_playtime(guild_id: int, players: list, seconds: int):
+    """Accumulate `seconds` of playtime only for currently-online players."""
+    if not players or seconds <= 0:
+        return
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            for p in players:
+                if not isinstance(p, dict):
+                    continue
+                if not p.get("online"):
+                    continue
+                pid = str(p.get("id") or p.get("name") or "unknown")
+                pname = str(p.get("name") or "Unknown")
+                cur.execute("""
+                    INSERT INTO player_playtime (guild_id, player_id, player_name, seconds, last_seen)
+                    VALUES (%s, %s, %s, %s, NOW())
+                    ON CONFLICT (guild_id, player_id)
+                    DO UPDATE SET
+                        player_name = EXCLUDED.player_name,
+                        seconds = player_playtime.seconds + EXCLUDED.seconds,
+                        last_seen = NOW()
+                """, (guild_id, pid, pname, seconds))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_playtime_map(guild_id: int) -> dict:
+    """Return playtime lookups keyed by player_id and player_name, plus raw rows.
+
+    shape: {"by_id": {...}, "by_name": {...}, "rows": [ ... ]}
+    """
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT player_id, player_name, seconds, last_seen
+                FROM player_playtime
+                WHERE guild_id = %s
+                ORDER BY seconds DESC
+            """, (guild_id,))
+            rows = cur.fetchall()
+        by_id = {}
+        by_name = {}
+        for pid, pname, seconds, last_seen in rows:
+            key_id = str(pid or "")
+            if key_id:
+                by_id[key_id] = {"seconds": seconds, "last_seen": last_seen}
+            if pname:
+                by_name[pname.lower()] = {"seconds": seconds, "last_seen": last_seen}
+        return {"by_id": by_id, "by_name": by_name, "rows": rows}
+    finally:
+        conn.close()
+
+
+def get_top_players(guild_id: int, limit: int = 20):
+    """Return the top players by accumulated playtime (seconds)."""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT player_id, player_name, seconds, last_seen
+                FROM player_playtime
+                WHERE guild_id = %s
+                ORDER BY seconds DESC
+                LIMIT %s
+            """, (guild_id, limit))
+            return [
+                {
+                    "player_id": r[0],
+                    "player_name": r[1],
+                    "seconds": r[2],
+                    "last_seen": r[3],
+                }
+                for r in cur.fetchall()
+            ]
+    finally:
+        conn.close()
+
+
+def reset_playtime(guild_id: int = None):
+    """Clear accumulated playtime. If guild_id is None, clears for all guilds.
+
+    Used to wipe bogus data accumulated before the online-only tracking fix.
+    """
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            if guild_id is None:
+                cur.execute("DELETE FROM player_playtime")
+            else:
+                cur.execute("DELETE FROM player_playtime WHERE guild_id = %s", (guild_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+# ============================================================
+#  PLAYER IP RECORDS (alt detection + IP ban data source)
+# ============================================================
+
+def add_ip_record(guild_id: int, player_name: str, ip_address: str,
+                  player_id: str = None, source: str = "manual"):
+    if not ip_address:
+        return
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO player_ip_records (guild_id, player_id, player_name, ip_address, source, last_seen)
+                VALUES (%s, %s, %s, %s, %s, NOW())
+                ON CONFLICT (guild_id, player_name, ip_address)
+                DO UPDATE SET last_seen = NOW(), player_id = EXCLUDED.player_id
+            """, (guild_id, player_id, player_name, ip_address, source))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_player_ips(guild_id: int, player_name: str = None, player_id: str = None):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            query = ("SELECT id, player_id, player_name, ip_address, source, first_seen, last_seen "
+                     "FROM player_ip_records WHERE guild_id = %s")
+            params = [guild_id]
+            if player_name:
+                query += " AND player_name = %s"
+                params.append(player_name)
+            if player_id:
+                query += " AND player_id = %s"
+                params.append(player_id)
+            query += " ORDER BY last_seen DESC"
+            cur.execute(query, params)
+            return [
+                {"id": r[0], "player_id": r[1], "player_name": r[2], "ip": r[3],
+                 "source": r[4], "first_seen": r[5], "last_seen": r[6]}
+                for r in cur.fetchall()
+            ]
+    finally:
+        conn.close()
+
+
+def get_ip_records(guild_id: int, limit: int = 200):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, player_id, player_name, ip_address, source, first_seen, last_seen
+                FROM player_ip_records WHERE guild_id = %s
+                ORDER BY last_seen DESC LIMIT %s
+            """, (guild_id, limit))
+            return [
+                {"id": r[0], "player_id": r[1], "player_name": r[2], "ip": r[3],
+                 "source": r[4], "first_seen": r[5], "last_seen": r[6]}
+                for r in cur.fetchall()
+            ]
+    finally:
+        conn.close()
+
+
+def find_alts(guild_id: int, player_name: str) -> list:
+    """Return players sharing an IP with the given player (alt detection)."""
+    ips = get_player_ips(guild_id, player_name=player_name)
+    if not ips:
+        return []
+    ip_set = {r["ip"] for r in ips}
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT DISTINCT player_name FROM player_ip_records
+                WHERE guild_id = %s AND ip_address = ANY(%s) AND player_name <> %s
+            """, (guild_id, list(ip_set), player_name))
+            return [r[0] for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+def delete_ip_record(record_id: int, guild_id: int) -> bool:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM player_ip_records WHERE id = %s AND guild_id = %s", (record_id, guild_id))
+            return cur.rowcount > 0
+    finally:
+        conn.commit()
+        conn.close()
+
+
+# ============================================================
+#  IP BANS
+# ============================================================
+
+def add_ip_ban(guild_id: int, ip_address: str, reason: str, issued_by: int, player_name: str = None):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO player_ip_bans (guild_id, ip_address, player_name, reason, issued_by)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (ip_address) DO NOTHING
+            """, (guild_id, ip_address, player_name, reason, issued_by))
+            return cur.rowcount > 0
+    finally:
+        conn.commit()
+        conn.close()
+
+
+def get_ip_bans(guild_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, guild_id, ip_address, player_name, reason, issued_by, created_at
+                FROM player_ip_bans WHERE guild_id = %s ORDER BY created_at DESC
+            """, (guild_id,))
+            return [
+                {"id": r[0], "guild_id": r[1], "ip": r[2], "player_name": r[3],
+                 "reason": r[4], "issued_by": r[5], "created_at": r[6]}
+                for r in cur.fetchall()
+            ]
+    finally:
+        conn.close()
+
+
+def is_ip_banned(guild_id: int, ip_address: str) -> bool:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT 1 FROM player_ip_bans WHERE guild_id = %s AND ip_address = %s LIMIT 1",
+                (guild_id, ip_address),
+            )
+            return cur.fetchone() is not None
+    finally:
+        conn.close()
+
+
+def remove_ip_ban(ban_id: int, guild_id: int) -> bool:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM player_ip_bans WHERE id = %s AND guild_id = %s", (ban_id, guild_id))
+            return cur.rowcount > 0
+    finally:
+        conn.commit()
+        conn.close()
+
+
+# ============================================================
+#  ADMIN ACTION LOG (anti-abuse)
+# ============================================================
+
+def log_admin_action(guild_id: int, admin_user_id, admin_name, action, target=None, details=None):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO admin_action_logs (guild_id, admin_user_id, admin_name, action, target, details)
+                VALUES (%s, %s, %s, %s, %s, %s::jsonb)
+            """, (guild_id, admin_user_id, admin_name, action, target,
+                  json.dumps(details) if details else None))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_admin_action_logs(guild_id: int, limit: int = 200, offset: int = 0):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, admin_user_id, admin_name, action, target, details, created_at
+                FROM admin_action_logs WHERE guild_id = %s
+                ORDER BY created_at DESC LIMIT %s OFFSET %s
+            """, (guild_id, limit, offset))
+            return [
+                {"id": r[0], "admin_user_id": r[1], "admin_name": r[2], "action": r[3],
+                 "target": r[4],
+                 "details": r[5] if isinstance(r[5], dict) else json.loads(r[5]) if r[5] else None,
+                 "created_at": r[6]}
+                for r in cur.fetchall()
+            ]
+    finally:
+        conn.close()
+
+
+def get_admin_action_count(guild_id: int) -> int:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM admin_action_logs WHERE guild_id = %s", (guild_id,))
+            return cur.fetchone()[0]
+    finally:
+        conn.close()
+
+
+# ============================================================
+#  CLUSTER ALPHA SYSTEM
+# ============================================================
+
+def add_cluster(guild_id: int, cluster_name: str, tribe_name: str, disc_channel=None, created_by=None):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO cluster_alphas (guild_id, cluster_name, tribe_name, disc_channel, created_by)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (guild_id, cluster_name)
+                DO UPDATE SET tribe_name = EXCLUDED.tribe_name,
+                              disc_channel = EXCLUDED.disc_channel,
+                              created_by = EXCLUDED.created_by
+            """, (guild_id, cluster_name, tribe_name, disc_channel, created_by))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_clusters(guild_id: int):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, guild_id, cluster_name, tribe_name, disc_channel, created_by, created_at
+                FROM cluster_alphas WHERE guild_id = %s ORDER BY created_at
+            """, (guild_id,))
+            return [
+                {"id": r[0], "guild_id": r[1], "cluster_name": r[2], "tribe_name": r[3],
+                 "disc_channel": r[4], "created_by": r[5], "created_at": r[6]}
+                for r in cur.fetchall()
+            ]
+    finally:
+        conn.close()
+
+
+def remove_cluster(cluster_id: int, guild_id: int) -> bool:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM cluster_alphas WHERE id = %s AND guild_id = %s", (cluster_id, guild_id))
+            return cur.rowcount > 0
+    finally:
+        conn.commit()
+        conn.close()
+
+
+def is_cluster_alpha(guild_id: int, tribe_name: str) -> bool:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT 1 FROM cluster_alphas WHERE guild_id = %s AND tribe_name = %s LIMIT 1",
+                (guild_id, tribe_name),
+            )
+            return cur.fetchone() is not None
+    finally:
+        conn.close()
+
+
+# ============================================================
+#  STAFF PAYMENT SYSTEM
+# ============================================================
+
+def add_staff_payment(guild_id: int, staff_user_id, staff_name, role, payment_type,
+                      amount, currency="USD", note=None, issued_by=None):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO staff_payments (guild_id, staff_user_id, staff_name, role, payment_type,
+                                            amount, currency, note, issued_by)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+            """, (guild_id, staff_user_id, staff_name, role, payment_type,
+                  amount, currency, note, issued_by))
+            return cur.fetchone()[0]
+    finally:
+        conn.commit()
+        conn.close()
+
+
+def get_staff_payments(guild_id: int, status=None):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            query = ("SELECT id, guild_id, staff_user_id, staff_name, role, payment_type, amount, "
+                     "currency, status, note, issued_by, issued_at, paid_at "
+                     "FROM staff_payments WHERE guild_id = %s")
+            params = [guild_id]
+            if status:
+                query += " AND status = %s"
+                params.append(status)
+            query += " ORDER BY issued_at DESC"
+            cur.execute(query, params)
+            return [
+                {"id": r[0], "guild_id": r[1], "staff_user_id": r[2], "staff_name": r[3],
+                 "role": r[4], "payment_type": r[5], "amount": float(r[6]), "currency": r[7],
+                 "status": r[8], "note": r[9], "issued_by": r[10],
+                 "issued_at": r[11], "paid_at": r[12]}
+                for r in cur.fetchall()
+            ]
+    finally:
+        conn.close()
+
+
+def set_staff_payment_status(payment_id: int, guild_id: int, status: str):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE staff_payments SET status = %s,
+                    paid_at = CASE WHEN %s = 'paid' THEN NOW() WHEN %s = 'pending' THEN NULL ELSE paid_at END
+                WHERE id = %s AND guild_id = %s
+            """, (status, status, status, payment_id, guild_id))
+            return cur.rowcount > 0
+    finally:
+        conn.commit()
+        conn.close()
+
+
+def delete_staff_payment(payment_id: int, guild_id: int) -> bool:
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM staff_payments WHERE id = %s AND guild_id = %s", (payment_id, guild_id))
+            return cur.rowcount > 0
+    finally:
+        conn.commit()
+        conn.close()

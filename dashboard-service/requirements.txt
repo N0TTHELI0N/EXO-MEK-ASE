@@ -1,0 +1,13 @@
+# DASHBOARD SERVICE requirements.
+# NOTE: discord.py / psnawp are intentionally absent — those belong to the
+# Bot Service. The dashboard needs the DB layer, the Nitrado client and the
+# Fernet crypto, nothing else.
+flask==3.0.3
+gunicorn==22.0.0
+# Imported directly (ProxyFix) to survive Koyeb's TLS-terminating proxy.
+werkzeug>=3.0.0
+psycopg2-binary==2.9.9
+cryptography==43.0.1
+requests==2.32.3
+paramiko==3.5.0
+python-dotenv==1.0.1

@@ -230,12 +230,26 @@ def _port() -> int:
         return 5000
 
 
-def run_dashboard():
-    from dashboard.app import app, guild_settings as gs
-    gs.init_db()
+def run_status_page():
+    """Bot Service HTTP surface.
+
+    The Flask dashboard no longer lives in this process — it is an independent
+    service (``dashboard-service/``). This service only needs a port for the
+    platform health check, so it serves a dependency-free WSGI status page
+    instead of pulling Flask + all dashboard views into the bot container.
+    """
+    from wsgiref.simple_server import make_server, WSGIRequestHandler
+
+    class _QuietHandler(WSGIRequestHandler):
+        def log_message(self, *args):  # noqa: D102
+            pass
+
+    from wsgi import application
+
     port = _port()
-    print(f"[Web] Listening on 0.0.0.0:{port}", flush=True)
-    app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
+    print(f"[Web] Bot status page on 0.0.0.0:{port}", flush=True)
+    httpd = make_server("0.0.0.0", port, application, handler_class=_QuietHandler)
+    httpd.serve_forever()
 
 
 if __name__ == "__main__":
@@ -252,4 +266,4 @@ if __name__ == "__main__":
     print(f"[Bot] Starting Discord bot thread (port={_port()})...", flush=True)
     bot_thread = threading.Thread(target=_bot_worker, daemon=True)
     bot_thread.start()
-    run_dashboard()
+    run_status_page()

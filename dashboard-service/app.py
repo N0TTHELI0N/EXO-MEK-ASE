@@ -11,8 +11,22 @@ from datetime import datetime, timedelta, timezone
 from flask import Flask, redirect, request, session, render_template, jsonify, url_for, send_file, send_from_directory
 from functools import wraps
 import sys
-sys.path.insert(0, os.path.dirname(__file__))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+# ────────────────────────────────────────────────────────────
+#  DASHBOARD SERVICE — standalone process, zero coupling to the bot
+# ────────────────────────────────────────────────────────────
+#  This service must be able to run on its own (own repo, own container),
+#  so its import path is strictly:
+#     1) this service folder  -> app.py, translations.py
+#     2) this service /core   -> vendored data layer (identical code that
+#                                lives in the Bot Service: same DB schema,
+#                                same Fernet key, same Nitrado API)
+#  The parent directory is deliberately NOT added: reaching into the bot's
+#  files is exactly the coupling this split removes.
+_HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, _HERE)
+sys.path.insert(0, os.path.join(_HERE, "core"))
+
 import guild_settings
 import shop_db
 import nitrado
@@ -2812,8 +2826,18 @@ def koyeb_health():
     """
     return jsonify({
         "status": "ok",
-        "service": "exo-mek-asa",
+        "service": "exo-mek-dashboard",
         "platform": os.environ.get("KOYEB_SERVICE_NAME", "local"),
+    }), 200
+
+
+@app.route("/api/service-info")
+def api_service_info():
+    """Identifies which service answered — handy when both run on Koyeb."""
+    return jsonify({
+        "service": "exo-mek-dashboard",
+        "role": "dashboard",
+        "bot_service": os.environ.get("BOT_SERVICE_URL", ""),
     }), 200
 
 
