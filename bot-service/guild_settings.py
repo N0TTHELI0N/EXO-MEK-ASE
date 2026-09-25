@@ -253,6 +253,64 @@ def _close_all_pool():
         _pool_open = 0
 
 
+# ── Migration support ───────────────────────────────────────────
+# Migrations get a private connection and an explicit transaction, so that
+# neither pool trimming nor a concurrent request can invalidate a cursor in
+# the middle of the schema build.
+
+_STATEMENT_TIMEOUT_MS = 120_000
+
+
+def _open_migration_connection():
+    """Open a raw connection dedicated to schema work.
+
+    Deliberately not routed through get_conn(): that returns a pooled proxy
+    whose close() releases the socket, and whose socket can be closed by the
+    pool at any time. A migration holds one connection for the whole run and
+    closes it itself.
+    """
+    if not DATABASE_URL:
+        raise RuntimeError("DATABASE_URL not set")
+    conn = psycopg2.connect(
+        DATABASE_URL,
+        connect_timeout=10,
+        application_name="mersad-migrate",
+        keepalives=1,
+    )
+    # Explicit transaction control: commit on success, rollback on failure.
+    conn.autocommit = False
+    return conn
+
+
+class _migration_transaction:
+    """``with _migration_transaction(conn):`` - commit, or rollback on error.
+
+    psycopg2's own ``with conn:`` does this too, but keeping it explicit here
+    means the rollback is guaranteed to run even if a cursor misbehaves, and
+    the intent is readable at the call site.
+    """
+
+    __slots__ = ("_conn",)
+
+    def __init__(self, conn):
+        self._conn = conn
+
+    def __enter__(self):
+        return self._conn
+
+    def __exit__(self, exc_type, exc, tb):
+        if exc_type is None:
+            self._conn.commit()
+        else:
+            try:
+                self._conn.rollback()
+            except Exception:
+                pass
+        # Never swallow the original exception: a failed migration must be
+        # loud, otherwise the service starts against a half-built schema.
+        return False
+
+
 def _encrypt(value: str) -> str:
     if not _fernet or not value:
         return value
@@ -278,12 +336,21 @@ def init_db():
     # deadlocking on each other's row locks.
     if not _init_db_spin_lock.acquire(blocking=False):
         return
-    conn = get_conn()
+    # A migration must never borrow from the connection pool. A pooled socket
+    # can be closed at any moment by _pool_trim_locked() or _close_all_pool()
+    # on an unrelated request path, and doing so kills every cursor held on
+    # it - which is what surfaced as InterfaceError: cursor already closed
+    # part-way through the DDL below.
     try:
-        with conn:
+        conn = _open_migration_connection()
+        with _migration_transaction(conn):
+            # Exactly one cursor for the whole schema, closed exactly once by
+            # the context manager. This used to be two `with` blocks: the
+            # first was closed before the second was created, and only the
+            # advisory-lock statement ever used the first one.
             with conn.cursor() as cur:
+                cur.execute("SET statement_timeout = %d" % _STATEMENT_TIMEOUT_MS)
                 cur.execute("SELECT pg_advisory_xact_lock(752001)")
-            with conn.cursor() as cur:
                 cur.execute("""
                 CREATE TABLE IF NOT EXISTS guild_settings (
                     guild_id    BIGINT PRIMARY KEY,
@@ -763,9 +830,7 @@ def init_db():
                 )
             """)
             cur.execute("CREATE INDEX IF NOT EXISTS idx_staff_pay_guild ON staff_payments(guild_id, status)")
-        conn.commit()
     finally:
-        conn.close()
         # The spin lock was acquired non-blocking above, so without an
         # explicit release init_db() could only ever succeed once per
         # process and every later call would silently return - leaving a
