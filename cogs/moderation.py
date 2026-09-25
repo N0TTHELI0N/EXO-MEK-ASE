@@ -23,6 +23,43 @@ async def _send_rcon(guild_id: int, command: str) -> str | None:
     return nitrado.send_rcon(guild_id, command)
 
 
+async def _send_rcon_first(guild_id: int, commands: list[str]) -> str | None:
+    """Run the first console command the game server actually accepts.
+
+    ARK: Survival Ascended renamed several admin commands, so each action sends
+    the ASA name first and keeps the ASE name as a fallback. That keeps the
+    moderation actions working before and after the migration.
+    """
+    last = None
+    for cmd in commands:
+        try:
+            resp = await _send_rcon(guild_id, cmd)
+        except Exception:
+            last = None
+            continue
+        if resp and "command not found" not in str(resp).lower():
+            return resp
+        last = resp
+    return last
+
+
+def _wipe_dino_commands(safe_name: str) -> list[str]:
+    """ASA exposes Kill/DestroyAllWildDinos; ASE used DestroyAllDinos."""
+    return [
+        f"DestroyAllWildDinos {safe_name}",
+        f"DestroyAllDinos {safe_name}",
+        f"admincheat DestroyAllWildDinos {safe_name}",
+    ]
+
+
+def _ban_cycle_commands(safe_name: str) -> list[str]:
+    """Ban→Unban cycle wipes a player's structures on both games."""
+    return [
+        f"BanPlayer {safe_name}\nUnBanPlayer {safe_name}",
+        f"admincheat BanPlayer {safe_name}\nadmincheat UnBanPlayer {safe_name}",
+    ]
+
+
 def _get_nitrado_headers(guild_id: int):
     cfg = guild_settings.get_nitrado_config(guild_id)
     token = cfg.get("api_token")
@@ -80,7 +117,11 @@ class Moderation(commands.Cog):
         expired = guild_settings.get_expired_tempbans()
         for pid, guild_id, player_name, player_id in expired:
             safe_name = sanitize_rcon_name(player_name)
-            result = await _send_rcon(guild_id, f"UnBan {safe_name}")
+            result = await _send_rcon_first(guild_id, [
+                f"UnBanPlayer {safe_name}",
+                f"UnBan {safe_name}",
+                f"admincheat UnBanPlayer {safe_name}",
+            ])
             if result is not None:
                 guild_settings.mark_action_done(pid)
                 guild = self.bot.get_guild(guild_id)
@@ -285,10 +326,9 @@ class Moderation(commands.Cog):
         for p_name, p_id in players:
             safe_name = sanitize_rcon_name(p_name)
             if wipe_val in ("wipe_dinos", "wipe_both"):
-                await _send_rcon(interaction.guild_id, f"DestroyAllDinos {safe_name}")
+                await _send_rcon_first(interaction.guild_id, _wipe_dino_commands(safe_name))
             if wipe_val in ("wipe_structures", "wipe_both"):
-                await _send_rcon(interaction.guild_id, f"BanPlayer {safe_name}")
-                await _send_rcon(interaction.guild_id, f"UnBanPlayer {safe_name}")
+                await _send_rcon_first(interaction.guild_id, _ban_cycle_commands(safe_name))
 
             punishment_id = guild_settings.add_punishment(
                 interaction.guild_id, p_name, wipe_val, reason, interaction.user.id,
@@ -340,7 +380,11 @@ class Moderation(commands.Cog):
         for p_name, p_id in targets:
             safe_name = sanitize_rcon_name(p_name)
             if not guild_settings.is_blacklisted(interaction.guild_id, p_name):
-                await _send_rcon(interaction.guild_id, f"Ban {safe_name}")
+                await _send_rcon_first(interaction.guild_id, [
+                    f"BanPlayer {safe_name}",
+                    f"Ban {safe_name}",
+                    f"admincheat BanPlayer {safe_name}",
+                ])
                 guild_settings.add_blacklist(
                     interaction.guild_id, p_name, reason, interaction.user.id,
                     player_id=p_id, tribe_name=tribe or None,
@@ -368,7 +412,11 @@ class Moderation(commands.Cog):
 
         rows = guild_settings.get_blacklists(interaction.guild_id, player)
         safe_name = sanitize_rcon_name(player)
-        result = await _send_rcon(interaction.guild_id, f"UnBan {safe_name}")
+        result = await _send_rcon_first(interaction.guild_id, [
+            f"UnBanPlayer {safe_name}",
+            f"UnBan {safe_name}",
+            f"admincheat UnBanPlayer {safe_name}",
+        ])
         removed = 0
         for row in rows:
             if guild_settings.remove_blacklist(row[0], interaction.guild_id):
@@ -655,13 +703,19 @@ class Moderation(commands.Cog):
         tempban_hours = guild_settings.get_setting(guild_id, "warning_tempban_hours", 24)
         safe_player = sanitize_rcon_name(player)
 
+        ban_cmd = [
+            f"BanPlayer {safe_player}",
+            f"Ban {safe_player}",
+            f"admincheat BanPlayer {safe_player}",
+        ]
+
         if punishment_type == "ban":
-            result = await _send_rcon(guild_id, f"Ban {safe_player}")
+            result = await _send_rcon_first(guild_id, ban_cmd)
             guild_settings.add_punishment(guild_id, player, "ban", "Auto-punishment: warning threshold reached", interaction.user.id)
             return bot_i18n.t(guild_id, "auto_banned", player=player) if result else bot_i18n.t(guild_id, "auto_ban_failed")
 
         elif punishment_type == "tempban":
-            result = await _send_rcon(guild_id, f"Ban {safe_player}")
+            result = await _send_rcon_first(guild_id, ban_cmd)
             expires_at = datetime.now(timezone.utc) + timedelta(hours=tempban_hours)
             pid = guild_settings.add_punishment(guild_id, player, "tempban", "Auto-punishment: warning threshold reached", interaction.user.id, expires_at=expires_at)
             if result:
@@ -670,10 +724,9 @@ class Moderation(commands.Cog):
 
         elif punishment_type in ("wipe_structures", "wipe_dinos", "wipe_both"):
             if punishment_type in ("wipe_dinos", "wipe_both"):
-                await _send_rcon(guild_id, f"DestroyAllDinos {safe_player}")
+                await _send_rcon_first(guild_id, _wipe_dino_commands(safe_player))
             if punishment_type in ("wipe_structures", "wipe_both"):
-                await _send_rcon(guild_id, f"BanPlayer {safe_player}")
-                await _send_rcon(guild_id, f"UnBanPlayer {safe_player}")
+                await _send_rcon_first(guild_id, _ban_cycle_commands(safe_player))
             guild_settings.add_punishment(guild_id, player, punishment_type, "Auto-punishment: warning threshold reached", interaction.user.id)
             return bot_i18n.t(guild_id, "auto_wipe_done", player=player, wipe=punishment_type.replace('_', ' '))
 

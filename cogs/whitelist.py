@@ -221,7 +221,14 @@ def _all_redeemed_gamertags(guild_id: int):
 
 
 def _update_whitelist_file(guild_id: int) -> bool:
-    """Write all active linked PSN IDs to the whitelist file via the Nitrado FileServer API."""
+    """Write every reserved-slot player to the server's whitelist file.
+
+    ARK: Survival Ascended has no access whitelist. The server is open and a
+    full 70/70 slot block is what kicks regular players out, so the equivalent
+    ASA mechanism is RESERVED SLOTS: the listed players are guaranteed entry
+    even when the server is full. ASA still reads the same Whitelist.txt file,
+    so the push target is unchanged — only the intent differs.
+    """
     wl_dir = guild_settings.get_setting(guild_id, "whitelist_path", "")
     if not wl_dir:
         return False
@@ -235,6 +242,18 @@ def _update_whitelist_file(guild_id: int) -> bool:
         return client.write_file(wl_dir, "Whitelist.txt", content)
     except Exception:
         return False
+
+
+def _slots_report(guild_id: int) -> str:
+    """One-line ASA slot summary: how full the server is and what that means
+    for a reserved-slot player trying to get in."""
+    try:
+        online, maximum = nitrado.get_players_count(guild_id)
+    except Exception:
+        return ""
+    if not maximum:
+        return ""
+    return f"{online}/{maximum}"
 
 
 def _push_whitelist_api(guild_id: int, gamertags) -> int:
@@ -385,7 +404,7 @@ class Whitelist(commands.Cog):
 
     # ── /set-whitelist-path ──────────────────────────────────
     @app_commands.guild_only()
-    @app_commands.command(name="set-whitelist-path", description="Set the directory for Whitelist.txt on the server (Admin only)")
+    @app_commands.command(name="set-whitelist-path", description="Set the directory holding Whitelist.txt / reserved slots on the server (Admin only)")
     @app_commands.describe(path="Server folder containing Whitelist.txt (e.g. /ShooterGame/Saved)")
     async def set_whitelist_path(self, interaction: discord.Interaction, path: str):
         if not interaction.user.guild_permissions.administrator:
@@ -408,12 +427,17 @@ class Whitelist(commands.Cog):
 
     # ── /whitelist ───────────────────────────────────────────
     @app_commands.guild_only()
-    @app_commands.command(name="whitelist", description="View whitelist status")
+    @app_commands.command(name="whitelist", description="View reserved-slot status (ASA reserved slots)")
     async def whitelist_cmd(self, interaction: discord.Interaction):
         players = _get_linked_players(interaction.guild_id)
         if not players:
             return await interaction.response.send_message(bot_i18n.t(interaction.guild_id, "whitelist_not_found", member="everyone"), ephemeral=True)
         lines = []
+        slots = _slots_report(interaction.guild_id)
+        if slots:
+            lines.append(
+                f"🎟️ {bot_i18n.t(interaction.guild_id, 'wl_slots_online')}: `{slots}`"
+            )
         for disc_id, psn, status in players:
             member = interaction.guild.get_member(disc_id)
             name = member.display_name if member else f"User#{disc_id}"
@@ -476,7 +500,7 @@ class Whitelist(commands.Cog):
 
     # ── /wl-status ───────────────────────────────────────────
     @app_commands.guild_only()
-    @app_commands.command(name="wl-status", description="Check your whitelist status")
+    @app_commands.command(name="wl-status", description="Check your reserved-slot status")
     async def wl_status(self, interaction: discord.Interaction):
         player = _get_player(interaction.guild_id, interaction.user.id)
         if not player:
@@ -486,8 +510,14 @@ class Whitelist(commands.Cog):
             )
         status = player[1]
         status_text = bot_i18n.t(interaction.guild_id, "whitelist_active") if status == "active" else bot_i18n.t(interaction.guild_id, "whitelist_pending_restart")
+        body = bot_i18n.t(interaction.guild_id, "wl_status_body", psn=player[0], status=status_text)
+        slots = _slots_report(interaction.guild_id)
+        if slots and status == "active":
+            body += "\n" + bot_i18n.t(
+                interaction.guild_id, "wl_slots_reserved_note", slots=slots
+            )
         await interaction.response.send_message(
-            bot_i18n.t(interaction.guild_id, "wl_status_body", psn=player[0], status=status_text),
+            body,
             ephemeral=True,
         )
 
@@ -509,8 +539,8 @@ class Whitelist(commands.Cog):
 
     # ── /wl-redeem ───────────────────────────────────────────
     @app_commands.guild_only()
-    @app_commands.command(name="wl-redeem", description="Use 1 token to add a gamertag to the server whitelist")
-    @app_commands.describe(gamertag="PSN gamertag to whitelist")
+    @app_commands.command(name="wl-redeem", description="Spend 1 token to reserve a slot for a gamertag (ASA reserved slots)")
+    @app_commands.describe(gamertag="PSN gamertag to reserve a slot for")
     async def wl_redeem(self, interaction: discord.Interaction, gamertag: str):
         if interaction.guild_id is None:
             return
@@ -533,7 +563,7 @@ class Whitelist(commands.Cog):
 
     # ── /wl-refresh ──────────────────────────────────────────
     @app_commands.guild_only()
-    @app_commands.command(name="wl-refresh", description="Re-apply all your redeemed gamertags to the server whitelist")
+    @app_commands.command(name="wl-refresh", description="Re-apply all your reserved slots to the server (ASA)")
     async def wl_refresh(self, interaction: discord.Interaction):
         if interaction.guild_id is None:
             return

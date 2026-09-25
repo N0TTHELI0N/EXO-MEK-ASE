@@ -709,7 +709,7 @@ class NitradoClient:
         if not user:
             return ""
         sftp = sftp_client.SFTPClient(host, user, password, cfg.get("port") or 22)
-        game = str(gs.get("game") or self._game_short() or "arkps").strip("/").strip("\ufeff").split("/")[0]
+        game = str(gs.get("game") or self._game_short() or "arksa").strip("/").strip("\ufeff").split("/")[0]
         for fname in ("ShooterGame_Last.log", "ShooterGame.log"):
             rel = f"ShooterGame/Saved/Logs/{fname}"
             guesses = []
@@ -769,7 +769,7 @@ class NitradoClient:
                 candidates.append(real)
         except Exception:
             pass
-        for slug in ("arkse", "arkps4", "arksa", "arkxb", "arkps", "ark", "asa"):
+        for slug in ("arksa", "asa", "arkxb", "arkse", "arkps4", "arkps", "ark"):
             if slug not in candidates:
                 candidates.append(slug)
         if not getattr(self, "_log_slugs_printed", False):
@@ -835,20 +835,23 @@ class NitradoClient:
             if not short:
                 raw_game = (gs.get("game") if isinstance(gs, dict) else "") or ""
                 gl = str(raw_game).lower()
-                if "ps4" in gl or "ps5" in gl:
-                    short = "arkps4"
-                elif "ascended" in gl or "asa" in gl:
+                # ASA first: an unlabelled Ascended service must not be guessed
+                # as Survival Evolved, otherwise log/file paths point at the
+                # wrong ShooterGame layout.
+                if "ascended" in gl or "asa" in gl:
                     short = "arksa"
+                elif "ps4" in gl or "ps5" in gl:
+                    short = "arkps4"
                 elif "xbox" in gl:
                     short = "arkxb"
-                elif "survival" in gl:
+                elif "survival" in gl or "evolved" in gl or "ase" in gl:
                     short = "arkse"
                 else:
-                    short = "arkps4"
+                    short = "arksa"
             print(f"[nitrado] game short resolved: {short!r}", flush=True)
         except Exception as e:
             print(f"[nitrado] game short error: {type(e).__name__}: {e}", flush=True)
-            short = "arkps4"
+            short = "arksa"
         self._game_short_cached = short
         return short
 
@@ -1436,11 +1439,16 @@ def change_server_password(guild_id: int, password: str) -> str:
 
 
 def get_ark_server_name(guild_id: int) -> str:
-    """Read the actual ARK server name from GameUserSettings.ini (SessionName)."""
+    """Read the actual ARK server name from GameUserSettings.ini (SessionName).
+
+    ASA keeps the same ShooterGame/Saved path, so both games are covered by the
+    same candidate list (ASA first so the newer layout wins if both exist).
+    """
     client = get_client(guild_id)
     if not client:
         return ""
     tried = [
+        "ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini",
         "ShooterGame/Saved/Config/GameUserSettings.ini",
         "ShooterGame/Saved/Config/LinuxServer/GameUserSettings.ini",
     ]
@@ -1650,7 +1658,10 @@ def ban_player(guild_id: int, name: str) -> str:
         _record_admin_event(guild_id, "ban", name, f"BanPlayer {name}")
         return "Banned"
     try:
-        _try_send_command(client, [f"BanPlayer {name}", f"Ban {name}", f"admincheat ban {name}"])
+        _try_send_command(client, [
+            f"BanPlayer {name}", f"Ban {name}",
+            f"admincheat BanPlayer {name}", f"admincheat ban {name}",
+        ])
         return "Banned"
     except Exception as e:
         return result if result != "Failed" else "Failed: " + type(e).__name__
@@ -1666,15 +1677,24 @@ def unban_player(guild_id: int, name: str) -> str:
         _record_admin_event(guild_id, "unban", name, f"UnBanPlayer {name}")
         return "Unbanned"
     try:
-        _try_send_command(client, [f"UnBanPlayer {name}", f"Unban {name}", f"admincheat unban {name}"])
+        _try_send_command(client, [
+            f"UnBanPlayer {name}", f"Unban {name}",
+            f"admincheat UnBanPlayer {name}", f"admincheat unban {name}",
+        ])
         return "Unbanned"
     except Exception as e:
         return result if result != "Failed" else "Failed: " + type(e).__name__
 
 
 def whitelist_player(guild_id: int, name: str) -> str:
-    """Add a player to the Nitrado whitelist via the game whitelist API
-    (the route that works for PlayStation services). Returns a status message."""
+    """Add a player to the Nitrado reserved-slot list via the game API
+    (the route that works for PlayStation services). Returns a status message.
+
+    ARK: Survival Ascended has no whitelist — the server stays open and specific
+    players are granted RESERVED SLOTS so they can always connect even when the
+    server is full (70/70). Nitrado still exposes this as the "whitelist" route
+    on ASA, but we keep the name for internal/API compatibility.
+    """
     client = get_client(guild_id)
     if not client:
         return "Nitrado not configured"
@@ -1682,4 +1702,70 @@ def whitelist_player(guild_id: int, name: str) -> str:
     if result == "OK":
         return "Whitelisted"
     return result
+
+
+def unwhitelist_player(guild_id: int, name: str) -> str:
+    """Remove a player from the reserved-slot list (ASA) / whitelist (ASE)."""
+    client = get_client(guild_id)
+    if not client:
+        return "Nitrado not configured"
+    result = _game_api_result(client, "DELETE", "whitelist", name)
+    if result == "OK":
+        return "Removed"
+    return result
+
+
+def get_players(guild_id: int) -> list[dict]:
+    """Return the currently connected players for a guild.
+
+    Used by the reserved-slot system to report how many of the ASA slots are
+    taken (ASA servers cap at 70) so admins can see whether a reserved player
+    can still get in.
+    """
+    client = get_client(guild_id)
+    if not client:
+        return []
+    try:
+        data = client._request(
+            "GET",
+            f"/services/{client.service_id}/gameservers/players",
+        )
+    except Exception as e:
+        print(f"[nitrado] get_players error (guild {guild_id}): {type(e).__name__}", flush=True)
+        return []
+    inner = data.get("data", data) if isinstance(data, dict) else data
+    if isinstance(inner, dict):
+        inner = inner.get("players", [])
+    if not isinstance(inner, list):
+        return []
+    out = []
+    for p in inner:
+        if isinstance(p, dict):
+            out.append(p)
+    return out
+
+
+def get_players_count(guild_id: int) -> tuple[int, int]:
+    """Return (players_online, max_players) for a guild. (0, 0) if unknown."""
+    client = get_client(guild_id)
+    if not client:
+        return (0, 0)
+    online = len(get_players(guild_id))
+    maximum = 0
+    try:
+        info = client.get_server_status() or {}
+    except Exception:
+        info = {}
+    for key in ("max_players", "maxplayers", "slots", "maxPlayers", "MaxPlayers"):
+        if key in info:
+            try:
+                maximum = int(info[key])
+                break
+            except Exception:
+                continue
+    if not maximum:
+        # ASA caps at 70 players; fall back to the ASA default so the reserved
+        # slot counter still reports a meaningful capacity.
+        maximum = 70
+    return (online, maximum)
 

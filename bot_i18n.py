@@ -187,28 +187,28 @@ STRINGS = {
         "en": "**{amount}** points removed. New balance: **{balance}**.",
     },
     "whitelist_added": {
-        "ar": "تمت إضافة **{gamertag}** للوايت ليست.",
-        "en": "**{gamertag}** has been added to the whitelist.",
+        "ar": "تمت حجز مقعد لـ **{gamertag}**.",
+        "en": "A reserved slot was granted to **{gamertag}**.",
     },
     "whitelist_removed": {
-        "ar": "تمت إزالة **{gamertag}** من الوايت ليست.",
-        "en": "**{gamertag}** has been removed from the whitelist.",
+        "ar": "تم إلغاء المقعد المحجوز لـ **{gamertag}**.",
+        "en": "The reserved slot for **{gamertag}** was removed.",
     },
     "whitelist_not_found": {
-        "ar": "هذا العضو غير مسجل بالوايت ليست.",
-        "en": "This member is not in the whitelist.",
+        "ar": "هذا العضو غير مسجل بمقعد محجوز.",
+        "en": "This member has no reserved slot.",
     },
     "linkpsn_success": {
-        "ar": "تم ربط **{gamertag}** مع {member}. سيتم إضافتهم للوايت ليست عند إعادة التشغيل.",
-        "en": "Linked **{gamertag}** to {member}. They will be added to the whitelist on next restart.",
+        "ar": "تم ربط **{gamertag}** مع {member}. سيُحجز له مقعد عند إعادة التشغيل.",
+        "en": "Linked **{gamertag}** to {member}. Their slot will be reserved on next restart.",
     },
     "unlinkpsn_success": {
         "ar": "تم فصل PSN عن {member}.",
         "en": "Unlinked PSN from {member}.",
     },
     "wl_not_registered": {
-        "ar": "{member} غير مسجل بنظام الوايت ليست.",
-        "en": "{member} is not registered in the whitelist system.",
+        "ar": "{member} غير مسجل بنظام المقاعد المحجوزة.",
+        "en": "{member} is not registered in the reserved slot system.",
     },
     "whitelist_pending_restart": {
         "ar": "في انتظار إعادة التشغيل",
@@ -251,16 +251,24 @@ STRINGS = {
         "en": "🏆 Top Players",
     },
     "server_restarted_whitelist": {
-        "ar": "🔄 تمت إعادة تشغيل السيرفر. تم تحديث الوايت ليست الساعة {time} UTC.",
-        "en": "🔄 Server restarted. Whitelist updated at {time} UTC.",
+        "ar": "🔄 تمت إعادة تشغيل السيرفر. تم تحديث المقاعد المحجوزة الساعة {time} UTC.",
+        "en": "🔄 Server restarted. Reserved slots updated at {time} UTC.",
     },
     "whitelist_path_set": {
-        "ar": "✅ تم تعيين مجلد الوايت ليست إلى:\n`{path}`",
-        "en": "✅ Whitelist directory set to:\n`{path}`",
+        "ar": "✅ تم تعيين مجلد المقاعد المحجوزة إلى:\n`{path}`",
+        "en": "✅ Reserved slot directory set to:\n`{path}`",
     },
     "whitelist_title": {
-        "ar": "📋 الوايت ليست",
-        "en": "📋 Whitelist",
+        "ar": "🎟️ المقاعد المحجوزة",
+        "en": "🎟️ Reserved Slots",
+    },
+    "wl_slots_online": {
+        "ar": "المقاعد المشغولة حالياً",
+        "en": "Slots currently in use",
+    },
+    "wl_slots_reserved_note": {
+        "ar": "🎟️ مقعدك محجوز: `{slots}` — يمكنك الدخول حتى لو كان السيرفر ممتلئاً.",
+        "en": "🎟️ Your slot is reserved: `{slots}` — you can still join when the server is full.",
     },
     "whitelist_status_active_word": {
         "ar": "نشط",
@@ -311,8 +319,8 @@ STRINGS = {
         "en": "❌ PSN verification is not configured (BOT OWNER hasn't set PSN_AWP_TOKEN).",
     },
     "wl_token_added": {
-        "ar": "{member} لديه الآن **`{count}x`** توكين usable for whitelist.",
-        "en": "{member} now has **`{count}x`** token(s) for whitelist.",
+        "ar": "{member} لديه الآن **`{count}x`** توكين usable for reserved slots.",
+        "en": "{member} now has **`{count}x`** token(s) for reserved slots.",
     },
     "wl_token_balance": {
         "ar": "💰 رصيدك: **{tokens}** توكين(ات)",
@@ -331,16 +339,16 @@ STRINGS = {
         "en": "❌ Insufficient token balance.",
     },
     "wl_redeem_ok": {
-        "ar": "✅ تمت إضافة **{gamertag}** للوايت ليست. الرصيد المتبقي: `{left}`",
-        "en": "✅ **{gamertag}** whitelisted. `{left}` token(s) left.",
+        "ar": "✅ تم حجز مقعد لـ **{gamertag}**. الرصيد المتبقي: `{left}`",
+        "en": "✅ Reserved slot granted to **{gamertag}**. `{left}` token(s) left.",
     },
     "wl_redeem_failed": {
-        "ar": "❌ تعذر إضافة **{gamertag}**: {reason}",
-        "en": "❌ Could not whitelist **{gamertag}**: {reason}",
+        "ar": "❌ تعذر حجز مقعد لـ **{gamertag}**: {reason}",
+        "en": "❌ Could not reserve a slot for **{gamertag}**: {reason}",
     },
     "wl_refresh_ok": {
-        "ar": "🔄 أُعيد تطبيق الوايت ليست لـ **{count}** gamertag(s).",
-        "en": "🔄 Re-applied whitelist for **{count}** gamertag(s).",
+        "ar": "🔄 أُعيد تطبيق المقاعد المحجوزة لـ **{count}** gamertag(s).",
+        "en": "🔄 Re-applied reserved slots for **{count}** gamertag(s).",
     },
     "wl_token_count_added": {
         "ar": "تم إضافة **{count}** توكين(ات) إلى {member}.",
@@ -533,20 +541,20 @@ STRINGS = {
 
     # ── whitelist ────────────────────────────────────────────
     "whitelist_path_set": {
-        "ar": "✅ تم تعيين مجلد الوايت ليست إلى:\n`{path}`",
-        "en": "✅ Whitelist directory set to:\n`{path}`",
+        "ar": "✅ تم تعيين مجلد المقاعد المحجوزة إلى:\n`{path}`",
+        "en": "✅ Reserved slot directory set to:\n`{path}`",
     },
     "no_linked_players": {
         "ar": "لا يوجد لاعبون مربوطون.",
         "en": "No linked players.",
     },
     "whitelist_title": {
-        "ar": "📋 الوايت ليست",
-        "en": "📋 Whitelist",
+        "ar": "🎟️ المقاعد المحجوزة",
+        "en": "🎟️ Reserved Slots",
     },
     "restart_whitelist_updated": {
-        "ar": "🔄 تمت إعادة تشغيل السيرفر. تم تحديث الوايت ليست الساعة {time} UTC.",
-        "en": "🔄 Server restarted. Whitelist updated at {time} UTC.",
+        "ar": "🔄 تمت إعادة تشغيل السيرفر. تم تحديث المقاعد المحجوزة الساعة {time} UTC.",
+        "en": "🔄 Server restarted. Reserved slots updated at {time} UTC.",
     },
 
     # ── playerlog ────────────────────────────────────────────

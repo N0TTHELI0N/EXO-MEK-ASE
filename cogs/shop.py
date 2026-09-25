@@ -132,11 +132,23 @@ class Shop(commands.Cog):
             return await send_or_update(interaction, bot_i18n.t(guild_id, "pending_not_found"), ephemeral=True)
 
         class_name = self._class_name(purchase["blueprint"])
-        cmd = f'GMSummon "{class_name}" {purchase["level"]}'
-        try:
-            result = await asyncio.to_thread(nitrado.send_rcon, guild_id, cmd)
-        except Exception:
-            result = None
+        # ASA renamed the summon console command to DMSummon (GMSummon is the
+        # ASE name). Try the ASA command first, then fall back to the ASE one so
+        # the shop still delivers on an un-migrated server.
+        candidates = [
+            f'DMSummon "{class_name}" {purchase["level"]}',
+            f'GMSummon "{class_name}" {purchase["level"]}',
+            f'admincheat DMSummon "{class_name}" {purchase["level"]}',
+        ]
+        result = None
+        for cmd in candidates:
+            try:
+                result = await asyncio.to_thread(nitrado.send_rcon, guild_id, cmd)
+            except Exception:
+                result = None
+                continue
+            if result and "command not found" not in str(result).lower():
+                break
         if result is None:
             return await send_or_update(interaction, bot_i18n.t(guild_id, "purchase_spawn_failed", purchase_id=purchase_id), ephemeral=True)
 
