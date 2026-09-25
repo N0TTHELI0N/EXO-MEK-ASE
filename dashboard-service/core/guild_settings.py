@@ -300,7 +300,13 @@ class _migration_transaction:
 
     def __exit__(self, exc_type, exc, tb):
         if exc_type is None:
-            self._conn.commit()
+            try:
+                self._conn.commit()
+            except psycopg2.InterfaceError:
+                # The socket died during the run. Leave it to the caller's
+                # retry with a brand-new connection rather than pretending
+                # the schema was committed.
+                raise
         else:
             try:
                 self._conn.rollback()
@@ -309,6 +315,88 @@ class _migration_transaction:
         # Never swallow the original exception: a failed migration must be
         # loud, otherwise the service starts against a half-built schema.
         return False
+
+
+# Stamp identifying this exact source revision. Printed by init_db() so a
+# failed deploy can be identified from the startup log alone.
+_SOURCE_STAMP = "guild_settings.py:init_db=cursor-recovering"
+
+
+class _RecoveringCursor:
+    """A cursor that re-opens itself instead of dying.
+
+    psycopg2 raises ``InterfaceError: cursor already closed`` from
+    ``cursor.execute()`` when the cursor - or the whole connection - went away
+    between two statements. The schema build issues 70+ statements in a row,
+    so a single dead cursor used to abort the rest of the migration and leave
+    a half-built database behind.
+
+    This wrapper re-opens the cursor (and the connection, if needed) and
+    retries the statement once. Every recovery is logged loudly, because a
+    recovery means something outside this module closed a connection, and
+    that is worth seeing in the logs.
+    """
+
+    __slots__ = ("_conn", "_cur", "_reconnects", "_stmt")
+
+    def __init__(self, conn):
+        self._conn = conn
+        self._cur = None
+        self._reconnects = 0
+        self._stmt = 0
+
+    def _dead_cursor(self) -> bool:
+        return self._cur is None or getattr(self._cur, "closed", True)
+
+    def _reset(self) -> None:
+        if self._cur is not None:
+            try:
+                self._cur.close()
+            except Exception:
+                pass
+            self._cur = None
+
+    def _fresh_connection(self):
+        self._reset()
+        self._conn = _open_migration_connection()
+        self._reconnects += 1
+        return self._conn
+
+    def execute(self, sql, *args, **kwargs):
+        self._stmt += 1
+        for attempt in (1, 2):
+            if self._conn is None or getattr(self._conn, "closed", True):
+                self._fresh_connection()
+            if self._dead_cursor():
+                self._cur = self._conn.cursor()
+            try:
+                return self._cur.execute(sql, *args, **kwargs)
+            except psycopg2.InterfaceError as exc:
+                self._reset()
+                if attempt == 2:
+                    print(
+                        "[migrate] FATAL: statement %d failed unrecoverably "
+                        "(%r). sql=%.90r" % (self._stmt, exc, sql),
+                        flush=True,
+                    )
+                    raise
+                print(
+                    "[migrate] WARN: cursor/connection lost on statement %d "
+                    "(%r) - re-opening. sql=%.90r" % (self._stmt, exc, sql),
+                    flush=True,
+                )
+        return None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        self._reset()
+        return False
+
+
+def _recovering_cursor(conn):
+    return _RecoveringCursor(conn)
 
 
 def _encrypt(value: str) -> str:
@@ -344,11 +432,16 @@ def init_db():
     try:
         conn = _open_migration_connection()
         with _migration_transaction(conn):
-            # Exactly one cursor for the whole schema, closed exactly once by
-            # the context manager. This used to be two `with` blocks: the
-            # first was closed before the second was created, and only the
-            # advisory-lock statement ever used the first one.
-            with conn.cursor() as cur:
+            # A self-healing cursor: exactly one object for the whole schema,
+            # which re-opens itself if a statement finds it closed rather than
+            # aborting the remaining ~70 statements. This used to be a bare
+            # psycopg2 cursor context manager, and it used to be two of them.
+            with _recovering_cursor(conn) as cur:
+                print(
+                    "[migrate] init_db starting (%s, statement_timeout=%dms)"
+                    % (_SOURCE_STAMP, _STATEMENT_TIMEOUT_MS),
+                    flush=True,
+                )
                 cur.execute("SET statement_timeout = %d" % _STATEMENT_TIMEOUT_MS)
                 cur.execute("SELECT pg_advisory_xact_lock(752001)")
                 cur.execute("""
