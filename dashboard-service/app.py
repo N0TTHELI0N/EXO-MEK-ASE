@@ -2836,7 +2836,7 @@ def koyeb_health():
     """
     return jsonify({
         "status": "ok",
-        "service": "exo-mek-dashboard",
+        "service": "mersad-dashboard",
         "platform": os.environ.get("KOYEB_SERVICE_NAME", "local"),
     }), 200
 
@@ -2845,7 +2845,7 @@ def koyeb_health():
 def api_service_info():
     """Identifies which service answered — handy when both run on Koyeb."""
     return jsonify({
-        "service": "exo-mek-dashboard",
+        "service": "mersad-dashboard",
         "role": "dashboard",
         "bot_service": os.environ.get("BOT_SERVICE_URL", ""),
     }), 200

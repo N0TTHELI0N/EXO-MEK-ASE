@@ -1,11 +1,11 @@
-# Exo-Mek ASA - ARK Discord Bot
+# Mersad - ARK Discord Bot
 
 Advanced admin bot for ARK servers hosted on Nitrado.
 
 ## Architecture — two independent services, two folders
 
 ```
-Exo-Mek ASE/
+Mersad/
 ├── bot-service/          Discord bot, cogs, RCON, Nitrado, DB layer
 ├── dashboard-service/    Flask dashboard, templates, static, web routes
 ├── .gitignore

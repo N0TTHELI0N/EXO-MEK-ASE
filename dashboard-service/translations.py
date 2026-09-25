@@ -53,7 +53,7 @@ TRANSLATIONS = {
     "f_automod": {"ar": "الحماية التلقائية", "en": "AutoMod"},
     "f_automod_desc": {"ar": "تصفية تلقائية للرسائل وتحكم مع قوائم كلمات مخصصة", "en": "Automatic message filtering and moderation with custom word lists"},
 
-    "footer_copyright": {"ar": "© 2024 EXO-BOT. غير تابعة لـ ARK أو Studio Wildcard.", "en": "&copy; 2024 EXO-BOT. Not affiliated with ARK or Studio Wildcard."},
+    "footer_copyright": {"ar": "© 2024 Mersad. غير تابعة لـ ARK أو Studio Wildcard.", "en": "&copy; 2024 Mersad. Not affiliated with ARK or Studio Wildcard."},
 
     "servers_title": {"ar": "اختر سيرفرًا", "en": "Select a Server"},
     "servers_sub": {"ar": "اختر السيرفرات التي لديك فيها صلاحية إدارة (أدمن). إذا لم يكن البوت فيها بعد، ادعوه لإضافته.", "en": "Choose a server where you have Administrator access. If the bot isn't there yet, invite it to join."},

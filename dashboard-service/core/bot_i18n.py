@@ -1291,8 +1291,8 @@ STRINGS = {
 
     # ── help / info (dropdown help) ──────────────────────────
     "help_welcome_title": {
-        "ar": "🤖 مرحبًا في بوت إكسو ميك!",
-        "en": "🤖 Welcome to Exo-Mek Bot!",
+        "ar": "🤖 مرحبًا في بوت مرصاد!",
+        "en": "🤖 Welcome to Mersad Bot!",
     },
     "help_welcome_desc": {
         "ar": "بوت إدارة متكامل لسيرفرات **ARK: Survival Evolved**.\nاختر فئة من القائمة أدناه لاستعراض الأوامر.",
@@ -1331,8 +1331,8 @@ STRINGS = {
         "en": "Quick start",
     },
     "help_about_body": {
-        "ar": "**إكسو ميك** هو بوت إدارة شامل لسيرفرات ARK: Survival Evolved يشمل:\n\n• إدارة اللاعبين والعقوبات والوايت ليست والـ IP\n• متجر داينوات بنظام نقاط\n• لوحة متصدرين وسجلات قبائل\n• مراقبة الشات والأتمود ومكافحة الإساءة\n• نسخ احتياطي وتحكم بالسيرفر عبر Nitrado\n• لوحة تحكم ويب كاملة\n\nاللغة الحالية: {lang_name} — غيّرها بأمر `/set-language`.",
-        "en": "**Exo-Mek** is an all-in-one management bot for ARK: Survival Evolved servers featuring:\n\n• Player management, punishments, whitelist and IP tools\n• Dino shop with a points system\n• Leaderboard and tribe logs\n• Chat monitoring, automod and anti-abuse\n• Backups and server control via Nitrado\n• Full web dashboard\n\nCurrent language: {lang_name} — change it with `/set-language`.",
+        "ar": "**مرصاد** هو بوت إدارة شامل لسيرفرات ARK: Survival Evolved يشمل:\n\n• إدارة اللاعبين والعقوبات والوايت ليست والـ IP\n• متجر داينوات بنظام نقاط\n• لوحة متصدرين وسجلات قبائل\n• مراقبة الشات والأتمود ومكافحة الإساءة\n• نسخ احتياطي وتحكم بالسيرفر عبر Nitrado\n• لوحة تحكم ويب كاملة\n\nاللغة الحالية: {lang_name} — غيّرها بأمر `/set-language`.",
+        "en": "**Mersad** is an all-in-one management bot for ARK: Survival Evolved servers featuring:\n\n• Player management, punishments, whitelist and IP tools\n• Dino shop with a points system\n• Leaderboard and tribe logs\n• Chat monitoring, automod and anti-abuse\n• Backups and server control via Nitrado\n• Full web dashboard\n\nCurrent language: {lang_name} — change it with `/set-language`.",
     },
     "help_about_dashboard": {
         "ar": "لوحة التحكم",

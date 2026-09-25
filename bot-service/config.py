@@ -17,7 +17,7 @@ DASHBOARD_SECRET = os.getenv("DASHBOARD_SECRET", "change-me")
 #  /help can link to it.
 #
 #  Set DASHBOARD_BASE_URL to the dashboard service's public URL, e.g.
-#      https://exo-mek-dashboard.koyeb.app
+#      https://mersad-dashboard.onrender.com
 #  Leave it empty to hide the link (cogs/help.py already guards on this).
 #
 #  Koyeb exposes KOYEB_PUBLIC_DOMAIN for the service it is deploying, which is

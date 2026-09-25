@@ -28,7 +28,7 @@ DASHBOARD_URL = os.environ.get("DASHBOARD_BASE_URL", "").rstrip("/")
 def _info():
     return {
         "status": "ok",
-        "service": "exo-mek-bot",
+        "service": "mersad-bot",
         "role": "bot",
         "runtime_seconds": int(time.time() - _STARTED_AT),
         "dashboard": DASHBOARD_URL or None,
@@ -47,12 +47,12 @@ def application(environ, start_response):
         dash = DASHBOARD_URL
         html = (
             "<!doctype html><meta charset=utf-8>"
-            "<title>Exo-Mek ASA — Bot Service</title>"
+            "<title>Mersad — Bot Service</title>"
             "<style>body{{font-family:system-ui;background:#0f1115;color:#e6e6e6;"
             "display:grid;place-items:center;height:100vh;margin:0}}"
             "div{{text-align:center;max-width:32rem;padding:2rem}}"
             "a{{color:#6ea8fe}}</style>"
-            "<div><h1>Exo-Mek ASA — Bot Service</h1>"
+            "<div><h1>Mersad — Bot Service</h1>"
             "<p>The Discord bot runs here. The web dashboard was moved to its "
             "own service.</p>"
             + (f'<p><a href="{dash}">Open the dashboard →</a></p>' if dash else
