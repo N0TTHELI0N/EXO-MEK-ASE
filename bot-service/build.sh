@@ -1,4 +1,4 @@
-# Koyeb: (builder defaults to this script when present at the service root)
-# Render used a build command; Koyeb can run either, and this script is
-# idempotent so it works on both platforms.
+# Render does not auto-detect this file.
+# Set the service's Build Command to:  bash build.sh
+# Idempotent, so it is safe to re-run on every deploy.
 pip install --no-cache-dir -r requirements.txt

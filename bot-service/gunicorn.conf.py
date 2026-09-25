@@ -1,4 +1,4 @@
-"""Gunicorn configuration for Koyeb (and any single-process PaaS).
+"""Gunicorn configuration for Render (and any single-process PaaS).
 
 Why this file exists
 --------------------
@@ -6,7 +6,7 @@ On Render this project ran as ``web: python run.py``, which meant a single
 Python process that manually started a daemon thread for the Discord bot and
 then served Flask with the built-in development server.
 
-Koyeb works the same way conceptually (a single ``web`` process bound to
+Render works the same way conceptually (a single ``web`` process bound to
 ``$PORT``), but the bot must be started *from inside* the worker process,
 otherwise gunicorn's master would fork workers that never run the bot and the
 Discord gateway session would be tied to a process that gets reaped.
@@ -23,7 +23,7 @@ import threading
 import traceback
 
 # ────────────────────────────────────────────────────────────
-#  Socket binding (Koyeb injects $PORT automatically)
+#  Socket binding (Render injects $PORT automatically)
 # ────────────────────────────────────────────────────────────
 def _port() -> int:
     raw = os.environ.get("PORT", "5000").strip() or "5000"
@@ -62,7 +62,7 @@ max_requests = 0
 # ────────────────────────────────────────────────────────────
 #  Logging
 # ────────────────────────────────────────────────────────────
-#  Koyeb collects stdout/stderr, so never write access logs to a file.
+#  Render collects stdout/stderr, so never write access logs to a file.
 accesslog = "-"
 errorlog = "-"
 loglevel = os.environ.get("LOG_LEVEL", "info")

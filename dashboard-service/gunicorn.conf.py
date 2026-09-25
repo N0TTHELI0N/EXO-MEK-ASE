@@ -1,4 +1,4 @@
-"""Gunicorn configuration — DASHBOARD SERVICE (Koyeb).
+"""Gunicorn configuration — DASHBOARD SERVICE (Render).
 
 This service runs NO Discord bot: no post_worker_init hook, no gateway
 thread. It is a pure web service, so it can be scaled horizontally

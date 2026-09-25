@@ -1,4 +1,4 @@
-"""WSGI entry point — BOT SERVICE (Koyeb).
+"""WSGI entry point — BOT SERVICE (Render).
 
 The Discord bot used to be co-hosted with the Flask dashboard in a single
 Render container. The dashboard is now its own service (``dashboard-service/``),
@@ -21,7 +21,7 @@ sys.path.insert(0, _HERE)
 _STARTED_AT = time.time()
 
 # The dashboard lives in a separate service now. Optional: falls back to the
-# Koyeb-provided domain of whichever service is running.
+# Render-provided domain of whichever service is running.
 DASHBOARD_URL = os.environ.get("DASHBOARD_BASE_URL", "").rstrip("/")
 
 

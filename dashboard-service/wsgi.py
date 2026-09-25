@@ -1,4 +1,4 @@
-"""WSGI entry point — DASHBOARD SERVICE (Koyeb).
+"""WSGI entry point — DASHBOARD SERVICE (Render).
 
 Runs independently of the Discord bot. Talks to the same PostgreSQL
 database and decrypts the same Fernet-encrypted settings as the Bot

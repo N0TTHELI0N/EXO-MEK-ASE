@@ -28,7 +28,7 @@ sys.path.insert(0, _HERE)
 sys.path.insert(0, os.path.join(_HERE, "core"))
 
 # Each service owns its configuration: read the .env sitting next to this
-# file. On Koyeb the variables come from the platform instead and this is a
+# file. On Render the variables come from the platform instead and this is a
 # no-op. Real environment variables always win (override=False).
 try:
     from dotenv import load_dotenv
@@ -104,9 +104,9 @@ app.config.update(
 )
 
 # ────────────────────────────────────────────────────────────
-#  Reverse-proxy awareness (Koyeb)
+#  Reverse-proxy awareness (Render)
 # ────────────────────────────────────────────────────────────
-#  Koyeb terminates TLS at its edge proxy and forwards plain HTTP to $PORT,
+#  Render terminates TLS at its edge proxy and forwards plain HTTP to $PORT,
 #  so without this Flask sees scheme="http" and builds wrong absolute URLs.
 #  That breaks the Discord OAuth redirect_uri, secure session cookies and
 #  any url_for(..., _external=True).
@@ -2828,22 +2828,22 @@ def api_health():
 
 
 @app.route("/health")
-def koyeb_health():
-    """Koyeb health-check target.
+def health():
+    """Render health-check target.
 
     Deliberately free of DB/network calls so a slow Postgres or a Nitrado
-    outage never causes Koyeb to mark the container unhealthy and restart it.
+    outage never causes Render to mark the container unhealthy and restart it.
     """
     return jsonify({
         "status": "ok",
         "service": "mersad-dashboard",
-        "platform": os.environ.get("KOYEB_SERVICE_NAME", "local"),
+        "platform": os.environ.get("RENDER_SERVICE_NAME", "local"),
     }), 200
 
 
 @app.route("/api/service-info")
 def api_service_info():
-    """Identifies which service answered — handy when both run on Koyeb."""
+    """Identifies which service answered — handy when both run on Render."""
     return jsonify({
         "service": "mersad-dashboard",
         "role": "dashboard",

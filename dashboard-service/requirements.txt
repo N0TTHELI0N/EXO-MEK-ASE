@@ -4,7 +4,7 @@
 # Fernet crypto, nothing else.
 flask==3.0.3
 gunicorn==22.0.0
-# Imported directly (ProxyFix) to survive Koyeb's TLS-terminating proxy.
+# Imported directly (ProxyFix) to survive Render's TLS-terminating proxy.
 werkzeug>=3.0.0
 psycopg2-binary==2.9.9
 cryptography==43.0.1

@@ -20,7 +20,7 @@ DASHBOARD_SECRET = os.getenv("DASHBOARD_SECRET", "change-me")
 #      https://mersad-dashboard.onrender.com
 #  Leave it empty to hide the link (cogs/help.py already guards on this).
 #
-#  Koyeb exposes KOYEB_PUBLIC_DOMAIN for the service it is deploying, which is
+#  Render exposes RENDER_EXTERNAL_HOSTNAME for the service it is deploying, which is
 #  the BOT's own domain — not the dashboard's — so it is only used as a
 #  last-resort guess, never as the primary source.
 _DASHBOARD_URL = os.getenv("DASHBOARD_BASE_URL", "").strip().rstrip("/")
@@ -37,7 +37,7 @@ DASHBOARD_BASE_URL = _DASHBOARD_URL
 # Dashboard Service (see dashboard-service/.env.example).
 BOT_SERVICE_URL = os.getenv("BOT_SERVICE_URL", "").strip().rstrip("/")
 if not BOT_SERVICE_URL:
-    _self_domain = os.getenv("KOYEB_PUBLIC_DOMAIN", "").strip()
+    _self_domain = os.getenv("RENDER_EXTERNAL_HOSTNAME", "").strip()
     if _self_domain:
         BOT_SERVICE_URL = f"https://{_self_domain}".rstrip("/")
 else:

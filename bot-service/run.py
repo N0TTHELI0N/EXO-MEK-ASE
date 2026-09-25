@@ -6,7 +6,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
 
 # Each service owns its configuration: read the .env sitting next to this
-# file. On Koyeb the variables come from the platform instead and this is a
+# file. On Render the variables come from the platform instead and this is a
 # no-op. Real environment variables always win (override=False).
 try:
     from dotenv import load_dotenv
@@ -233,7 +233,7 @@ def run_bot():
 
 
 def _port() -> int:
-    """Resolve the listen port. Koyeb injects $PORT; default 5000 locally."""
+    """Resolve the listen port. Render injects $PORT; default 5000 locally."""
     raw = os.environ.get("PORT", "5000").strip() or "5000"
     try:
         return int(raw)
@@ -264,7 +264,7 @@ def run_status_page():
 
 
 if __name__ == "__main__":
-    # Local / manual start path. On Koyeb the Procfile runs
+    # Local / manual start path. On Render the Procfile runs
     # `gunicorn --config gunicorn.conf.py wsgi:application`, and the bot is
     # started by that config's `post_worker_init` hook instead.
     def _bot_worker():
