@@ -766,6 +766,12 @@ def init_db():
         conn.commit()
     finally:
         conn.close()
+        # The spin lock was acquired non-blocking above, so without an
+        # explicit release init_db() could only ever succeed once per
+        # process and every later call would silently return - leaving a
+        # half-migrated schema with no error to explain it.
+        if _init_db_spin_lock.locked():
+            _init_db_spin_lock.release()
 
 
 # ============================================================
